@@ -1,0 +1,30 @@
+version: 0.2
+
+env:
+  variables:
+    LAMBDA_FUNCTION_NAME: "help-pr-backend-staging"
+    AWS_DEFAULT_REGION: "ap-south-1"
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 20
+    commands:
+      - echo "Installing dependencies..."
+      - npm ci
+
+  build:
+    commands:
+      - echo "Packaging Lambda artifact..."
+      - zip -r deploy.zip . -x ".git/*" ".github/*" ".env*" "coverage/*" "uploads/*" "temp/*" "tmp/*"
+
+  post_build:
+    commands:
+      - echo "Deploying to Lambda ${LAMBDA_FUNCTION_NAME} (${AWS_DEFAULT_REGION})"
+      - aws lambda update-function-code --function-name "${LAMBDA_FUNCTION_NAME}" --zip-file "fileb://deploy.zip" --region "${AWS_DEFAULT_REGION}"
+      - echo "Deployment command completed."
+      - echo "Reminder - set Lambda env vars separately - CHAT_SERVICE_ENABLED, CHAT_SERVICE_BASE_URL, CHAT_SERVICE_INTERNAL_API_KEY (see docs/LAMBDA_VPS_DEPLOY.md)"
+
+artifacts:
+  files:
+    - deploy.zip

@@ -1,0 +1,120 @@
+================================================================================
+  Franchise service — GET list (getAll) — frontend integration
+================================================================================
+
+Base path (see server.js): /api/franchise-service
+
+Route
+-----
+  GET /api/franchise-service/getAll
+
+Authentication
+--------------
+  Required: Bearer JWT (same as other franchise-service mapping routes).
+
+  Roles allowed: Super Admin, Staff, Franchise Admin, Franchise Employee.
+
+  Franchise Admin / Employee:
+    - The server forces the list to their own franchise.
+    - If they send franchise_id, it must match their user.franchise_id (403 otherwise).
+
+  Super Admin / Staff:
+    - franchise_id query parameter is required (400 if omitted).
+
+--------------------------------------------------------------------------------
+Response shape (high level)
+--------------------------------------------------------------------------------
+
+  On success (200):
+
+  - franchise          { _id, name, admin_name, is_active } — scoped franchise
+  - services           paginated array of global services for that franchise
+  - totalItems         total services after filters (not franchise row count)
+  - totalPages, currentPage — pagination over **services**
+
+  Each item in **services** is a global Service document (populated category_id)
+  plus availability flags:
+
+    - franchise_enabled   true if the service id is in franchise.services[]
+    - global_active       global service + parent category active
+    - franchise_active    alias of franchise_enabled
+    - partner_enabled     partner-side preference (when resolved)
+    - effective_active    true only when globally and franchise-visible for customers
+
+  There is no records / services_list / active_services / inactive_services /
+  all_services split. Use franchise_enabled for on/off UI; use effective_active
+  when showing what end users can book.
+
+--------------------------------------------------------------------------------
+Query parameters — reference
+--------------------------------------------------------------------------------
+
+  Pagination (services)
+  ---------------------
+  page, limit          defaults: page=1, limit=10
+
+  Franchise scope
+  ----------------
+  franchise_id         Super Admin / Staff: required.
+                       Franchise users: implied from JWT.
+
+  Catalog filters (apply to services before pagination)
+  -------------------------------------------------------
+  is_active            optional true|false — when true, only services with
+                       franchise_enabled === true (assigned on the franchise).
+                       When false, only services not assigned to the franchise.
+                       Omit for the full globally active service catalog (same count as
+                       super-admin active services). Includes services under inactive
+                       categories; those have effective_active: false until the category is on.
+
+  is_request           optional — filters by Service.is_request
+
+  Search
+  ------
+  search               optional string; case-insensitive substring.
+  q                    alias of search.
+                       “+” in the value is treated as space.
+
+  Logic:
+    1) If any service **name** matches, keep only those rows.
+    2) If no service name matches, keep rows whose **category name** matches.
+
+  Sort (full filtered list, then paginate)
+  ----------------------------------------
+  sort_by              optional; default: name
+                       name | id | _id | category_name | category
+
+  sort_order           optional; default: asc — asc | desc
+  order                alias of sort_order
+
+--------------------------------------------------------------------------------
+Examples
+--------------------------------------------------------------------------------
+
+  Full catalog (franchise admin):
+
+    GET /api/franchise-service/getAll?page=1&limit=50
+
+  Only services enabled on the franchise:
+
+    GET /api/franchise-service/getAll?page=1&limit=50&is_active=true
+
+  Super admin (franchise_id required):
+
+    GET /api/franchise-service/getAll?page=1&limit=50&franchise_id=<FRANCHISE_OID>
+
+  Search + sort:
+
+    ?search=wash&sort_by=category_name&sort_order=desc
+
+--------------------------------------------------------------------------------
+getById / update
+--------------------------------------------------------------------------------
+
+  GET /get/:id and PUT /update/:id still return the legacy mapping record shape
+  (services_list, active_services, inactive_services, services_order) for
+  toggle/reorder flows. Use getAll for the flat catalog list UI only.
+
+================================================================================
+  End of document
+================================================================================

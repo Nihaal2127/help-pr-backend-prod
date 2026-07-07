@@ -1,0 +1,133 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "Help PR — Orders (core CRUD)",
+    "description": "Five core **order** endpoints for `help-pr-backend-staging`.\n\n**Docs:** `docs/ORDER_MODULE_FRONTEND.md`, `docs/ORDER_GETALL_API_CHANGES.md`\n\n**Nested payloads:** Create/update accept optional `additional_charges` and `order_payments` on the same body (see request descriptions).\n\n**Legacy sub-routes:** `postman/Help-PR-Order-Charges-Payments.postman_collection.json` (standalone charge/payment CRUD if needed).\n\n**Not in this collection (separate routes):** `GET /api/order/getCustomerOrder`, `PUT /api/order/serviceUpdate`, `PUT /api/order/cancle`, `PUT /api/order/cancleService`, `/api/order_service/*`, `/api/order/financial-payments/*`, `POST /api/getCount`, Razorpay webhook.\n\n**Setup:** Set `baseUrl`, `accessToken` (Bearer JWT). After **Create**, copy `record.order_id` → `orderId` and `service_items[0]._id` → `orderServiceId`.\n\n**Pricing:** Send `total_service_charge` + `service_id`; server calculates commission, tax (after offer), `total_price`, min deposit.\n\n**Payment status:** Derived from customer `order_payment` rows — do **not** set `is_paid` on update.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5001" },
+    { "key": "accessToken", "value": "" },
+    { "key": "orderId", "value": "", "description": "Mongo order _id — set after create or from list" },
+    { "key": "orderServiceId", "value": "", "description": "order_service _id from create/get response (service_items[0])" },
+    { "key": "customerUserId", "value": "", "description": "getAll filter: user_id" },
+    { "key": "franchiseId", "value": "", "description": "getAll filter: franchise_id (role-scoped)" },
+    { "key": "partnerId", "value": "", "description": "getAll filter: partner_id" },
+    { "key": "employeeId", "value": "", "description": "getAll filter: employee_id" },
+    { "key": "offerId", "value": "", "description": "Offer ObjectId for create/update" },
+    { "key": "search", "value": "" },
+    { "key": "from_date", "value": "2026-05-14" },
+    { "key": "to_date", "value": "2026-05-20" },
+    { "key": "orderStatus", "value": "in-progress", "description": "in-progress | completed | cancelled | refunded" },
+    { "key": "paymentStatus", "value": "", "description": "unpaid | paid | partially_paid | refund | partially_refund" }
+  ],
+  "item": [
+    {
+      "name": "1. Get all orders",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": {
+          "raw": "{{baseUrl}}/api/order/getAll?page=1&limit=10&order_status={{orderStatus}}&payment_status={{paymentStatus}}&search={{search}}&from_date={{from_date}}&to_date={{to_date}}&franchise_id={{franchiseId}}&user_id={{customerUserId}}&partner_id={{partnerId}}&employee_id={{employeeId}}&category_id=&service_id=&city_id=&sort_by=created_at&sort_order=desc",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "order", "getAll"],
+          "query": [
+            { "key": "page", "value": "1", "description": "Default 1" },
+            { "key": "limit", "value": "10", "description": "Default 10" },
+            { "key": "order_status", "value": "{{orderStatus}}", "description": "in-progress | completed | cancelled | refunded. Invalid → 409. Disable param to omit." },
+            { "key": "payment_status", "value": "{{paymentStatus}}", "description": "unpaid | paid | partially_paid | refund | partially_refund. Disable to omit." },
+            { "key": "is_paid", "value": "", "disabled": true, "description": "Legacy: true | false (maps to paid)" },
+            { "key": "search", "value": "{{search}}", "description": "Free-text: unique_id, users, category, service, quote, city, franchise. Disable if empty." },
+            { "key": "keyword", "value": "", "disabled": true, "description": "Legacy alias for search" },
+            { "key": "from_date", "value": "{{from_date}}", "description": "ISO date. Alone = that UTC calendar day. With to_date = schedule overlap + order_date fallback. Disable to omit." },
+            { "key": "to_date", "value": "{{to_date}}", "description": "ISO date. Same single-day rule when used alone. Disable to omit." },
+            { "key": "franchise_id", "value": "{{franchiseId}}", "description": "Super/staff: optional filter. Franchise admin/employee: auto-scoped; must match own franchise or 403. Disable to omit." },
+            { "key": "user_id", "value": "{{customerUserId}}", "description": "Customer ObjectId filter. Disable to omit." },
+            { "key": "partner_id", "value": "{{partnerId}}", "description": "Partner ObjectId filter. Disable to omit." },
+            { "key": "employee_id", "value": "{{employeeId}}", "description": "Employee ObjectId filter. Disable to omit." },
+            { "key": "category_id", "value": "", "disabled": true, "description": "Category ObjectId filter" },
+            { "key": "service_id", "value": "", "disabled": true, "description": "Service ObjectId filter" },
+            { "key": "city_id", "value": "", "disabled": true, "description": "City ObjectId filter" },
+            { "key": "sort_by", "value": "created_at", "description": "created_at | updated_at | order_date | order_status | total_price | sub_total | unique_id | is_paid | payment_status | tax | min_deposit | order_description" },
+            { "key": "sort_order", "value": "desc", "description": "asc | desc" },
+            { "key": "sort", "value": "", "disabled": true, "description": "Legacy: 1 = asc, else desc if sort_order omitted" }
+          ]
+        },
+        "description": "**GET /api/order/getAll** — paginated order list (staff/backoffice).\n\n**Access:** Super admin, staff, franchise admin, franchise employee. Partner / customer → **403** (customers: **GET /api/order/getCustomerOrder?user_id=**).\n\n**Date filters:** Enable only `from_date` for single-day; only `to_date` for single-day; both for range.\n\n**Response:** Hydrated rows with display names; `payment_status` on each record.\n\nSee `docs/ORDER_GETALL_API_CHANGES.md` for franchise scope and search behavior."
+      },
+      "response": []
+    },
+    {
+      "name": "2. Get order by id",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": {
+          "raw": "{{baseUrl}}/api/order/get/{{orderId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "order", "get", "{{orderId}}"]
+        },
+        "description": "**GET /api/order/get/:id** — full order detail in one call.\n\n**Includes:** populated customer/city/category/partner/employee/franchise/service/quote; **`service_items`** with line detail; **`additional_charges`**; **`order_payments`**; **`order_offer`** (if offer applied); **`payment_status`**; customer payment breakdown fields.\n\n**Access:** Super admin / staff — any order. Franchise admin / employee — own franchise only. Partner / customer → **403**.\n\nUse this instead of separate list-charges / list-payments calls for read-only UI."
+      },
+      "response": []
+    },
+    {
+      "name": "3. Create order",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"user_id\": \"REPLACE_CUSTOMER_OBJECT_ID\",\n  \"user_unique_id\": \"CUST001\",\n  \"city_id\": \"REPLACE_CITY_OBJECT_ID\",\n  \"category_id\": \"REPLACE_CATEGORY_OBJECT_ID\",\n  \"created_by_id\": \"REPLACE_STAFF_OR_CUSTOMER_OBJECT_ID\",\n  \"is_paid\": false,\n  \"payment_mode_id\": \"\",\n  \"transaction_id\": \"\",\n  \"order_date\": \"2026-06-01\",\n  \"address\": \"123 Sample Street, City\",\n  \"total_service_charge\": 3000,\n  \"service_id\": \"REPLACE_SERVICE_OBJECT_ID\",\n  \"type\": 2,\n  \"partner_id\": \"REPLACE_PARTNER_OBJECT_ID\",\n  \"order_description\": \"Optional notes\",\n  \"service_items\": [\n    {\n      \"user_id\": \"REPLACE_CUSTOMER_OBJECT_ID\",\n      \"partner_id\": \"REPLACE_PARTNER_OBJECT_ID\",\n      \"category_id\": \"REPLACE_CATEGORY_OBJECT_ID\",\n      \"service_id\": \"REPLACE_SERVICE_OBJECT_ID\",\n      \"service_date\": \"2026-06-01T00:00:00.000Z\",\n      \"service_from_time\": \"2026-06-01T09:00:00.000Z\",\n      \"service_to_time\": \"2026-06-01T17:00:00.000Z\",\n      \"total_service_charge\": 3000\n    }\n  ],\n  \"additional_charges\": [\n    {\n      \"amount\": 150,\n      \"label\": \"Transport\",\n      \"payment_method\": \"upi\",\n      \"charge_type\": \"transport\"\n    }\n  ],\n  \"order_payments\": [\n    {\n      \"payer_type\": \"customer\",\n      \"amount\": 500,\n      \"status\": \"completed\",\n      \"payment_method\": \"upi\",\n      \"transaction_reference\": \"UPIREF123\"\n    }\n  ]\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/order/create",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "order", "create"]
+        },
+        "description": "**POST /api/order/create** — creates order + **exactly one** `order_service`.\n\n**Nested (optional):**\n- **`additional_charges`**: array or `{ create: [...] }` — each item: `amount` (required), `label`, `description`, `payment_method`, `charge_type`.\n- **`order_payments`**: array or `{ create: [...] }` — each item: `payer_type` (`customer`|`partner`), `amount`, optional `status`, `payment_method`, `transaction_reference`, `paid_at`, `notes`.\n\nServer recalculates **`total_price`** and **`payment_status`** after nested rows. Response may include **`record.nested`** with created ids.\n\nOmit both arrays for order-only create. See `docs/ORDER_MODULE_FRONTEND.md` §7."
+      },
+      "response": []
+    },
+    {
+      "name": "4. Update order",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"user_id\": \"REPLACE_CUSTOMER_OBJECT_ID\",\n  \"partner_id\": \"REPLACE_PARTNER_OBJECT_ID\",\n  \"employee_id\": null,\n  \"franchise_id\": null,\n  \"city_id\": \"REPLACE_CITY_OBJECT_ID\",\n  \"category_id\": \"REPLACE_CATEGORY_OBJECT_ID\",\n  \"service_id\": \"REPLACE_SERVICE_OBJECT_ID\",\n  \"address\": \"456 Updated Street\",\n  \"address_id\": null,\n  \"order_date\": \"2026-06-15\",\n  \"order_description\": \"Updated job notes\",\n  \"customer_description\": \"Customer note\",\n  \"from_date\": \"2026-06-15\",\n  \"to_date\": \"2026-06-16\",\n  \"work_start_time\": \"09:00\",\n  \"work_end_time\": \"18:00\",\n  \"payment_schedule_type\": \"single\",\n  \"customer_payment_method\": \"upi\",\n  \"order_status\": \"completed\",\n  \"total_service_charge\": 4000,\n  \"offer_id\": null,\n  \"service_items\": {\n    \"update\": [\n      {\n        \"_id\": \"{{orderServiceId}}\",\n        \"partner_id\": \"REPLACE_PARTNER_OBJECT_ID\",\n        \"service_date\": \"2026-06-15T00:00:00.000Z\",\n        \"service_from_time\": \"2026-06-15T09:00:00.000Z\",\n        \"service_to_time\": \"2026-06-15T18:00:00.000Z\",\n        \"total_service_charge\": 4000,\n        \"service_status\": \"completed\"\n      }\n    ]\n  },\n  \"additional_charges\": {\n    \"create\": [{ \"amount\": 100, \"label\": \"Materials\", \"charge_type\": \"misc\" }],\n    \"update\": [{ \"_id\": \"REPLACE_CHARGE_OBJECT_ID\", \"amount\": 200 }],\n    \"delete\": []\n  },\n  \"order_payments\": {\n    \"create\": [\n      {\n        \"payer_type\": \"customer\",\n        \"amount\": 1000,\n        \"status\": \"completed\",\n        \"payment_method\": \"upi\"\n      }\n    ],\n    \"update\": [],\n    \"delete\": []\n  }\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/order/update/{{orderId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "order", "update", "{{orderId}}"]
+        },
+        "description": "**PUT /api/order/update/:id** — single payload for header, line, pricing, charges, and payments. **Remove keys you are not changing.**\n\n**Header:** `user_id`, `partner_id`, `employee_id`, `franchise_id`, `city_id`, `category_id`, `service_id`, `address`, `address_id`, `order_date`, descriptions, schedule, `payment_schedule_type`, `customer_payment_method`.\n\n**Pricing:** `total_service_charge`, `offer_id` (`null` = remove).\n\n**Status:** `order_status`.\n\n**Line:** `service_items.update[]` with `_id` = `{{orderServiceId}}` (optional when order has one line).\n\n**Nested:** `additional_charges`, `order_payments` — `{ create, update, delete }`.\n\n**Do not send** order `is_paid`. Response: `record`, optional `nested`, optional `pricing`.\n\nSee `docs/ORDER_MODULE_FRONTEND.md` §8."
+      },
+      "response": []
+    },
+    {
+      "name": "5. Soft-delete order",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": {
+          "raw": "{{baseUrl}}/api/order/delete/{{orderId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "order", "delete", "{{orderId}}"]
+        },
+        "description": "**DELETE /api/order/delete/:id** — sets `deleted_at` (soft delete). Does not remove related charges/payments rows.\n\nRequires valid `orderId` and JWT with access to the order."
+      },
+      "response": []
+    }
+  ]
+}
