@@ -1161,3 +1161,5 @@ Customers **cannot** call `PUT /api/dispute/update` (`403`).
 - Closing chats: [§13](#13-closing-chats). Dispute resolve/close auto-closes linked chat via Lambda → Chat Service internal API.
 
 
+
+
