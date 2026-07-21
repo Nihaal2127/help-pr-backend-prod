@@ -1,11 +1,16 @@
 const Order = require('../../../../models/order');
 const OrderPayment = require('../../../../models/order_payment');
+const Quote = require('../../../../models/quote');
 const { GATEWAY_PAYMENT_METHOD, PAYMENT_PURPOSES } = require('../constants/payment.constants');
 const {
     findOrderPaymentForPaymentLink,
     completeOrderPaymentFromWebhook,
     finalizeCompletedOrderPaymentSideEffects,
 } = require('../services/orderOnlinePayment.service');
+const {
+    isQuoteDepositPayment,
+    completeQuoteDepositFromWebhook,
+} = require('../services/quoteDepositPayment.service');
 const { recordGatewayPayment } = require('../services/gatewayPayment.service');
 
 /**
@@ -19,7 +24,64 @@ const handleOrderPaymentLinkPaid = async (paymentLinkId, context = {}) => {
     const paymentRow = await findOrderPaymentForPaymentLink(paymentLinkId, paymentLinkEntity);
 
     if (paymentRow) {
-        const order = await Order.findById(paymentRow.order_id).select('user_id').lean();
+        if (isQuoteDepositPayment(paymentRow) || (paymentRow.quote_id && !paymentRow.order_id)) {
+            const quote = paymentRow.quote_id
+                ? await Quote.findOne({ _id: paymentRow.quote_id, deleted_at: null })
+                    .select('user_id')
+                    .lean()
+                : null;
+            const result = await completeQuoteDepositFromWebhook(
+                paymentRow._id,
+                paymentLinkId,
+                paidAmountPaise,
+                {
+                    gateway_payment_id: paymentEntity?.id || null,
+                    instrument_type: paymentEntity?.method || null,
+                    paid_at: paymentEntity?.created_at
+                        ? new Date(Number(paymentEntity.created_at) * 1000)
+                        : new Date(),
+                    payer_id: quote?.user_id || null,
+                    actor_user_id: quote?.user_id || null,
+                }
+            );
+
+            if (result.ok) {
+                if (result.refunded) {
+                    console.log(`Quote deposit payment ${paymentRow._id} refunded (quote invalid)`);
+                } else {
+                    console.log(`Quote deposit payment ${paymentRow._id} completed from Razorpay`);
+                }
+                return {
+                    handled: true,
+                    order_id: result.order_id || null,
+                    payment_id: result.payment_id,
+                    quote_id: result.quote_id,
+                    already_completed: !!result.already_completed,
+                    refunded: Boolean(result.refunded),
+                };
+            }
+
+            console.error('quote deposit webhook completion failed', result.message);
+            if ((result.status === 409 || result.status === 400) && !result.retryable) {
+                return {
+                    handled: false,
+                    fatal: true,
+                    noRetry: true,
+                    reason: result.message,
+                    payment_id: paymentRow._id,
+                };
+            }
+            return {
+                handled: false,
+                fatal: true,
+                reason: result.message,
+                payment_id: paymentRow._id,
+            };
+        }
+
+        const order = paymentRow.order_id
+            ? await Order.findById(paymentRow.order_id).select('user_id').lean()
+            : null;
         const result = await completeOrderPaymentFromWebhook(
             paymentRow._id,
             paymentLinkId,
@@ -31,6 +93,7 @@ const handleOrderPaymentLinkPaid = async (paymentLinkId, context = {}) => {
                     ? new Date(Number(paymentEntity.created_at) * 1000)
                     : new Date(),
                 payer_id: order?.user_id || null,
+                actor_user_id: order?.user_id || null,
             }
         );
 

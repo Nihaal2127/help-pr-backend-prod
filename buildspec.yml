@@ -2,7 +2,7 @@ version: 0.2
 
 env:
   variables:
-    LAMBDA_FUNCTION_NAME: "help-pr-backend"
+    LAMBDA_FUNCTION_NAME: "help-pr-backend-staging"
     AWS_DEFAULT_REGION: "ap-south-1"
 
 phases:

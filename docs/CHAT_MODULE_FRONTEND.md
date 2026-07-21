@@ -1159,7 +1159,3 @@ Customers **cannot** call `PUT /api/dispute/update` (`403`).
 - Disputes and orders remain on **Lambda** — only `chat_id` and provisioning are shared. Full dispute chat flow: [§7](#7-dispute-chats).
 - Dispute and support chats are **1:1** (customer + handler — employee or franchise admin when assigned). Order chats are **group**.
 - Closing chats: [§13](#13-closing-chats). Dispute resolve/close auto-closes linked chat via Lambda → Chat Service internal API.
-
-
-
-checking the pipeline

@@ -4,7 +4,10 @@ const OrderPayment = require('../../../../models/order_payment');
 const User = require('../../../../models/user');
 const { syncOrderPaymentStatus } = require('../../../../services/order_payment_status_service');
 const { syncAllPartnerOrderPaymentsForOrder } = require('../../../../services/partner_wallet_order_service');
-const { safeNotifyOrderPaymentReceived } = require('../../notifications/services/domainHooks');
+const {
+  safeNotifyOrderPaymentReceived,
+  safeNotifyOrderPaymentFailed,
+} = require('../../notifications/services/domainHooks');
 const { createOrderPaymentLink, fetchPaymentLink } = require('../razorpay.service');
 const { PAYMENT_PURPOSES, GATEWAY_PAYMENT_METHOD } = require('../constants/payment.constants');
 const {
@@ -51,10 +54,30 @@ const findPendingOnlinePayment = async (orderId, amount = null) => {
 };
 
 const markPaymentFailed = async (paymentId) => {
-    await OrderPayment.findOneAndUpdate(
-        { _id: paymentId, status: 'pending', deleted_at: null },
-        { $set: { status: 'failed', updated_at: new Date() } }
-    );
+  const payment = await OrderPayment.findOneAndUpdate(
+    { _id: paymentId, status: 'pending', deleted_at: null },
+    { $set: { status: 'failed', updated_at: new Date() } },
+    { new: true }
+  );
+
+  if (!payment) {
+    return null;
+  }
+
+  if (!payment.order_id) {
+    return payment;
+  }
+
+  const order = await Order.findById(payment.order_id).lean();
+  if (order) {
+    void safeNotifyOrderPaymentFailed({
+      order,
+      payment,
+      actorUserId: null,
+    });
+  }
+
+  return payment;
 };
 
 /**
@@ -107,6 +130,13 @@ const completeOrderPaymentFromWebhook = async (
     }
 
     if (payment.status === 'completed') {
+        if (!payment.order_id) {
+            return {
+                ok: false,
+                status: 409,
+                message: 'Completed payment is missing order_id.',
+            };
+        }
         const syncResult = await finalizeCompletedOrderPaymentSideEffects(payment.order_id, {
             payment,
             actorUserId: gatewayMeta.actor_user_id || null,
@@ -168,7 +198,7 @@ const completeOrderPaymentFromWebhook = async (
 
     const syncResult = await finalizeCompletedOrderPaymentSideEffects(payment.order_id, {
         payment,
-        actorUserId: gatewayMeta.actor_user_id || null,
+        actorUserId: gatewayMeta.actor_user_id || gatewayMeta.payer_id || null,
         notify: true,
     });
 
@@ -198,6 +228,10 @@ const syncPendingOrderPayment = async (paymentId) => {
         return { synced: false, reason: 'not_pending_online' };
     }
 
+    if (!payment.order_id) {
+        return { synced: false, reason: 'missing_order_id' };
+    }
+
     const linkId = payment.transaction_reference;
     let link;
     try {
@@ -221,6 +255,7 @@ const syncPendingOrderPayment = async (paymentId) => {
         instrument_type: link.payments?.[0]?.method || null,
         paid_at: link.updated_at ? new Date(link.updated_at * 1000) : new Date(),
         payer_id: order?.user_id || null,
+        actor_user_id: order?.user_id || null,
     });
 
     if (!completion?.ok) {
@@ -406,4 +441,5 @@ module.exports = {
     syncPendingOrderPayment,
     findOrderPaymentForPaymentLink,
     RAZORPAY_LINK_RESUMABLE,
+    RAZORPAY_LINK_TERMINAL_UNPAID,
 };

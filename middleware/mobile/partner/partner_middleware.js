@@ -1267,13 +1267,9 @@ const partnerRegisterMiddleware = async (req, res, next) => {
   }
   req.body.phone_number = normalizedPhone;
 
-  if (date_of_birth !== undefined && date_of_birth !== null && String(date_of_birth).trim() !== '') {
-    const validatedDob = validateDateOfBirth(date_of_birth, res);
-    if (validatedDob === null) return;
-    req.body.date_of_birth = validatedDob;
-  } else {
-    delete req.body.date_of_birth;
-  }
+  const validatedDob = validateDateOfBirth(date_of_birth, res);
+  if (validatedDob === null) return;
+  req.body.date_of_birth = validatedDob;
 
   if (!password || String(password).trim() === '') {
     return res.status(400).json({

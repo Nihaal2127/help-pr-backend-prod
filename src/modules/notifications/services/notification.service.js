@@ -4,8 +4,22 @@ const User = require("../../../../models/user");
 const { mapUserTypeToRole } = require("../../../../constants/user_types");
 const { NOTIFICATION_EVENTS } = require("../constants/notification_events");
 const { sendPushForNotification } = require("./notificationPush.service");
+const { logNotificationDelivery } = require("./notificationDeliveryLog.service");
+const { buildFieldDateRangeFilter } = require("../../../../utils/schedule_date_filters");
 
 const MAX_PAGE_SIZE = 100;
+
+const NOTIFICATION_CATEGORIES = [
+  "order",
+  "quote",
+  "subscription",
+  "wallet",
+  "ticket",
+  "chat",
+  "system",
+  "reminder",
+  "admin",
+];
 
 const formatNotificationForApi = (doc) => ({
   _id: doc._id,
@@ -31,6 +45,71 @@ const parsePagination = (query = {}) => {
   if (!Number.isFinite(limit) || limit < 1) limit = 20;
   if (limit > MAX_PAGE_SIZE) limit = MAX_PAGE_SIZE;
   return { page, limit, skip: (page - 1) * limit };
+};
+
+const buildNotificationQueryFilter = (userId, query = {}) => {
+  const filter = {
+    recipient_user_id: userId,
+    deleted_at: null,
+  };
+
+  if (query.is_read !== undefined && query.is_read !== "") {
+    filter.is_read = String(query.is_read).toLowerCase() === "true";
+  }
+
+  if (query.category) {
+    const category = String(query.category).trim().toLowerCase();
+    if (!NOTIFICATION_CATEGORIES.includes(category)) {
+      return {
+        ok: false,
+        status: 400,
+        message: `Invalid category. Use one of: ${NOTIFICATION_CATEGORIES.join(", ")}.`,
+      };
+    }
+    filter.category = category;
+  }
+
+  if (query.event) {
+    const event = String(query.event).trim();
+    if (!NOTIFICATION_EVENTS[event]) {
+      return {
+        ok: false,
+        status: 400,
+        message: "Invalid event filter.",
+      };
+    }
+    filter.event = event;
+  }
+
+  if (query.franchise_id) {
+    const franchiseId = String(query.franchise_id).trim();
+    if (!mongoose.Types.ObjectId.isValid(franchiseId)) {
+      return {
+        ok: false,
+        status: 400,
+        message: "Invalid franchise_id filter.",
+      };
+    }
+    filter.franchise_id = franchiseId;
+  }
+
+  const dateFilter = buildFieldDateRangeFilter(query, "created_at");
+  if (!dateFilter.ok) {
+    return { ok: false, status: 400, message: dateFilter.message };
+  }
+  Object.assign(filter, dateFilter.filter);
+
+  return { ok: true, filter };
+};
+
+const uniqueRecipientIds = (recipientIds = []) => {
+  const seen = new Set();
+  return recipientIds.filter((id) => {
+    const key = String(id);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 };
 
 const excludeActor = (recipientIds, actorUserId) => {
@@ -62,6 +141,8 @@ const notify = async ({
   franchiseId = null,
   metadata = {},
   dedupeKeyPrefix = null,
+  pushPreference = "update",
+  skipPush = false,
 }) => {
   const template = NOTIFICATION_EVENTS[eventKey];
   if (!template) {
@@ -69,23 +150,56 @@ const notify = async ({
     return;
   }
 
-  const recipients = excludeActor(recipientUserIds, actorUserId);
+  const recipients = excludeActor(uniqueRecipientIds(recipientUserIds), actorUserId);
   if (!recipients.length) return;
 
   const title = template.title(context);
   const body = template.body(context);
   const now = new Date();
+  const sentDeviceTokens = new Set();
+
+  console.log(
+    `[notifications:delivery] batch event=${eventKey} entity=${entityType || ""}:${entityId || ""} recipients=${recipients.length} skip_push=${skipPush}`
+  );
 
   for (const recipientId of recipients) {
+    const deliveryBase = {
+      event: eventKey,
+      category: template.category,
+      actorUserId,
+      recipientUserId: recipientId,
+      title,
+      body,
+      entityType,
+      entityId,
+      franchiseId,
+      metadata,
+      inAppCreated: false,
+      pushAttempted: !skipPush,
+      pushSent: false,
+      dedupeKey: null,
+    };
+
     try {
       let dedupeKey = null;
       if (dedupeKeyPrefix) {
         dedupeKey = `${dedupeKeyPrefix}:${recipientId}`;
       }
+      deliveryBase.dedupeKey = dedupeKey;
 
       if (dedupeKey) {
         const existing = await Notification.findOne({ dedupe_key: dedupeKey }).lean();
-        if (existing) continue;
+        if (existing) {
+          logNotificationDelivery({
+            ...deliveryBase,
+            recipientRole: existing.recipient_role || "",
+            notificationId: existing._id,
+            inAppCreated: false,
+            pushAttempted: false,
+            pushSkipReason: "dedupe_skipped",
+          });
+          continue;
+        }
       }
 
       const recipientRole = await resolveRecipientRole(recipientId);
@@ -108,52 +222,89 @@ const notify = async ({
         updated_at: now,
       });
 
-      const pushSent = await sendPushForNotification({
-        userId: recipientId,
-        title,
-        body,
-        data: {
-          type: template.category,
-          notification_id: String(doc._id),
-          event: eventKey,
-          entity_type: entityType || "",
-          entity_id: entityId ? String(entityId) : "",
-          click_action: "FLUTTER_NOTIFICATION_CLICK",
-        },
-      });
+      deliveryBase.inAppCreated = true;
+      deliveryBase.recipientRole = recipientRole;
+      deliveryBase.notificationId = doc._id;
 
-      if (pushSent) {
+      let pushResult = {
+        pushSent: false,
+        skipReason: skipPush ? "push_disabled_for_hook" : null,
+      };
+
+      if (!skipPush) {
+        pushResult = await sendPushForNotification({
+          userId: recipientId,
+          title,
+          body,
+          pushPreference,
+          sentDeviceTokens,
+          data: {
+            type: template.category,
+            notification_id: String(doc._id),
+            event: eventKey,
+            entity_type: entityType || "",
+            entity_id: entityId ? String(entityId) : "",
+            click_action: "FLUTTER_NOTIFICATION_CLICK",
+          },
+        });
+      }
+
+      if (pushResult.pushSent) {
         await Notification.updateOne(
           { _id: doc._id },
           { $set: { push_sent_at: new Date(), updated_at: new Date() } }
         );
       }
+
+      logNotificationDelivery({
+        ...deliveryBase,
+        pushSent: pushResult.pushSent,
+        pushSkipReason: pushResult.skipReason || "",
+        pushError: pushResult.pushError || "",
+        pushErrorCode: pushResult.pushErrorCode || "",
+        firebaseTarget: pushResult.firebaseTarget || "",
+        deviceTokenSuffix: pushResult.deviceTokenSuffix || "",
+        userType: pushResult.userType,
+      });
     } catch (error) {
       if (error?.code === 11000) {
+        logNotificationDelivery({
+          ...deliveryBase,
+          pushAttempted: false,
+          pushSkipReason: "dedupe_skipped",
+        });
         continue;
       }
       console.error(
         `[notifications] failed for recipient ${recipientId} event ${eventKey}:`,
         error.message
       );
+      logNotificationDelivery({
+        ...deliveryBase,
+        pushSkipReason: "notify_error",
+        pushError: error.message || String(error),
+      });
     }
   }
 };
 
 const listNotifications = async (userId, query = {}) => {
   const { page, limit, skip } = parsePagination(query);
-  const filter = {
+  const filterResult = buildNotificationQueryFilter(userId, query);
+  if (!filterResult.ok) {
+    return filterResult;
+  }
+  const filter = filterResult.filter;
+
+  const unreadFilter = {
     recipient_user_id: userId,
     deleted_at: null,
+    is_read: false,
   };
-
-  if (query.is_read !== undefined && query.is_read !== "") {
-    filter.is_read = String(query.is_read).toLowerCase() === "true";
-  }
-
-  if (query.category) {
-    filter.category = String(query.category).trim().toLowerCase();
-  }
+  if (filter.category) unreadFilter.category = filter.category;
+  if (filter.event) unreadFilter.event = filter.event;
+  if (filter.franchise_id) unreadFilter.franchise_id = filter.franchise_id;
+  if (filter.created_at) unreadFilter.created_at = filter.created_at;
 
   const [totalItems, records, unreadCount] = await Promise.all([
     Notification.countDocuments(filter),
@@ -162,14 +313,11 @@ const listNotifications = async (userId, query = {}) => {
       .skip(skip)
       .limit(limit)
       .lean(),
-    Notification.countDocuments({
-      recipient_user_id: userId,
-      deleted_at: null,
-      is_read: false,
-    }),
+    Notification.countDocuments(unreadFilter),
   ]);
 
   return {
+    ok: true,
     totalItems,
     totalPages: Math.ceil(totalItems / limit) || 0,
     currentPage: page,
@@ -179,13 +327,17 @@ const listNotifications = async (userId, query = {}) => {
   };
 };
 
-const getUnreadCount = async (userId) => {
-  const count = await Notification.countDocuments({
-    recipient_user_id: userId,
-    deleted_at: null,
-    is_read: false,
+const getUnreadCount = async (userId, query = {}) => {
+  const filterResult = buildNotificationQueryFilter(userId, {
+    ...query,
+    is_read: "false",
   });
-  return count;
+  if (!filterResult.ok) {
+    return filterResult;
+  }
+
+  const count = await Notification.countDocuments(filterResult.filter);
+  return { ok: true, unreadCount: count };
 };
 
 const markAsRead = async (userId, notificationId) => {
@@ -246,4 +398,5 @@ module.exports = {
   markAsRead,
   markAllAsRead,
   formatNotificationForApi,
+  NOTIFICATION_CATEGORIES,
 };

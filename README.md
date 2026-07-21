@@ -1,5 +1,3 @@
-# help-pr-backend-prod
-
 # Help PR — Backend (Staging)
 
 Node.js / Express API for **Help PR**, a franchise-based home-services marketplace. Partners deliver services; franchises operate territories; platform staff manage global catalog and operations.
