@@ -13,6 +13,12 @@ const {
     safeNotifySubscriptionAssigned,
     safeNotifySubscriptionStatusChanged,
 } = require('../src/modules/notifications/services/domainHooks');
+const { assertPartnerFranchiseAccess } = require('../utils/partner_subscription_access');
+const {
+    DEFAULT_PARTNER_PLAN_NAME,
+    AUTO_BASIC_SUBSCRIPTION_NOTES,
+    PLATINUM_PLAN_NAME,
+} = require('../constants/partner_subscription');
 /** Same as `user.type` in models/user.js (2 = Partner). */
 const USER_TYPE_PARTNER = 2;
 
@@ -69,6 +75,44 @@ const loadActivePlan = async (planOid) => {
         deleted_at: null,
         is_active: true,
     });
+};
+
+const loadPlanByOid = async (planOid) =>
+    SubscriptionPlan.findOne({ _id: planOid, deleted_at: null }).lean();
+
+const isPlatinumPlanDoc = (plan) =>
+    Boolean(plan && String(plan.plan_name || '').toLowerCase() === PLATINUM_PLAN_NAME);
+
+const normalizeBannerImageUrl = (raw) => {
+    if (raw === undefined) return { provided: false, value: undefined };
+    if (raw === null || raw === '') return { provided: true, value: null };
+    const value = String(raw).trim();
+    if (!value) return { provided: true, value: null };
+    return { provided: true, value };
+};
+
+const validateBannerForPlan = async (planOidOrDoc, banner) => {
+    if (!banner.provided) return { ok: true };
+    const plan =
+        planOidOrDoc && planOidOrDoc.plan_name
+            ? planOidOrDoc
+            : await loadPlanByOid(planOidOrDoc);
+    if (!plan) {
+        return { ok: false, status: 404, message: 'Subscription plan not found.' };
+    }
+    if (banner.value !== null && !isPlatinumPlanDoc(plan)) {
+        return {
+            ok: false,
+            status: 400,
+            message: 'Banner image can only be set for platinum subscriptions.',
+        };
+    }
+    return { ok: true };
+};
+
+const assertSubscriptionPartnerFranchiseAccess = async (req, partnerId) => {
+    if (!req?.user) return { ok: true };
+    return assertPartnerFranchiseAccess(req.user, partnerId);
 };
 
 const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -441,14 +485,20 @@ const listPartnerSubscriptions = async (query, req = null) => {
     }
 };
 
-const createPartnerSubscription = async (body, assignedByUserId) => {
+const createPartnerSubscription = async (body, assignedByUserId, req = null) => {
     try {
-        const { partner_id, subscription_plan_id, started_at, expires_at, notes, status } = body;
+        const { partner_id, subscription_plan_id, started_at, expires_at, notes, status, banner_image_url } =
+            body;
 
         const pPartner = parseObjectId(partner_id, 'partner_id');
         if (!pPartner.ok) return fail(400, pPartner.message);
         const pPlan = parseObjectId(subscription_plan_id, 'subscription_plan_id');
         if (!pPlan.ok) return fail(400, pPlan.message);
+
+        const franchiseAccess = await assertSubscriptionPartnerFranchiseAccess(req, pPartner.oid);
+        if (!franchiseAccess.ok) {
+            return fail(franchiseAccess.status, franchiseAccess.message);
+        }
 
         const partnerUser = await loadPartnerUser(pPartner.oid);
         if (!partnerUser) {
@@ -458,6 +508,12 @@ const createPartnerSubscription = async (body, assignedByUserId) => {
         const plan = await loadActivePlan(pPlan.oid);
         if (!plan) {
             return fail(404, 'Subscription plan not found, inactive, or deleted.');
+        }
+
+        const banner = normalizeBannerImageUrl(banner_image_url);
+        const bannerValidation = await validateBannerForPlan(plan, banner);
+        if (!bannerValidation.ok) {
+            return fail(bannerValidation.status, bannerValidation.message);
         }
 
         const start = started_at ? new Date(started_at) : new Date();
@@ -507,6 +563,9 @@ const createPartnerSubscription = async (body, assignedByUserId) => {
         primary.status = normalizedStatus;
         primary.assigned_by_id = assignedOid;
         primary.notes = notes !== undefined && notes !== null ? String(notes) : '';
+        if (banner.provided) {
+            primary.banner_image_url = banner.value;
+        }
         primary.updated_at = new Date();
         if (!primary.created_at) {
             primary.created_at = new Date();
@@ -546,7 +605,7 @@ const createPartnerSubscription = async (body, assignedByUserId) => {
     }
 };
 
-const updatePartnerSubscription = async (id, body) => {
+const updatePartnerSubscription = async (id, body, req = null) => {
     try {
         const pId = parseObjectId(id, 'id');
         if (!pId.ok) return fail(400, pId.message);
@@ -554,7 +613,13 @@ const updatePartnerSubscription = async (id, body) => {
         const row = await PartnerSubscription.findOne({ _id: pId.oid, deleted_at: null });
         if (!row) return fail(404, 'No record found');
 
+        const franchiseAccess = await assertSubscriptionPartnerFranchiseAccess(req, row.partner_id);
+        if (!franchiseAccess.ok) {
+            return fail(franchiseAccess.status, franchiseAccess.message);
+        }
+
         const previousStatus = row.status;
+        let effectivePlanDoc = await loadPlanByOid(row.subscription_plan_id);
 
         if (body.subscription_plan_id !== undefined) {
             const pPlan = parseObjectId(body.subscription_plan_id, 'subscription_plan_id');
@@ -564,6 +629,16 @@ const updatePartnerSubscription = async (id, body) => {
                 return fail(404, 'Subscription plan not found, inactive, or deleted.');
             }
             row.subscription_plan_id = pPlan.oid;
+            effectivePlanDoc = plan;
+        }
+
+        const banner = normalizeBannerImageUrl(body.banner_image_url);
+        const bannerValidation = await validateBannerForPlan(
+            effectivePlanDoc || row.subscription_plan_id,
+            banner
+        );
+        if (!bannerValidation.ok) {
+            return fail(bannerValidation.status, bannerValidation.message);
         }
 
         if (body.started_at !== undefined) {
@@ -593,6 +668,10 @@ const updatePartnerSubscription = async (id, body) => {
             row.notes = body.notes !== null ? String(body.notes) : '';
         }
 
+        if (banner.provided) {
+            row.banner_image_url = banner.value;
+        }
+
         row.updated_at = new Date();
         await row.save();
 
@@ -618,16 +697,23 @@ const updatePartnerSubscription = async (id, body) => {
     }
 };
 
-const getPartnerSubscriptionById = async (id) => {
+const getPartnerSubscriptionById = async (id, req = null) => {
     try {
         const pId = parseObjectId(id, 'id');
         if (!pId.ok) return fail(400, pId.message);
 
         const record = await PartnerSubscription.findOne({ _id: pId.oid, deleted_at: null })
-            .populate('partner_id', 'name email phone_number')
+            .populate('partner_id', 'name email phone_number franchise_id')
             .populate('subscription_plan_id')
             .populate('assigned_by_id', 'name email');
         if (!record) return fail(404, 'No record found');
+
+        const partnerOid = record.partner_id?._id ?? record.partner_id;
+        const franchiseAccess = await assertSubscriptionPartnerFranchiseAccess(req, partnerOid);
+        if (!franchiseAccess.ok) {
+            return fail(franchiseAccess.status, franchiseAccess.message);
+        }
+
         return ok(200, { message: 'Partner subscription fetched successfully', record });
     } catch (error) {
         console.error('getPartnerSubscriptionById', error);
@@ -635,7 +721,7 @@ const getPartnerSubscriptionById = async (id) => {
     }
 };
 
-const softDeletePartnerSubscription = async (id) => {
+const softDeletePartnerSubscription = async (id, req = null) => {
     try {
         const pId = parseObjectId(id, 'id');
         if (!pId.ok) return fail(400, pId.message);
@@ -643,6 +729,11 @@ const softDeletePartnerSubscription = async (id) => {
         const row = await PartnerSubscription.findById(pId.oid);
         if (!row) return fail(404, 'No record found');
         if (row.deleted_at) return fail(400, 'Record is already deleted');
+
+        const franchiseAccess = await assertSubscriptionPartnerFranchiseAccess(req, row.partner_id);
+        if (!franchiseAccess.ok) {
+            return fail(franchiseAccess.status, franchiseAccess.message);
+        }
 
         row.deleted_at = new Date();
         await row.save();
@@ -653,7 +744,7 @@ const softDeletePartnerSubscription = async (id) => {
     }
 };
 
-const importPartnerSubscriptions = async (records, assignedByUserId) => {
+const importPartnerSubscriptions = async (records, assignedByUserId, req = null) => {
     if (!records || !Array.isArray(records)) {
         return fail(400, 'Invalid input. Expected an array of records.');
     }
@@ -682,6 +773,11 @@ const importPartnerSubscriptions = async (records, assignedByUserId) => {
             const partnerUser = await loadPartnerUser(pPartner.oid);
             if (!partnerUser) {
                 return fail(404, `Partner not found or not a partner.`);
+            }
+
+            const franchiseAccess = await assertSubscriptionPartnerFranchiseAccess(req, pPartner.oid);
+            if (!franchiseAccess.ok) {
+                return fail(franchiseAccess.status, franchiseAccess.message);
             }
 
             const plan = await loadActivePlan(pPlan.oid);
@@ -773,6 +869,93 @@ const getMySubscription = async (partnerUserId) => {
     }
 };
 
+const loadDefaultBasicPlan = async () =>
+    SubscriptionPlan.findOne({
+        plan_name: DEFAULT_PARTNER_PLAN_NAME,
+        is_active: true,
+        deleted_at: null,
+    });
+
+const partnerHasActiveSubscription = async (partnerOid) => {
+    const now = new Date();
+    const row = await PartnerSubscription.findOne({
+        partner_id: partnerOid,
+        status: 'active',
+        deleted_at: null,
+        $or: [{ expires_at: null }, { expires_at: { $gt: now } }],
+    })
+        .select('_id')
+        .lean();
+    return Boolean(row);
+};
+
+/**
+ * Assign the default "basic" plan when a partner has no active subscription.
+ * Matches mobile onboarding: expires_at null, status active, no assignment notification.
+ */
+const assignDefaultBasicPlanIfMissing = async (partnerId, options = {}) => {
+    try {
+        const { assignedByUserId = null, source = 'web', startedAt = null, notes } = options;
+
+        const pPartner = parseObjectId(partnerId, 'partner_id');
+        if (!pPartner.ok) return fail(400, pPartner.message);
+
+        const partnerUser = await loadPartnerUser(pPartner.oid);
+        if (!partnerUser) {
+            return fail(404, 'Partner not found or user is not a partner.');
+        }
+
+        if (await partnerHasActiveSubscription(pPartner.oid)) {
+            return ok(200, {
+                message: 'Partner already has an active subscription.',
+                skipped: true,
+            });
+        }
+
+        const basicPlan = await loadDefaultBasicPlan();
+        if (!basicPlan) {
+            return fail(500, 'Default subscription plan "basic" is not configured.');
+        }
+
+        const start = startedAt ? new Date(startedAt) : new Date();
+        if (Number.isNaN(start.getTime())) {
+            return fail(400, `${fieldLabel('started_at')} must be a valid date.`);
+        }
+
+        const sourceKey = String(source || 'web').toLowerCase() === 'mobile' ? 'mobile' : 'web';
+        const resolvedNotes =
+            notes !== undefined && notes !== null
+                ? String(notes)
+                : AUTO_BASIC_SUBSCRIPTION_NOTES[sourceKey];
+
+        let assignedOid = null;
+        if (assignedByUserId !== undefined && assignedByUserId !== null) {
+            const assignedBy = parseObjectId(assignedByUserId, 'assigned_by_id');
+            if (assignedBy.ok) {
+                assignedOid = assignedBy.oid;
+            }
+        }
+
+        await PartnerSubscription.create({
+            partner_id: pPartner.oid,
+            subscription_plan_id: basicPlan._id,
+            started_at: start,
+            expires_at: null,
+            status: 'active',
+            notes: resolvedNotes,
+            assigned_by_id: assignedOid,
+        });
+
+        return ok(200, {
+            message: 'Default basic subscription assigned successfully.',
+            skipped: false,
+        });
+    } catch (error) {
+        console.error('assignDefaultBasicPlanIfMissing', error.message);
+        return fail(500, 'Internal server error.');
+    }
+};
+
 module.exports = {
     listPartnerSubscriptions,
     createPartnerSubscription,
@@ -781,4 +964,5 @@ module.exports = {
     softDeletePartnerSubscription,
     importPartnerSubscriptions,
     getMySubscription,
+    assignDefaultBasicPlanIfMissing,
 };

@@ -2,6 +2,7 @@ const { notify } = require("./notification.service");
 const OrderPayment = require("../../../../models/order_payment");
 const OrderAdditionalCharge = require("../../../../models/order_additional_charge");
 const { formatAmount } = require("../constants/notification_events");
+const { normalizeQuoteStatus } = require("../../../../enum/quote_status_enum");
 const { resolveOrderRecipients } = require("../resolvers/orderRecipients");
 const { resolveQuoteRecipients } = require("../resolvers/quoteRecipients");
 const { resolveSubscriptionRecipients } = require("../resolvers/subscriptionRecipients");
@@ -21,6 +22,13 @@ const runSafe = async (label, fn) => {
   } catch (error) {
     console.error(`[notifications] ${label}:`, error.message || error);
   }
+};
+
+const truncatePostDescription = (value, maxLen = 60) => {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  if (text.length <= maxLen) return text;
+  return `${text.slice(0, maxLen - 1)}…`;
 };
 
 const buildOrderMetadata = (order, extra = {}) => ({
@@ -356,26 +364,32 @@ const safeNotifyQuoteStatusChanged = async ({
   actorUserId,
 }) => {
   await runSafe("quote.status_changed", async () => {
-    if (!newStatus || newStatus === previousStatus) return;
+    const prev = normalizeQuoteStatus(previousStatus, quote) || previousStatus;
+    const next = normalizeQuoteStatus(newStatus, quote) || newStatus;
+    if (!next || String(next) === String(prev)) return;
 
     const recipients = await resolveQuoteRecipients(quote);
     await notify({
       eventKey: "QUOTE_STATUS_CHANGED",
       actorUserId,
       recipientUserIds: recipients,
-      context: { quote, previousStatus, newStatus },
+      context: { quote, previousStatus: prev, newStatus: next },
       entityType: "quote",
       entityId: quote._id,
       franchiseId: quote.franchise_id,
       metadata: {
         quote_id: quote._id,
         quote_sequence_id: quote.quote_sequence_id,
-        previousStatus,
-        newStatus,
+        previousStatus: prev,
+        newStatus: next,
       },
-      dedupeKeyPrefix: `quote.status:${quote._id}:${newStatus}`,
+      dedupeKeyPrefix: `quote.status:${quote._id}:${next}`,
     });
-    void safeNotifyBackofficeQuoteStatusChanged({ quote, newStatus, actorUserId });
+    await safeNotifyBackofficeQuoteStatusChanged({
+      quote,
+      newStatus: next,
+      actorUserId,
+    });
   });
 };
 
@@ -577,6 +591,70 @@ const safeNotifyQuoteAssigned = async ({ quote, actorUserId }) => {
         partner_id: quote.partner_id,
       },
       dedupeKeyPrefix: `quote.assigned:${quote._id}`,
+    });
+  });
+};
+
+const safeNotifyPartnerPostReviewed = async ({
+  post,
+  partnerUserId,
+  reviewStatus,
+  rejectionReason = "",
+  actorUserId,
+}) => {
+  await runSafe("partner.post_reviewed", async () => {
+    const isApproved = String(reviewStatus || "").toLowerCase() === "approved";
+    const eventKey = isApproved ? "PARTNER_POST_APPROVED" : "PARTNER_POST_REJECTED";
+    const postDescription = truncatePostDescription(post?.description);
+
+    await notify({
+      eventKey,
+      actorUserId,
+      recipientUserIds: [partnerUserId],
+      context: {
+        post,
+        postDescription,
+        rejectionReason: String(rejectionReason || "").trim(),
+      },
+      entityType: "partner_post",
+      entityId: post?._id,
+      franchiseId: post?.franchise_id || null,
+      metadata: {
+        post_id: post?._id || null,
+        status: isApproved ? "published" : "rejected",
+        rejection_reason: isApproved ? "" : String(rejectionReason || "").trim(),
+      },
+      dedupeKeyPrefix: `partner.post.reviewed:${post?._id}:${post?.updated_at ? new Date(post.updated_at).toISOString() : Date.now()}`,
+    });
+  });
+};
+
+const safeNotifyPartnerPostModerated = async ({
+  post,
+  partnerUserId,
+  moderationStatus,
+  actorUserId,
+}) => {
+  await runSafe("partner.post_moderated", async () => {
+    const status = String(moderationStatus || "").toLowerCase();
+    if (status !== "hidden" && status !== "removed") return;
+
+    const eventKey = status === "hidden" ? "PARTNER_POST_HIDDEN" : "PARTNER_POST_REMOVED";
+    const postDescription = truncatePostDescription(post?.description);
+
+    await notify({
+      eventKey,
+      actorUserId,
+      recipientUserIds: [partnerUserId],
+      context: { post, postDescription },
+      entityType: "partner_post",
+      entityId: post?._id,
+      franchiseId: post?.franchise_id || null,
+      metadata: {
+        post_id: post?._id || null,
+        status,
+      },
+      dedupeKeyPrefix: `partner.post.moderated:${post?._id}:${status}:${post?.updated_at ? new Date(post.updated_at).toISOString() : Date.now()}`,
     });
   });
 };
@@ -928,6 +1006,8 @@ module.exports = {
   safeNotifyPartnerWorkStarted,
   safeNotifyPartnerWorkCompleted,
   safeNotifyQuoteAssigned,
+  safeNotifyPartnerPostReviewed,
+  safeNotifyPartnerPostModerated,
   safeNotifyPartnerVerificationUpdated,
   safeNotifyOrderAdditionalChargeUpdated,
   safeNotifyOrderAdditionalChargeRemoved,

@@ -6,7 +6,7 @@ const Service = require('../../../models/service');
 const { handleImageUpload } = require('../../../helper/image_uploader');
 const { getUploadType } = require('../../../enum/upload_type_enum');
 const { normalizePostType } = require('../../../enum/post_type_enum');
-const { POST_STATUS_PUBLISHED } = require('../../../enum/post_report_reason_enum');
+const { POST_STATUS_PENDING, POST_STATUS_REJECTED } = require('../../../enum/post_report_reason_enum');
 const { ORDER_STATUS_COMPLETED } = require('../../../enum/order_status_enum');
 const {
   fail,
@@ -27,6 +27,7 @@ const {
   POST_TYPE_ORDER,
   POST_TYPE_LEGACY_WORK,
 } = require('../../../services/partner_post_common_service');
+const { safeNotifyBackofficePartnerPostPending } = require('../../../src/modules/notifications/services/backofficeHooks');
 
 const uploadPostImages = async (files) => {
   const uploadType = getUploadType(5);
@@ -158,7 +159,7 @@ const createPartnerPost = async (partnerId, body, files) => {
     legacy_service_name: legacyServiceName,
     description: descParsed.text,
     image_urls: imageUrls,
-    status: POST_STATUS_PUBLISHED,
+    status: POST_STATUS_PENDING,
     share_token: generateShareToken(),
     likes_count: 0,
     shares_count: 0,
@@ -168,8 +169,13 @@ const createPartnerPost = async (partnerId, body, files) => {
     deleted_at: null,
   });
 
+  await safeNotifyBackofficePartnerPostPending({
+    post: post.toObject(),
+    actorUserId: partnerId,
+  });
+
   const mapped = await mapPostRecords([post.toObject()], { includePartner: true });
-  return ok(201, { message: 'Post created successfully.', post: mapped[0] });
+  return ok(201, { message: 'Post submitted for approval.', post: mapped[0] });
 };
 
 const listPartnerPosts = async (partnerId, query) => {
@@ -350,8 +356,21 @@ const updatePartnerPost = async (partnerId, postId, body, files) => {
 
   updates.image_urls = finalImages;
 
+  const wasRejected = post.status === POST_STATUS_REJECTED;
+  if (wasRejected) {
+    updates.status = POST_STATUS_PENDING;
+    updates.rejection_reason = '';
+  }
+
   Object.assign(post, updates);
   await post.save();
+
+  if (wasRejected) {
+    await safeNotifyBackofficePartnerPostPending({
+      post: post.toObject(),
+      actorUserId: partnerId,
+    });
+  }
 
   const mapped = await mapPostRecords([post.toObject()], { includePartner: true });
   return ok(200, { message: 'Post updated successfully.', post: mapped[0] });

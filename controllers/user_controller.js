@@ -739,6 +739,7 @@ const normalizePartnerSubscriptionPayload = (payload) => {
       null,
     status: parsed.status ?? null,
     notes: parsed.notes ?? '',
+    banner_image_url: parsed.banner_image_url ?? null,
   };
 };
 
@@ -1793,6 +1794,20 @@ const create = async (req, res) => {
             success: false,
             status: subscriptionResult.status,
             message: subscriptionResult.message,
+          });
+        }
+      } else {
+        const autoSubscriptionResult =
+          await partnerSubscriptionService.assignDefaultBasicPlanIfMissing(savedUser._id, {
+            assignedByUserId: created_by_id || req.user?.id || req.user?._id || null,
+            source: 'web',
+            startedAt: savedUser.created_at,
+          });
+        if (!autoSubscriptionResult.ok) {
+          return res.status(autoSubscriptionResult.status).json({
+            success: false,
+            status: autoSubscriptionResult.status,
+            message: autoSubscriptionResult.message,
           });
         }
       }

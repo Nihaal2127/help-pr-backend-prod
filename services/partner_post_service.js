@@ -6,11 +6,15 @@ const {
   normalizePostStatus,
   normalizeReportStatus,
   REPORT_STATUS_PENDING,
+  POST_STATUS_PENDING,
   POST_STATUS_PUBLISHED,
+  POST_STATUS_REJECTED,
   POST_STATUS_HIDDEN,
   POST_STATUS_REMOVED,
+  POST_MODERATION_STATUSES,
 } = require('../enum/post_report_reason_enum');
 const { resolvePartnerPostListScope } = require('../utils/partner_post_access');
+const { safeNotifyPartnerPostReviewed, safeNotifyPartnerPostModerated } = require('../src/modules/notifications/services/domainHooks');
 const {
   fail,
   ok,
@@ -20,6 +24,7 @@ const {
   DEFAULT_LIMIT,
   MAX_LIMIT,
   mapPostRecords,
+  parseRejectionReason,
 } = require('./partner_post_common_service');
 
 const MAX_ADMIN_LIMIT = 100;
@@ -80,8 +85,10 @@ const getPostCounts = async (req, query = {}) => {
 
   const postFilter = filterResult.filter;
 
-  const [published, hidden, removed, reportCounts] = await Promise.all([
+  const [postPending, published, rejected, hidden, removed, reportCounts] = await Promise.all([
+    PartnerPost.countDocuments({ ...postFilter, status: POST_STATUS_PENDING }),
     PartnerPost.countDocuments({ ...postFilter, status: POST_STATUS_PUBLISHED }),
+    PartnerPost.countDocuments({ ...postFilter, status: POST_STATUS_REJECTED }),
     PartnerPost.countDocuments({ ...postFilter, status: POST_STATUS_HIDDEN }),
     PartnerPost.countDocuments({ ...postFilter, status: POST_STATUS_REMOVED }),
     countReportStatusesForPostFilter(postFilter),
@@ -90,7 +97,10 @@ const getPostCounts = async (req, query = {}) => {
   return ok(200, {
     message: 'Post counts fetched successfully.',
     counts: {
+      total: postPending + published + rejected + hidden + removed,
+      post_pending: postPending,
       published,
+      rejected,
       hidden,
       removed,
       pending: reportCounts.pending,
@@ -100,12 +110,31 @@ const getPostCounts = async (req, query = {}) => {
   });
 };
 
-const listReports = async (query) => {
+const listReports = async (req, query) => {
   const page = parsePositiveInt(query.page, DEFAULT_PAGE);
   const limit = Math.min(parsePositiveInt(query.limit, DEFAULT_LIMIT), MAX_ADMIN_LIMIT);
   const skip = (page - 1) * limit;
 
-  const filter = {};
+  const filterResult = await buildPostListScopeFilter(req, query);
+  if (!filterResult.ok) {
+    return fail(filterResult.status, filterResult.message);
+  }
+
+  const scopedPostIds = await PartnerPost.find(filterResult.filter).distinct('_id');
+  if (!scopedPostIds.length) {
+    return ok(200, {
+      message: 'Reports retrieved successfully.',
+      data: {
+        records: [],
+        totalItems: 0,
+        totalPages: 0,
+        currentPage: page,
+        limit,
+      },
+    });
+  }
+
+  const filter = { post_id: { $in: scopedPostIds } };
   const status = query.status != null ? normalizeReportStatus(query.status) : REPORT_STATUS_PENDING;
   if (status) {
     filter.status = status;
@@ -194,12 +223,17 @@ const listReports = async (query) => {
   });
 };
 
-const listAllPosts = async (query) => {
+const listAllPosts = async (req, query) => {
   const page = parsePositiveInt(query.page, DEFAULT_PAGE);
   const limit = Math.min(parsePositiveInt(query.limit, DEFAULT_LIMIT), MAX_ADMIN_LIMIT);
   const skip = (page - 1) * limit;
 
-  const filter = { deleted_at: null };
+  const filterResult = await buildPostListScopeFilter(req, query);
+  if (!filterResult.ok) {
+    return fail(filterResult.status, filterResult.message);
+  }
+
+  const filter = { ...filterResult.filter };
 
   if (query.status !== undefined && String(query.status).trim() !== '') {
     const status = normalizePostStatus(query.status);
@@ -207,18 +241,6 @@ const listAllPosts = async (query) => {
       return fail(400, 'Invalid post status filter.');
     }
     filter.status = status;
-  }
-
-  if (query.partner_id) {
-    const parsed = parseObjectId(query.partner_id, 'partner_id');
-    if (!parsed.ok) return fail(400, parsed.message);
-    filter.partner_id = parsed.oid;
-  }
-
-  if (query.franchise_id) {
-    const parsed = parseObjectId(query.franchise_id, 'franchise_id');
-    if (!parsed.ok) return fail(400, parsed.message);
-    filter.franchise_id = parsed.oid;
   }
 
   const [totalItems, posts] = await Promise.all([
@@ -241,26 +263,101 @@ const listAllPosts = async (query) => {
   });
 };
 
-const moderatePost = async (postId, body) => {
+const moderatePost = async (req, postId, body) => {
   const parsed = parseObjectId(postId, 'post_id');
   if (!parsed.ok) return fail(400, parsed.message);
 
-  const status = normalizePostStatus(body.status);
-  if (!status) {
-    return fail(400, 'status must be one of: published, hidden, removed.');
+  const scopeResult = await buildPostListScopeFilter(req, {});
+  if (!scopeResult.ok) {
+    return fail(scopeResult.status, scopeResult.message);
   }
 
-  const post = await PartnerPost.findOne({ _id: parsed.oid, deleted_at: null });
+  const status = normalizePostStatus(body.status);
+  if (!status) {
+    return fail(400, 'status must be one of: published, hidden, removed, rejected.');
+  }
+
+  const post = await PartnerPost.findOne({
+    _id: parsed.oid,
+    deleted_at: null,
+    ...scopeResult.filter,
+  });
   if (!post) {
     return fail(404, 'Post not found.');
   }
 
-  post.status = status;
+  const currentStatus = post.status;
+
+  if (currentStatus === POST_STATUS_PENDING) {
+    if (status === POST_STATUS_PUBLISHED) {
+      post.status = POST_STATUS_PUBLISHED;
+      post.rejection_reason = '';
+    } else if (status === POST_STATUS_REJECTED) {
+      const parsed = parseRejectionReason(body.rejection_reason);
+      if (!parsed.ok) {
+        return fail(400, parsed.message);
+      }
+      post.status = POST_STATUS_REJECTED;
+      post.rejection_reason = parsed.text;
+    } else {
+      return fail(400, 'Pending posts can only be approved (published) or rejected.');
+    }
+  } else if (currentStatus === POST_STATUS_REJECTED) {
+    if (status === POST_STATUS_PUBLISHED) {
+      post.status = POST_STATUS_PUBLISHED;
+      post.rejection_reason = '';
+    } else {
+      return fail(400, 'Rejected posts can only be approved (published).');
+    }
+  } else if (POST_MODERATION_STATUSES.includes(currentStatus)) {
+    if (!POST_MODERATION_STATUSES.includes(status)) {
+      return fail(400, 'status must be one of: published, hidden, removed.');
+    }
+    post.status = status;
+  } else {
+    return fail(400, 'This post cannot be moderated.');
+  }
+
   post.updated_at = new Date();
   await post.save();
 
+  const isApprovalReview =
+    (currentStatus === POST_STATUS_PENDING &&
+      (post.status === POST_STATUS_PUBLISHED || post.status === POST_STATUS_REJECTED)) ||
+    (currentStatus === POST_STATUS_REJECTED && post.status === POST_STATUS_PUBLISHED);
+
+  if (isApprovalReview) {
+    // Await so Lambda does not freeze before FCM send completes
+    // (callbackWaitsForEmptyEventLoop = false).
+    await safeNotifyPartnerPostReviewed({
+      post: post.toObject(),
+      partnerUserId: post.partner_id,
+      reviewStatus: post.status === POST_STATUS_PUBLISHED ? 'approved' : 'rejected',
+      rejectionReason: post.rejection_reason || '',
+      actorUserId: req.user?.id || req.user?._id || null,
+    });
+  }
+
+  const isVisibilityModeration =
+    POST_MODERATION_STATUSES.includes(currentStatus) &&
+    post.status !== currentStatus &&
+    (post.status === POST_STATUS_HIDDEN || post.status === POST_STATUS_REMOVED);
+
+  if (isVisibilityModeration) {
+    await safeNotifyPartnerPostModerated({
+      post: post.toObject(),
+      partnerUserId: post.partner_id,
+      moderationStatus: post.status,
+      actorUserId: req.user?.id || req.user?._id || null,
+    });
+  }
+
   const mapped = await mapPostRecords([post.toObject()], { includePartner: true });
-  return ok(200, { message: 'Post moderated successfully.', post: mapped[0] });
+  const message =
+    currentStatus === POST_STATUS_PENDING || currentStatus === POST_STATUS_REJECTED
+      ? 'Post review updated successfully.'
+      : 'Post moderated successfully.';
+  return ok(200, { message, post: mapped[0] });
 };
 
 const updateReportStatus = async (reportId, body) => {

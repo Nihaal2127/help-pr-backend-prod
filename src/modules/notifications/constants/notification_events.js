@@ -152,6 +152,51 @@ const NOTIFICATION_EVENTS = {
     body: () =>
       "Your partner verification was not approved. Please check your documents.",
   },
+  PARTNER_POST_APPROVED: {
+    category: "system",
+    title: () => "Post approved",
+    body: (ctx) => {
+      const preview = String(ctx.postDescription || "").trim();
+      if (preview) {
+        return `Your portfolio post "${preview}" has been approved and is now live.`;
+      }
+      return "Your portfolio post has been approved and is now live.";
+    },
+  },
+  PARTNER_POST_REJECTED: {
+    category: "system",
+    title: () => "Post rejected",
+    body: (ctx) => {
+      const preview = String(ctx.postDescription || "").trim();
+      const reason = String(ctx.rejectionReason || "").trim();
+      const base = preview
+        ? `Your portfolio post "${preview}" was not approved.`
+        : "Your portfolio post was not approved.";
+      return reason ? `${base} Reason: ${reason}` : base;
+    },
+  },
+  PARTNER_POST_HIDDEN: {
+    category: "system",
+    title: () => "Post hidden",
+    body: (ctx) => {
+      const preview = String(ctx.postDescription || "").trim();
+      if (preview) {
+        return `Your portfolio post "${preview}" was hidden from the public feed.`;
+      }
+      return "Your portfolio post was hidden from the public feed.";
+    },
+  },
+  PARTNER_POST_REMOVED: {
+    category: "system",
+    title: () => "Post removed",
+    body: (ctx) => {
+      const preview = String(ctx.postDescription || "").trim();
+      if (preview) {
+        return `Your portfolio post "${preview}" was removed from the platform.`;
+      }
+      return "Your portfolio post was removed from the platform.";
+    },
+  },
   ORDER_ADDITIONAL_CHARGE_UPDATED: {
     category: "order",
     title: () => "Additional charge updated",
@@ -324,6 +369,19 @@ const NOTIFICATION_EVENTS = {
     category: "admin",
     title: (ctx) => ctx.senderName || "New message",
     body: (ctx) => ctx.messagePreview || "You have a new message.",
+  },
+  PARTNER_POST_PENDING_REVIEW: {
+    category: "admin",
+    title: () => "New post awaiting approval",
+    body: (ctx) => {
+      const partner = String(ctx.partnerName || "A partner").trim();
+      const suffix = ctx.franchiseName ? ` (${ctx.franchiseName})` : "";
+      const preview = String(ctx.postDescription || "").trim();
+      if (preview) {
+        return `${partner} submitted a portfolio post for review${suffix}: "${preview}"`;
+      }
+      return `${partner} submitted a portfolio post for review${suffix}.`;
+    },
   },
 };
 
