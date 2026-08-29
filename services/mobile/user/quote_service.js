@@ -8,6 +8,7 @@ const { applyPagination } = require('../../../utils/pagination');
 const { OrderCreationError } = require('../../../errors/order_creation_error');
 const OrderPayment = require('../../../models/order_payment');
 const Order = require('../../../models/order');
+const { fieldLabel } = require('../../../utils/field_labels');
 const {
   resolveQuotePricing,
   applyPricingToQuote,
@@ -29,7 +30,6 @@ const {
 const {
   safeNotifyQuoteCreated,
   safeNotifyQuoteStatusChanged,
-  safeNotifyQuoteAssigned,
   safeNotifyOrderPaymentReceived,
 } = require('../../../src/modules/notifications/services/domainHooks');
 const {
@@ -47,6 +47,7 @@ const {
   buildHistoryChange,
   appendQuoteHistory,
 } = require('../../../utils/quote_history_helper');
+const { applyQuoteActionDeadline } = require('../../../utils/quote_action_deadline');
 const {
   createOrderFromQuote,
 } = require('../../order_creation_service');
@@ -214,7 +215,7 @@ const createCustomerQuote = async (customerId, body) => {
       service_id: body.service_id,
       franchise_id: body.franchise_id,
       address_id: body.address_id,
-      status: hasPartner ? 'pending' : 'new',
+      status: 'new',
       from_date: body.from_date,
       to_date: body.to_date,
       work_hours_per_day: parseFloat(body.work_hours_per_day),
@@ -228,6 +229,7 @@ const createCustomerQuote = async (customerId, body) => {
     });
 
     applyPricingToQuote(quote, pricing);
+    applyQuoteActionDeadline(quote, { previousStatus: '' });
     appendQuoteHistory(quote, {
       actorId: customerId,
       actorRole: 'customer',
@@ -384,9 +386,9 @@ const updateCustomerQuote = async (customerId, quoteId, body) => {
     }
 
     const historyChanges = [];
+    const previousPartnerId = quote.partner_id;
     const previousValues = applyCustomerQuoteFieldUpdates(quote, body);
     const previousStatus = currentStatus;
-    let assignedPartner = false;
 
     if (quotePricingInputChanged(body)) {
       try {
@@ -416,11 +418,10 @@ const updateCustomerQuote = async (customerId, quoteId, body) => {
       if (change) historyChanges.push(change);
     }
 
-    if (currentStatus === 'new' && quote.partner_id) {
-      historyChanges.push(buildHistoryChange('status', currentStatus, 'pending'));
-      quote.status = 'pending';
-      assignedPartner = true;
-    }
+    applyQuoteActionDeadline(quote, {
+      previousStatus: currentStatus,
+      previousPartnerId,
+    });
 
     quote.updated_at = new Date();
 
@@ -436,12 +437,7 @@ const updateCustomerQuote = async (customerId, quoteId, body) => {
 
     await quote.save();
 
-    if (assignedPartner) {
-      void safeNotifyQuoteAssigned({
-        quote,
-        actorUserId: customerId,
-      });
-    } else if (quote.status !== previousStatus) {
+    if (quote.status !== previousStatus) {
       void safeNotifyQuoteStatusChanged({
         quote,
         previousStatus,
@@ -505,6 +501,7 @@ const cancelCustomerQuote = async (customerId, quoteId, body) => {
     if (body.cancellation_reason !== undefined) {
       quote.cancellation_reason = String(body.cancellation_reason).trim();
     }
+    applyQuoteActionDeadline(quote, { previousStatus: currentStatus });
 
     const historyChanges = [
       buildHistoryChange('status', oldStatus, quote.status),
@@ -578,11 +575,11 @@ const convertCustomerQuoteToOrder = async (customerId, quoteId, body) => {
     if (paidAmount < minimumDeposit) {
       return fail(
         409,
-        `Minimum deposit is ${minimumDeposit}. Amount must be at least minimum_deposit_amount.`
+        `Minimum deposit is ${minimumDeposit}. Amount must be at least the minimum deposit.`
       );
     }
     if (totalPrice > 0 && paidAmount > totalPrice) {
-      return fail(409, 'Amount cannot exceed quote total_price.');
+      return fail(409, 'Amount cannot exceed the quote total.');
     }
 
     const paymentMethod = String(body.payment_method || '').trim().toLowerCase();
@@ -653,7 +650,7 @@ const convertCustomerQuoteToOrder = async (customerId, quoteId, body) => {
     const paymentStatus = body.payment_status ? String(body.payment_status).trim() : 'completed';
     const allowedPaymentStatuses = new Set(['pending', 'completed']);
     if (!allowedPaymentStatuses.has(paymentStatus)) {
-      return fail(400, 'payment_status must be either pending or completed.');
+      return fail(400, `${fieldLabel('payment_status')} must be either pending or completed.`);
     }
 
     const orderPayment = new OrderPayment({

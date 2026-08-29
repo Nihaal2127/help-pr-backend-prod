@@ -13,6 +13,7 @@ const {
   unregisterDeviceToken,
   buildDeviceRegistrationOptions,
 } = require('../../../services/device_token_service');
+const { deleteOwnAccount } = require('../shared/delete_own_account_service');
 const { getDocumentList } = require('../../../controllers/document_controller');
 const {
   createMultiple,
@@ -20,6 +21,10 @@ const {
 } = require('../../../controllers/partner_document_controller');
 const PartnerCategory = require('../../../models/partner_category');
 const PartnerService = require('../../../models/partner_service');
+const {
+  loadMasterPaymentTypesByServiceId,
+  resolveCreatePaymentType,
+} = require('../../partner_category_service');
 const { handleImageUpload } = require('../../../helper/image_uploader');
 const { getUploadType } = require('../../../enum/upload_type_enum');
 const {
@@ -35,6 +40,7 @@ const { USER_TYPE_PARTNER } = require('../../../constants/user_types');
 const Otp = require('../../../models/otp');
 const { fail, okWithData, okPass, okWithMessage } = require('../../../utils/mobile_service_result');
 const { issueAndSendPhoneOtp } = require('../shared/phone_otp_delivery_service');
+const { failIfDeletedAccount } = require('../shared/deleted_account_guard');
 const {
   resolvePartnerBankInputFromBody,
   upsertPartnerBankAccountForPartner,
@@ -48,9 +54,12 @@ const {
   partnerDocumentFieldsAfterImageUpload,
   applyPartnerUserStatusAfterDocumentUpload,
 } = require('../../../utils/partner_document_status');
-const REGISTRATION_TYPE_NORMAL = 1;
-const REGISTRATION_TYPE_GOOGLE = 2;
-const REGISTRATION_TYPE_APPLE = 3;
+const {
+  REGISTRATION_TYPE_OTP,
+  REGISTRATION_TYPE_GOOGLE,
+  REGISTRATION_TYPE_APPLE,
+  REGISTRATION_TYPE_EMAIL_PASSWORD,
+} = require('../../../constants/registration_types');
 
 const VERIFICATION_STATUS_MESSAGES = {
   1: 'Your profile is under verification. We will notify you once it is approved.',
@@ -398,15 +407,18 @@ async function mergeMobilePartnerCatalogFromNormalizedRows(partnerId, normalized
     );
   }
 
+  const masterPaymentTypes = await loadMasterPaymentTypesByServiceId([...latestByService.keys()]);
+
   // keep partner_service additive too (no delete/replace)
   for (const [serviceStr, row] of latestByService) {
     const serviceOid = toOid(serviceStr);
     const categoryOid = toOid(row.category_id);
+    const requestedPaymentType = row.payment_type != null ? String(row.payment_type).trim() : '';
     const updateFields = {
       category_id: categoryOid,
       description: row.description != null ? String(row.description) : '',
       price: coerceNumber(row.price, 0),
-      payment_type: row.payment_type != null ? String(row.payment_type).trim() : '',
+      payment_type: requestedPaymentType,
       tax: coerceNumber(row.tax, 0),
       minimum_deposit: coerceNumber(row.minimum_deposit, 0),
       is_active: row.is_active !== false,
@@ -431,6 +443,7 @@ async function mergeMobilePartnerCatalogFromNormalizedRows(partnerId, normalized
       partner_id: partnerOid,
       service_id: serviceOid,
       ...updateFields,
+      payment_type: resolveCreatePaymentType(requestedPaymentType, masterPaymentTypes.get(serviceStr)),
       created_at: now,
     });
   }
@@ -662,6 +675,13 @@ const logoutPartner = async ({ userId, device_token, device_id }) => {
   return okWithMessage(200, 'Logged out successfully.');
 };
 
+const deleteOwnPartnerAccount = async ({ userId }) =>
+  deleteOwnAccount({
+    userId,
+    expectedType: USER_TYPE_PARTNER,
+    notFoundMessage: 'Partner not found.',
+  });
+
 const tagRegisterError = (step, err) => {
   if (err && typeof err === 'object') {
     err.registerStep = step;
@@ -673,6 +693,20 @@ const registerPartner = async ({ name, email, phone_number, password, date_of_bi
   const normalizedEmail = normalizeUserEmail(email);
   const normalizedPhone = normalizeUserPhone(phone_number);
   console.log('[partner.register] service: checking email/phone uniqueness');
+
+  const deletedAccount = await failIfDeletedAccount({
+    email: normalizedEmail,
+    phone_number: normalizedPhone,
+    type: USER_TYPE_PARTNER,
+  });
+  if (deletedAccount) {
+    console.log('[partner.register] service: deleted account credential', {
+      message: deletedAccount.message,
+    });
+    const err = new Error(deletedAccount.message);
+    err.status = deletedAccount.status;
+    throw err;
+  }
 
   const uniqueness = await checkUserContactUniqueness({
     email: normalizedEmail,
@@ -714,7 +748,7 @@ const registerPartner = async ({ name, email, phone_number, password, date_of_bi
     phone_number: normalizedPhone,
     date_of_birth,
     type: USER_TYPE_PARTNER,
-    registration_type: REGISTRATION_TYPE_NORMAL,
+    registration_type: REGISTRATION_TYPE_EMAIL_PASSWORD,
     is_from_web: false,
     verification_status: 1,
     verified_at: null,
@@ -797,6 +831,14 @@ const findOrCreatePartner = async (phone_number) => {
     return { ok: true, user, isNew: false };
   }
 
+  const deletedAccount = await failIfDeletedAccount({
+    phone_number: normalizedPhone,
+    type: USER_TYPE_PARTNER,
+  });
+  if (deletedAccount) {
+    return deletedAccount;
+  }
+
   const uniqueness = await checkUserContactUniqueness({
     phone_number: normalizedPhone,
     type: USER_TYPE_PARTNER,
@@ -815,7 +857,7 @@ const findOrCreatePartner = async (phone_number) => {
     user_id,
     phone_number: normalizedPhone,
     type: USER_TYPE_PARTNER,
-    registration_type: REGISTRATION_TYPE_NORMAL,
+    registration_type: REGISTRATION_TYPE_OTP,
     is_from_web: false,
     verification_status: 1,
     verified_at: null,
@@ -871,6 +913,13 @@ const verifyPartnerOtpAndLogin = async ({
   });
 
   if (!user) {
+    const deletedAccount = await failIfDeletedAccount({
+      phone_number: normalizedPhone,
+      type: USER_TYPE_PARTNER,
+    });
+    if (deletedAccount) {
+      return deletedAccount;
+    }
     return fail(401, 'Invalid credentials.');
   }
 
@@ -887,6 +936,10 @@ const verifyPartnerOtpAndLogin = async ({
 const loginPartner = async ({ email, password, device_token, platform, device_id }) => {
   const user = await User.findOne({ email, deleted_at: null }).select('+password');
   if (!user) {
+    const deletedAccount = await failIfDeletedAccount({ email });
+    if (deletedAccount) {
+      return deletedAccount;
+    }
     return fail(401, 'Invalid email.');
   }
 
@@ -939,6 +992,11 @@ const googleLoginPartner = async ({
     return { ...result, message: 'Login successfully.' };
   }
 
+  const deletedByGoogle = await failIfDeletedAccount({ google_id });
+  if (deletedByGoogle) {
+    return deletedByGoogle;
+  }
+
   if (email) {
     const normalizedEmail = normalizeUserEmail(email);
     user = await User.findOne({
@@ -960,10 +1018,23 @@ const googleLoginPartner = async ({
       if (!result.ok) return result;
       return { ...result, message: 'Login successfully.' };
     }
+
+    const deletedByEmail = await failIfDeletedAccount({ email: normalizedEmail });
+    if (deletedByEmail) {
+      return deletedByEmail;
+    }
   }
 
   if (!email) {
     return fail(400, 'Google account must include an email address to register as a partner.');
+  }
+
+  const deletedByPhone = await failIfDeletedAccount({
+    phone_number: normalizedPhone,
+    type: USER_TYPE_PARTNER,
+  });
+  if (deletedByPhone) {
+    return deletedByPhone;
   }
 
   const uniqueness = await checkUserContactUniqueness({
@@ -1061,6 +1132,11 @@ const appleLoginPartner = async ({
     return { ...result, message: 'Login successfully.' };
   }
 
+  const deletedByApple = await failIfDeletedAccount({ apple_id });
+  if (deletedByApple) {
+    return deletedByApple;
+  }
+
   if (email) {
     const normalizedEmail = normalizeUserEmail(email);
     user = await User.findOne({
@@ -1082,10 +1158,23 @@ const appleLoginPartner = async ({
       if (!result.ok) return result;
       return { ...result, message: 'Login successfully.' };
     }
+
+    const deletedByEmail = await failIfDeletedAccount({ email: normalizedEmail });
+    if (deletedByEmail) {
+      return deletedByEmail;
+    }
   }
 
   if (!email) {
     return fail(400, 'Apple account must include an email address to register as a partner.');
+  }
+
+  const deletedByPhone = await failIfDeletedAccount({
+    phone_number: normalizedPhone,
+    type: USER_TYPE_PARTNER,
+  });
+  if (deletedByPhone) {
+    return deletedByPhone;
   }
 
   const uniqueness = await checkUserContactUniqueness({
@@ -1486,5 +1575,6 @@ module.exports = {
   googleLoginPartner,
   appleLoginPartner,
   logoutPartner,
+  deleteOwnPartnerAccount,
   updatePartner,
 };

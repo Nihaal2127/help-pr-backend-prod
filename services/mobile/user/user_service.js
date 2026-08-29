@@ -14,15 +14,18 @@ const {
   unregisterDeviceToken,
   buildDeviceRegistrationOptions,
 } = require('../../../services/device_token_service');
+const { deleteOwnAccount } = require('../shared/delete_own_account_service');
 const { verifyGoogleIdToken, GOOGLE_APP_USER } = require('../../../helper/google_auth');
 const { verifyAppleIdToken, APPLE_APP_USER } = require('../../../helper/apple_auth');
 const { USER_TYPE_CUSTOMER } = require('../../../constants/user_types');
+const {
+  REGISTRATION_TYPE_OTP,
+  REGISTRATION_TYPE_GOOGLE,
+  REGISTRATION_TYPE_APPLE,
+} = require('../../../constants/registration_types');
 const { fail, okWithMessage } = require('../../../utils/mobile_service_result');
 const { issueAndSendPhoneOtp } = require('../shared/phone_otp_delivery_service');
-
-const REGISTRATION_TYPE_NORMAL = 1;
-const REGISTRATION_TYPE_GOOGLE = 2;
-const REGISTRATION_TYPE_APPLE = 3;
+const { failIfDeletedAccount } = require('../shared/deleted_account_guard');
 
 const findCustomerByPhone = async (phone_number) => {
   const normalizedPhone = normalizeUserPhone(phone_number);
@@ -48,6 +51,14 @@ const findOrCreateCustomer = async (phone_number) => {
     return { ok: true, user };
   }
 
+  const deletedAccount = await failIfDeletedAccount({
+    phone_number: normalizedPhone,
+    type: USER_TYPE_CUSTOMER,
+  });
+  if (deletedAccount) {
+    return deletedAccount;
+  }
+
   const uniqueness = await checkUserContactUniqueness({
     phone_number: normalizedPhone,
     type: USER_TYPE_CUSTOMER,
@@ -66,7 +77,7 @@ const findOrCreateCustomer = async (phone_number) => {
     user_id,
     phone_number: normalizedPhone,
     type: USER_TYPE_CUSTOMER,
-    registration_type: REGISTRATION_TYPE_NORMAL,
+    registration_type: REGISTRATION_TYPE_OTP,
     is_from_web: false,
     is_active: true,
   });
@@ -163,6 +174,13 @@ const logoutCustomer = async ({ userId, device_token, device_id }) => {
   return okWithMessage(200, 'Logged out successfully.');
 };
 
+const deleteOwnCustomerAccount = async ({ userId }) =>
+  deleteOwnAccount({
+    userId,
+    expectedType: USER_TYPE_CUSTOMER,
+    notFoundMessage: 'Customer not found.',
+  });
+
 const applyGoogleProfileToUser = (user, { email, name, picture }) => {
   if (email && !user.email) {
     user.email = normalizeUserEmail(email);
@@ -200,6 +218,13 @@ const verifyOtpAndLogin = async ({
   });
 
   if (!user) {
+    const deletedAccount = await failIfDeletedAccount({
+      phone_number: normalizedPhone,
+      type: USER_TYPE_CUSTOMER,
+    });
+    if (deletedAccount) {
+      return deletedAccount;
+    }
     return fail(401, 'Invalid credentials.');
   }
 
@@ -238,6 +263,11 @@ const googleLogin = async ({ id_token, device_token, platform, device_id }) => {
     });
   }
 
+  const deletedByGoogle = await failIfDeletedAccount({ google_id });
+  if (deletedByGoogle) {
+    return deletedByGoogle;
+  }
+
   if (email) {
     const normalizedEmail = normalizeUserEmail(email);
     user = await User.findOne({
@@ -259,6 +289,11 @@ const googleLogin = async ({ id_token, device_token, platform, device_id }) => {
       platform,
       device_id,
     });
+    }
+
+    const deletedByEmail = await failIfDeletedAccount({ email: normalizedEmail });
+    if (deletedByEmail) {
+      return deletedByEmail;
     }
   }
 
@@ -323,6 +358,11 @@ const appleLogin = async ({ id_token, device_token, name, platform, device_id })
     });
   }
 
+  const deletedByApple = await failIfDeletedAccount({ apple_id });
+  if (deletedByApple) {
+    return deletedByApple;
+  }
+
   if (email) {
     const normalizedEmail = normalizeUserEmail(email);
     user = await User.findOne({
@@ -344,6 +384,11 @@ const appleLogin = async ({ id_token, device_token, name, platform, device_id })
       platform,
       device_id,
     });
+    }
+
+    const deletedByEmail = await failIfDeletedAccount({ email: normalizedEmail });
+    if (deletedByEmail) {
+      return deletedByEmail;
     }
   }
 
@@ -505,6 +550,7 @@ module.exports = {
   googleLogin,
   appleLogin,
   logoutCustomer,
+  deleteOwnCustomerAccount,
   updateUser,
   listAllPincodes,
 };

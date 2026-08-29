@@ -6,9 +6,13 @@
 const IMAGE_FIELD_KEYS = new Set([
   'image_url',
   'profile_url',
+  'customer_profile_url',
   'document_image',
   'service_image',
   'banner_image_url',
+  /** Relative S3 keys stored as string arrays (order proofs, partner posts). */
+  'image_urls',
+  'work_proof_image_urls',
 ]);
 
 const getCdnBase = () =>
@@ -35,6 +39,18 @@ const isPlainObject = (val) => {
   return proto === Object.prototype || proto === null;
 };
 
+const applyImageFieldValue = (value) => {
+  if (typeof value === 'string') {
+    return toPublicImageUrl(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) =>
+      typeof item === 'string' ? toPublicImageUrl(item) : deepApplyPublicImageUrls(item)
+    );
+  }
+  return deepApplyPublicImageUrls(value);
+};
+
 const deepApplyPublicImageUrls = (value) => {
   if (value == null) return value;
   if (Array.isArray(value)) {
@@ -47,8 +63,8 @@ const deepApplyPublicImageUrls = (value) => {
   const out = {};
   for (const key of Object.keys(value)) {
     const v = value[key];
-    if (IMAGE_FIELD_KEYS.has(key) && typeof v === 'string') {
-      out[key] = toPublicImageUrl(v);
+    if (IMAGE_FIELD_KEYS.has(key)) {
+      out[key] = applyImageFieldValue(v);
     } else {
       out[key] = deepApplyPublicImageUrls(v);
     }

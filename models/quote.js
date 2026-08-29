@@ -53,6 +53,7 @@ var quoteSchema = new schema(
     total_price: { type: Number, default: 0 },
     minimum_deposit_percent: { type: Number, default: 0 },
     minimum_deposit_amount: { type: Number, default: 0 },
+    /** new = awaiting admin confirm; pending = released to partner. */
     status: { type: String, default: "new", trim: true, lowercase: true },
     from_date: { type: Date, default: null },
     to_date: { type: Date, default: null },
@@ -66,6 +67,8 @@ var quoteSchema = new schema(
     quote_description: { type: String, default: "", trim: true },
     /** Internal admin-only notes; optional. */
     admin_description: { type: String, default: null, trim: true },
+    /** When the pending (partner) or accepted (customer) 1-hour action window ends. */
+    action_deadline_at: { type: Date, default: null },
     history: { type: [quoteHistoryEventSchema], default: [] },
     created_at: { type: Date, default: Date.now },
     updated_at: { type: Date, default: Date.now },
@@ -85,5 +88,6 @@ quoteSchema.index({ service_id: 1 });
 quoteSchema.index({ status: 1 });
 quoteSchema.index({ deleted_at: 1 });
 quoteSchema.index({ quote_sequence_id: 1 });
+quoteSchema.index({ deleted_at: 1, status: 1, action_deadline_at: 1 });
 
 module.exports = mongoose.model("quote", quoteSchema);

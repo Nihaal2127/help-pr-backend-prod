@@ -279,6 +279,12 @@ const NOTIFICATION_EVENTS = {
     body: (ctx) =>
       `Quote #${ctx.quoteSequenceId || ""} is waiting for your response.`,
   },
+  QUOTE_DEADLINE_REMINDER: {
+    category: "reminder",
+    title: () => "Quote expiring soon",
+    body: (ctx) =>
+      `Quote #${ctx.quoteSequenceId || ""} expires in ${ctx.minutesLeft || ""} minutes. ${ctx.actionHint || "Please respond."}`.trim(),
+  },
   SUBSCRIPTION_EXPIRING_REMINDER: {
     category: "reminder",
     title: () => "Subscription reminder",
@@ -382,6 +388,24 @@ const NOTIFICATION_EVENTS = {
       }
       return `${partner} submitted a portfolio post for review${suffix}.`;
     },
+  },
+  BACKOFFICE_ORDER_REVIEW_RECEIVED: {
+    category: "admin",
+    title: () => "New partner review",
+    body: (ctx) =>
+      `Customer left a review for ${ctx.partnerName || "a partner"} on order #${ctx.orderUniqueId || ""}${ctx.franchiseName ? ` (${ctx.franchiseName})` : ""}.`,
+  },
+  PARTNER_ACCOUNT_DELETED: {
+    category: "admin",
+    title: () => "Partner account deleted",
+    body: (ctx) =>
+      `Partner ${ctx.partnerName || ""} deleted their account${ctx.franchiseName ? ` (${ctx.franchiseName})` : ""}.`,
+  },
+  CUSTOMER_ACCOUNT_DELETED: {
+    category: "admin",
+    title: () => "Customer account deleted",
+    body: (ctx) =>
+      `Customer ${ctx.customerName || ""} deleted their account.`,
   },
 };
 

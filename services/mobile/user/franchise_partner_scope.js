@@ -9,6 +9,7 @@ const PartnerCategory = require('../../../models/partner_category');
 const PartnerService = require('../../../models/partner_service');
 const PartnerSubscription = require('../../../models/partner_subscription');
 const { PLATINUM_PLAN_NAME } = require('../../../constants/partner_subscription');
+const { fieldLabel } = require('../../../utils/field_labels');
 const {
   resolveFranchiseEffectiveCatalog,
   resolveFranchiseAssignedEnabledMaps,
@@ -153,7 +154,7 @@ const resolveFranchiseFromLocation = async (rawLocation, options = {}) => {
 const resolveFranchiseById = async (rawFranchiseId) => {
   const id = rawFranchiseId != null ? String(rawFranchiseId).trim() : '';
   if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-    return fail(400, 'franchise_id must be a valid ObjectId.');
+    return fail(400, `${fieldLabel('franchise_id')} must be a valid ObjectId.`);
   }
 
   const franchise = await Franchise.findOne({
@@ -665,6 +666,106 @@ const buildPartnerDetailCatalog = async (franchiseId, partnerId) => {
   return { ok: true, categories };
 };
 
+/**
+ * Franchise-scoped partners who effectively offer `serviceId`.
+ * Each item: { id, name, profile_url, average_rating, franchise_id, franchise_name }.
+ */
+const listPartnersOfferingService = async (franchiseId, serviceId, options = {}) => {
+  const serviceKey = serviceId != null ? String(serviceId) : '';
+  if (!franchiseId || !serviceKey) {
+    return { ok: true, partners: [] };
+  }
+
+  const catalogResolved = await resolveFranchiseEffectiveCatalog(franchiseId);
+  if (!catalogResolved.ok) {
+    return catalogResolved;
+  }
+
+  const effectiveServiceIds = (catalogResolved.effectiveServiceIds || []).map((id) => String(id));
+  if (!effectiveServiceIds.includes(serviceKey)) {
+    return { ok: true, partners: [] };
+  }
+
+  const subscribed = await loadSubscribedFranchisePartners(franchiseId);
+  if (subscribed.partnerIds.length === 0) {
+    return { ok: true, partners: [] };
+  }
+
+  let franchiseName = options.franchiseName ?? null;
+  if (franchiseName == null) {
+    const franchise = await Franchise.findOne({
+      _id: franchiseId,
+      deleted_at: null,
+    })
+      .select('name')
+      .lean();
+    franchiseName = franchise?.name ?? null;
+  }
+
+  const offerings = await collectEffectivePartnerOfferings(
+    franchiseId,
+    [serviceKey],
+    subscribed.partnerIds
+  );
+  const offeringPartnerIds = new Set(offerings.map((row) => String(row.partner_id)));
+
+  const partners = subscribed.partners
+    .filter((partner) => offeringPartnerIds.has(String(partner._id)))
+    .map((partner) => {
+      const ratings = attachPartnerRatingFields(partner);
+      return {
+        id: String(partner._id),
+        name: partner.name || null,
+        profile_url: partner.profile_url || null,
+        average_rating: ratings.average_rating,
+        franchise_id: String(franchiseId),
+        franchise_name: franchiseName,
+      };
+    });
+
+  return { ok: true, partners };
+};
+
+/**
+ * Super admin/staff: partners across every active franchise who effectively offer `serviceId`.
+ */
+const listPartnersOfferingServiceAcrossFranchises = async (serviceId) => {
+  const serviceKey = serviceId != null ? String(serviceId) : '';
+  if (!serviceKey) {
+    return { ok: true, partners: [] };
+  }
+
+  const franchises = await Franchise.find({ deleted_at: null, is_active: true })
+    .select('_id name')
+    .lean();
+
+  if (franchises.length === 0) {
+    return { ok: true, partners: [] };
+  }
+
+  const results = await Promise.all(
+    franchises.map((franchise) =>
+      listPartnersOfferingService(franchise._id, serviceKey, {
+        franchiseName: franchise.name ?? null,
+      })
+    )
+  );
+
+  const partners = [];
+  for (const result of results) {
+    if (!result.ok) continue;
+    partners.push(...(result.partners || []));
+  }
+
+  partners.sort((a, b) => {
+    const byFranchise = String(a.franchise_name ?? '').localeCompare(String(b.franchise_name ?? ''));
+    if (byFranchise !== 0) return byFranchise;
+    return String(a.name ?? '').localeCompare(String(b.name ?? ''));
+  });
+
+  return { ok: true, partners };
+};
+
 module.exports = {
   resolveFranchiseFromLocation,
   resolveFranchiseById,
@@ -673,4 +774,6 @@ module.exports = {
   collectEffectivePartnerOfferings,
   mapFranchisePartnerRecords,
   buildPartnerDetailCatalog,
+  listPartnersOfferingService,
+  listPartnersOfferingServiceAcrossFranchises,
 };

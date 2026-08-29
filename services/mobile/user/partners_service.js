@@ -6,6 +6,7 @@ const User = require('../../../models/user');
 const OrderService = require('../../../models/order_services');
 const { USER_TYPE_PARTNER } = require('../../../constants/user_types');
 const { ORDER_STATUS_COMPLETED } = require('../../../enum/order_status_enum');
+const { fieldLabel } = require('../../../utils/field_labels');
 const {
   resolveFranchiseById,
   loadSubscribedFranchisePartners,
@@ -18,6 +19,10 @@ const {
   enrichPartnerListRecordsWithServiceRatings,
 } = require('./partner_rating_service');
 const { attachPartnerRatingFields } = require('../../../utils/rating_format');
+const {
+  getPartnerEngagementCounts,
+  getPartnersEngagementCountsByPartnerIds,
+} = require('../../partner_post_common_service');
 
 const { fail, ok, parsePositiveInt } = require('../../../utils/mobile_service_result');
 
@@ -31,7 +36,7 @@ const parseOptionalPrice = (raw, fieldName) => {
   }
   const n = Number(raw);
   if (Number.isNaN(n) || n < 0) {
-    return { ok: false, message: `${fieldName} must be a non-negative number.` };
+    return { ok: false, message: `${fieldLabel(fieldName)} must be a non-negative number.` };
   }
   return { ok: true, value: n };
 };
@@ -160,7 +165,7 @@ const parsePartnersListQuery = (query) => {
     maxPriceParsed.value != null &&
     minPriceParsed.value > maxPriceParsed.value
   ) {
-    return { ok: false, status: 400, message: 'min_price cannot be greater than max_price.' };
+    return { ok: false, status: 400, message: `${fieldLabel('min_price')} cannot be greater than ${fieldLabel('max_price')}.` };
   }
 
   const planNameRaw = query.plan_name != null ? String(query.plan_name).trim().toLowerCase() : '';
@@ -168,18 +173,18 @@ const parsePartnersListQuery = (query) => {
     return {
       ok: false,
       status: 400,
-      message: `plan_name must be one of: ${PLAN_NAMES.join(', ')}.`,
+      message: `${fieldLabel('plan_name')} must be one of: ${PLAN_NAMES.join(', ')}.`,
     };
   }
 
   const categoryId = query.category_id ? String(query.category_id).trim() : '';
   if (categoryId && !mongoose.Types.ObjectId.isValid(categoryId)) {
-    return { ok: false, status: 400, message: 'category_id must be a valid ObjectId.' };
+    return { ok: false, status: 400, message: `${fieldLabel('category_id')} must be a valid ObjectId.` };
   }
 
   const serviceId = query.service_id ? String(query.service_id).trim() : '';
   if (serviceId && !mongoose.Types.ObjectId.isValid(serviceId)) {
-    return { ok: false, status: 400, message: 'service_id must be a valid ObjectId.' };
+    return { ok: false, status: 400, message: `${fieldLabel('service_id')} must be a valid ObjectId.` };
   }
 
   return {
@@ -224,6 +229,8 @@ const paginatePartnerRecords = (records, { filters, serviceId, categoryId, page,
 /**
  * Build partner list cards for a franchise (subscribed partners + catalog offerings).
  * Optional partnerIdAllowlist limits to specific partner Mongo ids.
+ * Optional publishedOnly controls post engagement scope.
+ * Default true = published posts only (customer / admin partner cards and gallery).
  */
 const buildFranchisePartnerListRecords = async (franchiseId, options = {}) => {
   const franchiseCtx = await resolveFranchiseById(franchiseId);
@@ -235,6 +242,7 @@ const buildFranchisePartnerListRecords = async (franchiseId, options = {}) => {
     options.partnerIdAllowlist != null
       ? new Set(options.partnerIdAllowlist.map((id) => String(id)))
       : null;
+  const publishedOnly = options.publishedOnly !== false;
 
   const subscribed = await loadSubscribedFranchisePartners(franchiseCtx.franchise._id);
 
@@ -259,17 +267,30 @@ const buildFranchisePartnerListRecords = async (franchiseId, options = {}) => {
   const effectiveServiceIds = (catalogResolved.effectiveServiceIds || []).map((x) => String(x));
   const partnerIds = partners.map((p) => p._id);
 
-  const effectiveOfferings = await collectEffectivePartnerOfferings(
-    franchiseCtx.franchise._id,
-    effectiveServiceIds,
-    partnerIds
-  );
+  const [effectiveOfferings, engagementByPartnerId] = await Promise.all([
+    collectEffectivePartnerOfferings(
+      franchiseCtx.franchise._id,
+      effectiveServiceIds,
+      partnerIds
+    ),
+    getPartnersEngagementCountsByPartnerIds(partnerIds, { publishedOnly }),
+  ]);
 
   const records = mapFranchisePartnerRecords(
     partners,
     subscribed.planByPartnerId,
     effectiveOfferings
-  );
+  ).map((record) => ({
+    ...record,
+    ...(engagementByPartnerId.get(String(record._id)) || {
+      posts_count: 0,
+      images_count: 0,
+      video_count: 0,
+      likes_count: 0,
+      shares_count: 0,
+      saves_count: 0,
+    }),
+  }));
 
   const recordsWithRatings = await enrichPartnerListRecordsWithServiceRatings(records);
 
@@ -291,7 +312,7 @@ const isPartnerSavedByUser = async (userId, partnerId) => {
   return Boolean(row);
 };
 
-const listFranchisePartnersPaginated = async (query) => {
+const listFranchisePartnersPaginated = async (query, options = {}) => {
   try {
     const franchiseCtx = await resolveFranchiseById(query.franchise_id);
     if (!franchiseCtx.ok) {
@@ -301,7 +322,11 @@ const listFranchisePartnersPaginated = async (query) => {
     const parsed = parsePartnersListQuery(query);
     if (!parsed.ok) return fail(parsed.status, parsed.message);
 
-    const built = await buildFranchisePartnerListRecords(franchiseCtx.franchise._id);
+    // Partner browse cards (customer + admin) count published posts only.
+    const publishedOnly = options.publishedOnly !== false;
+    const built = await buildFranchisePartnerListRecords(franchiseCtx.franchise._id, {
+      publishedOnly,
+    });
     if (!built.ok) return built;
     const builtData = built.data || {};
     if (!Array.isArray(builtData.records)) {
@@ -378,7 +403,7 @@ const getPartnerProfileForCustomer = async (partnerId, franchiseId, userId = nul
   try {
     const partnerKey = String(partnerId ?? '').trim();
     if (!partnerKey || !mongoose.Types.ObjectId.isValid(partnerKey)) {
-      return fail(400, 'partnerId must be a valid ObjectId.');
+      return fail(400, `${fieldLabel('partnerId')} must be a valid ObjectId.`);
     }
 
     const franchiseIdRaw =
@@ -434,10 +459,12 @@ const getPartnerProfileForCustomer = async (partnerId, franchiseId, userId = nul
       return fail(404, 'Partner not found.');
     }
 
-    const [catalogResult, completedServicesCount, isSaved] = await Promise.all([
+    const [catalogResult, completedServicesCount, isSaved, engagementCounts] = await Promise.all([
       buildPartnerDetailCatalog(franchiseCtx.franchise._id, partner._id),
       countPartnerCompletedServices(partner._id),
       userId ? isPartnerSavedByUser(userId, partner._id) : Promise.resolve(false),
+      // Published-only: matches customer / admin partner posts gallery on mobile.
+      getPartnerEngagementCounts(partner._id, { publishedOnly: true }),
     ]);
     if (!catalogResult.ok) {
       return fail(catalogResult.status, catalogResult.message);
@@ -471,6 +498,7 @@ const getPartnerProfileForCustomer = async (partnerId, franchiseId, userId = nul
           no_of_services_completed: completedServicesCount,
           is_saved: isSaved,
           ...partnerRatings,
+          ...engagementCounts,
         },
         categories: categoriesWithRatings,
       },

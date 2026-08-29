@@ -9,6 +9,7 @@ const Order = require('../models/order');
 const OrderService = require('../models/order_services');
 const Category = require('../models/category');
 const Service = require('../models/service');
+const { fieldLabel } = require('../utils/field_labels');
 const { USER_TYPE_PARTNER } = require('../constants/user_types');
 const { POST_TYPE_ORDER, POST_TYPE_LEGACY_WORK } = require('../enum/post_type_enum');
 const { POST_STATUS_PENDING, POST_STATUS_PUBLISHED } = require('../enum/post_report_reason_enum');
@@ -24,7 +25,6 @@ const MAX_LIMIT = 50;
 const MIN_IMAGES = 1;
 const MAX_IMAGES = 4;
 const MAX_DESCRIPTION_LENGTH = 500;
-const MAX_POST_REJECTION_REASON_LENGTH = 500;
 const MIN_LEGACY_SERVICE_NAME_LENGTH = 3;
 
 const OBJECT_ID_HEX_24 = /^[a-fA-F0-9]{24}$/;
@@ -37,22 +37,22 @@ const parsePositiveInt = (raw, fallback) => {
 const parseObjectId = (raw, fieldName) => {
   const s = raw !== undefined && raw !== null ? String(raw).trim() : '';
   if (!s || !OBJECT_ID_HEX_24.test(s)) {
-    return { ok: false, message: `${fieldName} must be a valid id.` };
+    return { ok: false, message: `${fieldLabel(fieldName)} must be a valid id.` };
   }
   return { ok: true, oid: new mongoose.Types.ObjectId(s) };
 };
 
 const generateShareToken = () => uuidv4().replace(/-/g, '');
 
-const buildShareUrl = (shareToken) => {
-  // HTTPS share links open in WhatsApp/SMS browsers, then deep-link into the app.
-  // Override with POST_SHARE_WEB_BASE_URL if needed (default matches https://helppr.in/post/:token).
+const buildShareUrl = (postId) => {
+  // HTTPS App Link / Universal Link. Flutter extracts post_id from /post/{postId}.
+  // Override with POST_SHARE_WEB_BASE_URL if needed (default https://staging-app.helppr.in/post/:postId).
   const base = String(
     process.env.POST_SHARE_WEB_BASE_URL ||
       process.env.MOBILE_APP_SHARE_WEB_BASE ||
-      'https://helppr.in/post'
+      'https://staging-app.helppr.in/post'
   ).replace(/\/$/, '');
-  return `${base}/${shareToken}`;
+  return `${base}/${postId}`;
 };
 
 const assertPartnerCanPost = async (partnerId) => {
@@ -200,25 +200,13 @@ const parsePostDescription = (value) => {
   if (!text) {
     return { ok: false, message: 'Description is required.' };
   }
-  if (text.length > MAX_DESCRIPTION_LENGTH) {
-    return {
-      ok: false,
-      message: `Description must be at most ${MAX_DESCRIPTION_LENGTH} characters.`,
-    };
-  }
   return { ok: true, text };
 };
 
 const parseRejectionReason = (raw) => {
   const text = String(raw ?? '').trim();
   if (!text) {
-    return { ok: false, message: 'rejection_reason is required when status is rejected.' };
-  }
-  if (text.length > MAX_POST_REJECTION_REASON_LENGTH) {
-    return {
-      ok: false,
-      message: `rejection_reason must be at most ${MAX_POST_REJECTION_REASON_LENGTH} characters.`,
-    };
+    return { ok: false, message: `${fieldLabel('rejection_reason')} is required when status is rejected.` };
   }
   return { ok: true, text };
 };
@@ -328,6 +316,19 @@ const loadSavedPostIds = async (userId, postIds) => {
     .lean();
 
   return new Set(saves.map((s) => String(s.post_id)));
+};
+
+const loadSaveCountsByPostIds = async (postIds) => {
+  if (!postIds.length) {
+    return new Map();
+  }
+
+  const rows = await PartnerPostSave.aggregate([
+    { $match: { post_id: { $in: postIds.map((id) => new mongoose.Types.ObjectId(String(id))) } } },
+    { $group: { _id: '$post_id', count: { $sum: 1 } } },
+  ]);
+
+  return new Map(rows.map((row) => [String(row._id), Math.max(0, Number(row.count) || 0)]));
 };
 
 const formatOrderServiceLocation = (order) => {
@@ -509,7 +510,9 @@ const mapPostRecord = (post, options = {}) => {
     categoryById = new Map(),
     serviceById = new Map(),
     orderById = new Map(),
+    saveCountByPostId = new Map(),
     includePartner = true,
+    includeSaveCount = false,
   } = options;
 
   const orderDetail =
@@ -527,7 +530,7 @@ const mapPostRecord = (post, options = {}) => {
     status: post.status,
     rejection_reason: post.rejection_reason || '',
     share_token: post.share_token,
-    share_url: buildShareUrl(post.share_token),
+    share_url: buildShareUrl(post._id),
     likes_count: post.likes_count ?? 0,
     shares_count: post.shares_count ?? 0,
     reports_count: post.reports_count ?? 0,
@@ -535,6 +538,10 @@ const mapPostRecord = (post, options = {}) => {
     updated_at: post.updated_at,
     linked: buildLinkedBlock(post, { categoryById, serviceById, orderDetail }),
   };
+
+  if (includeSaveCount) {
+    record.saves_count = saveCountByPostId.get(String(post._id)) ?? 0;
+  }
 
   if (userId) {
     record.is_liked = likedPostIds.has(String(post._id));
@@ -555,7 +562,7 @@ const mapPostRecord = (post, options = {}) => {
 };
 
 const mapPostRecords = async (posts, options = {}) => {
-  const { userId = null, includePartner = true } = options;
+  const { userId = null, includePartner = true, includeSaveCount = false } = options;
 
   if (posts.length === 0) {
     return [];
@@ -564,12 +571,13 @@ const mapPostRecords = async (posts, options = {}) => {
   const postIds = posts.map((p) => p._id);
   const partnerIds = [...new Set(posts.map((p) => String(p.partner_id)).filter(Boolean))];
 
-  const [likedPostIds, savedPostIds, partnerById, labelMaps, orderById] = await Promise.all([
+  const [likedPostIds, savedPostIds, partnerById, labelMaps, orderById, saveCountByPostId] = await Promise.all([
     loadLikedPostIds(userId, postIds),
     loadSavedPostIds(userId, postIds),
     includePartner ? loadPartnerSummaries(partnerIds.map((id) => new mongoose.Types.ObjectId(id))) : Promise.resolve(new Map()),
     loadLinkedLabels(posts),
     loadLinkedOrderDetails(posts),
+    includeSaveCount ? loadSaveCountsByPostIds(postIds) : Promise.resolve(new Map()),
   ]);
 
   return posts.map((post) =>
@@ -581,7 +589,9 @@ const mapPostRecords = async (posts, options = {}) => {
       categoryById: labelMaps.categoryById,
       serviceById: labelMaps.serviceById,
       orderById,
+      saveCountByPostId,
       includePartner,
+      includeSaveCount,
     })
   );
 };
@@ -602,11 +612,61 @@ const partnerPostScopeFilter = (partnerId) => {
   };
 };
 
-/** Aggregate post, like, and save totals for a partner (all non-deleted posts). */
-const getPartnerEngagementCounts = async (partnerId) => {
-  const postMatch = partnerPostScopeFilter(partnerId);
-  if (!postMatch) {
-    return { posts_count: 0, likes_count: 0, saves_count: 0 };
+const emptyPartnerEngagementCounts = () => ({
+  posts_count: 0,
+  images_count: 0,
+  video_count: 0,
+  likes_count: 0,
+  shares_count: 0,
+  saves_count: 0,
+});
+
+const normalizePartnerObjectIds = (partnerIds = []) => {
+  const oids = [];
+  const seen = new Set();
+  for (const raw of partnerIds) {
+    const key = String(raw ?? '').trim();
+    if (!key || !mongoose.Types.ObjectId.isValid(key) || seen.has(key)) continue;
+    seen.add(key);
+    oids.push(new mongoose.Types.ObjectId(key));
+  }
+  return oids;
+};
+
+/**
+ * Batch engagement totals keyed by partner id string.
+ * Uses denormalized likes_count / shares_count on each post so totals match
+ * summing the values shown on post cards. images_count is the total number of
+ * images on those same posts (1–4 per post). video_count is always 0 until
+ * video posts are implemented.
+ *
+ * @param {Array<string|import('mongoose').Types.ObjectId>} partnerIds
+ * @param {{ publishedOnly?: boolean }} [options]
+ */
+const getPartnersEngagementCountsByPartnerIds = async (
+  partnerIds,
+  { publishedOnly = false } = {}
+) => {
+  const oids = normalizePartnerObjectIds(partnerIds);
+  const byPartnerId = new Map();
+  if (oids.length === 0) {
+    return byPartnerId;
+  }
+
+  const postMatch = {
+    partner_id: { $in: oids },
+    deleted_at: null,
+  };
+  if (publishedOnly) {
+    postMatch.status = POST_STATUS_PUBLISHED;
+  }
+
+  const savePostMatch = {
+    'post.partner_id': { $in: oids },
+    'post.deleted_at': null,
+  };
+  if (publishedOnly) {
+    savePostMatch['post.status'] = POST_STATUS_PUBLISHED;
   }
 
   const [postAgg, savesAgg] = await Promise.all([
@@ -614,9 +674,19 @@ const getPartnerEngagementCounts = async (partnerId) => {
       { $match: postMatch },
       {
         $group: {
-          _id: null,
+          _id: '$partner_id',
           posts_count: { $sum: 1 },
+          images_count: {
+            $sum: {
+              $cond: [
+                { $isArray: '$image_urls' },
+                { $size: '$image_urls' },
+                0,
+              ],
+            },
+          },
           likes_count: { $sum: { $ifNull: ['$likes_count', 0] } },
+          shares_count: { $sum: { $ifNull: ['$shares_count', 0] } },
         },
       },
     ]),
@@ -630,19 +700,60 @@ const getPartnerEngagementCounts = async (partnerId) => {
         },
       },
       { $unwind: '$post' },
-      { $match: { 'post.partner_id': postMatch.partner_id, 'post.deleted_at': null } },
-      { $count: 'saves_count' },
+      { $match: savePostMatch },
+      { $group: { _id: '$post.partner_id', saves_count: { $sum: 1 } } },
     ]),
   ]);
 
-  const postStats = postAgg[0] || {};
-  const savesStats = savesAgg[0] || {};
+  for (const oid of oids) {
+    byPartnerId.set(String(oid), emptyPartnerEngagementCounts());
+  }
 
-  return {
-    posts_count: Math.max(0, Number(postStats.posts_count) || 0),
-    likes_count: Math.max(0, Number(postStats.likes_count) || 0),
-    saves_count: Math.max(0, Number(savesStats.saves_count) || 0),
-  };
+  for (const row of postAgg) {
+    const key = String(row._id);
+    const current = byPartnerId.get(key) || emptyPartnerEngagementCounts();
+    byPartnerId.set(key, {
+      ...current,
+      posts_count: Math.max(0, Number(row.posts_count) || 0),
+      images_count: Math.max(0, Number(row.images_count) || 0),
+      video_count: 0,
+      likes_count: Math.max(0, Number(row.likes_count) || 0),
+      shares_count: Math.max(0, Number(row.shares_count) || 0),
+    });
+  }
+
+  for (const row of savesAgg) {
+    const key = String(row._id);
+    const current = byPartnerId.get(key) || emptyPartnerEngagementCounts();
+    byPartnerId.set(key, {
+      ...current,
+      saves_count: Math.max(0, Number(row.saves_count) || 0),
+    });
+  }
+
+  return byPartnerId;
+};
+
+/**
+ * Aggregate post / image / like / share / save totals for a partner.
+ * Uses the same denormalized counters shown on each post card so profile
+ * totals match summing the partner's mobile post list.
+ *
+ * @param {string|import('mongoose').Types.ObjectId} partnerId
+ * @param {{ publishedOnly?: boolean }} [options]
+ *   - publishedOnly=false (default): all non-deleted posts (partner app list)
+ *   - publishedOnly=true: published only (customer / admin partner gallery)
+ */
+const getPartnerEngagementCounts = async (partnerId, { publishedOnly = false } = {}) => {
+  const postMatch = partnerPostScopeFilter(partnerId);
+  if (!postMatch) {
+    return emptyPartnerEngagementCounts();
+  }
+
+  const byPartnerId = await getPartnersEngagementCountsByPartnerIds([postMatch.partner_id], {
+    publishedOnly,
+  });
+  return byPartnerId.get(String(postMatch.partner_id)) || emptyPartnerEngagementCounts();
 };
 
 const findPublishedPostById = async (postId) => {
@@ -668,7 +779,6 @@ module.exports = {
   MIN_IMAGES,
   MAX_IMAGES,
   MAX_DESCRIPTION_LENGTH,
-  MAX_POST_REJECTION_REASON_LENGTH,
   parseRejectionReason,
   MIN_LEGACY_SERVICE_NAME_LENGTH,
   parsePositiveInt,
@@ -684,6 +794,7 @@ module.exports = {
   publishedPostFilter,
   findPublishedPostById,
   getPartnerEngagementCounts,
+  getPartnersEngagementCountsByPartnerIds,
   POST_TYPE_ORDER,
   POST_TYPE_LEGACY_WORK,
 };

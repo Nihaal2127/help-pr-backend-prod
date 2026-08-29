@@ -533,7 +533,11 @@ const getCountData = async (req, res) => {
                     });
                 }
                 const stateId = frDoc.state_id;
-                const cityId = frDoc.city_id;
+                const cityIds = Array.isArray(frDoc.city_id)
+                    ? frDoc.city_id.filter(Boolean)
+                    : frDoc.city_id
+                      ? [frDoc.city_id]
+                      : [];
                 const areaIds = (frDoc.area_id || []).filter(Boolean);
 
                 response.total_state = await State.countDocuments({ _id: stateId, deleted_at: null });
@@ -548,17 +552,22 @@ const getCountData = async (req, res) => {
                     deleted_at: null,
                 });
 
-                response.total_city = await City.countDocuments({ _id: cityId, deleted_at: null });
-                response.inactive_city = await City.countDocuments({
-                    _id: cityId,
-                    is_active: false,
-                    deleted_at: null,
-                });
-                response.active_city = await City.countDocuments({
-                    _id: cityId,
-                    is_active: true,
-                    deleted_at: null,
-                });
+                if (cityIds.length === 0) {
+                    response.total_city = 0;
+                    response.inactive_city = 0;
+                    response.active_city = 0;
+                } else {
+                    const cityBase = { _id: { $in: cityIds }, deleted_at: null };
+                    response.total_city = await City.countDocuments(cityBase);
+                    response.inactive_city = await City.countDocuments({
+                        ...cityBase,
+                        is_active: false,
+                    });
+                    response.active_city = await City.countDocuments({
+                        ...cityBase,
+                        is_active: true,
+                    });
+                }
 
                 if (areaIds.length === 0) {
                     response.total_area = 0;
@@ -1361,6 +1370,155 @@ const getServiceCountData = async (id) => {
     }
 };
 
+const toOidList = (ids) =>
+    [...new Set((ids || []).map((id) => String(id)).filter((id) => mongoose.Types.ObjectId.isValid(id)))].map(
+        (id) => new mongoose.Types.ObjectId(id),
+    );
+
+const partnerEntitlementTotalExpr = {
+    $cond: [
+        '$_isTerminal',
+        0,
+        {
+            $add: [
+                { $ifNull: ['$_line.partner_earning', 0] },
+                { $ifNull: ['$additional_charges_subtotal', 0] },
+            ],
+        },
+    ],
+};
+
+const partnerFirstLineLookup = () => ({
+    $lookup: {
+        from: OrderService.collection.name,
+        let: { lineId: { $arrayElemAt: ['$service_items', 0] } },
+        pipeline: [
+            {
+                $match: {
+                    $and: [
+                        { $expr: { $eq: ['$_id', '$$lineId'] } },
+                        { deleted_at: null },
+                        { service_status: { $ne: ORDER_STATUS_REFUNDED } },
+                    ],
+                },
+            },
+            { $limit: 1 },
+            { $project: { partner_earning: 1 } },
+        ],
+        as: '_line',
+    },
+});
+
+/**
+ * Batch sort keys matching getAll / getById job stats:
+ * total_service, total_amount, bal_payment (same as balance_amount).
+ */
+const buildUserJobFinancialSortKeyMap = async (users) => {
+    const map = new Map();
+    const customerIds = [];
+    const partnerIds = [];
+    for (const user of users || []) {
+        if (!user?._id) continue;
+        const id = String(user._id);
+        map.set(id, { total_service: 0, total_amount: 0, bal_payment: 0, no_of_services: 0 });
+        const type = Number(user.type);
+        if (type === 4) customerIds.push(user._id);
+        else if (type === 2) partnerIds.push(user._id);
+    }
+
+    const customerOids = toOidList(customerIds);
+    const partnerOids = toOidList(partnerIds);
+    const terminalStatusValues = buildTerminalOrderStatusMatchValues();
+    const customerBillableExpr = {
+        $cond: ['$_isTerminal', 0, { $ifNull: ['$total_price', 0] }],
+    };
+
+    const [customerRows, partnerCountRows, partnerAmountRows, partnerCatalogRows] = await Promise.all([
+        customerOids.length === 0
+            ? Promise.resolve([])
+            : Order.aggregate([
+                  { $match: { deleted_at: null, user_id: { $in: customerOids } } },
+                  { $addFields: { _isTerminal: { $in: ['$order_status', terminalStatusValues] } } },
+                  {
+                      $group: {
+                          _id: '$user_id',
+                          total_service: { $sum: 1 },
+                          total_amount: { $sum: customerBillableExpr },
+                          bal_payment: { $sum: { $ifNull: ['$customer_due_amount', 0] } },
+                      },
+                  },
+              ]),
+        partnerOids.length === 0
+            ? Promise.resolve([])
+            : Order.aggregate([
+                  { $match: { deleted_at: null, partner_id: { $in: partnerOids } } },
+                  {
+                      $group: {
+                          _id: '$partner_id',
+                          total_service: { $sum: 1 },
+                          bal_payment: { $sum: { $ifNull: ['$partner_due_amount', 0] } },
+                      },
+                  },
+              ]),
+        partnerOids.length === 0
+            ? Promise.resolve([])
+            : Order.aggregate([
+                  { $match: { deleted_at: null, partner_id: { $in: partnerOids } } },
+                  { $addFields: { _isTerminal: { $in: ['$order_status', terminalStatusValues] } } },
+                  partnerFirstLineLookup(),
+                  { $unwind: { path: '$_line', preserveNullAndEmptyArrays: true } },
+                  {
+                      $group: {
+                          _id: '$partner_id',
+                          total_amount: { $sum: partnerEntitlementTotalExpr },
+                      },
+                  },
+              ]),
+        partnerOids.length === 0
+            ? Promise.resolve([])
+            : PartnerService.aggregate([
+                  { $match: { partner_id: { $in: partnerOids }, deleted_at: null } },
+                  { $group: { _id: '$partner_id', no_of_services: { $sum: 1 } } },
+              ]),
+    ]);
+
+    for (const row of customerRows) {
+        map.set(String(row._id), {
+            total_service: Number(row.total_service) || 0,
+            total_amount: roundServiceMoney(row.total_amount),
+            bal_payment: roundServiceMoney(row.bal_payment),
+            no_of_services: 0,
+        });
+    }
+    const partnerAmountById = new Map(
+        partnerAmountRows.map((row) => [String(row._id), roundServiceMoney(row.total_amount)]),
+    );
+    const partnerCatalogById = new Map(
+        partnerCatalogRows.map((row) => [String(row._id), Number(row.no_of_services) || 0]),
+    );
+    const partnerCountIdSet = new Set(partnerCountRows.map((row) => String(row._id)));
+    for (const row of partnerCountRows) {
+        const id = String(row._id);
+        map.set(id, {
+            total_service: Number(row.total_service) || 0,
+            total_amount: partnerAmountById.get(id) || 0,
+            bal_payment: roundServiceMoney(row.bal_payment),
+            no_of_services: partnerCatalogById.get(id) || 0,
+        });
+    }
+    for (const [id, total_amount] of partnerAmountById) {
+        if (!partnerCountIdSet.has(id) && map.has(id)) {
+            map.set(id, { ...map.get(id), total_amount });
+        }
+    }
+    for (const [id, no_of_services] of partnerCatalogById) {
+        if (map.has(id)) {
+            map.set(id, { ...map.get(id), no_of_services });
+        }
+    }
+    return map;
+};
+
 const getVerificationCountData = async (id) => {
     try {
         const document_uploaded_count = await PartnerDocument.countDocuments({
@@ -1459,4 +1617,5 @@ module.exports = {
     getPartnerServiceCount,
     getHomeCount,
     pickFranchiseIdFromRequest,
+    buildUserJobFinancialSortKeyMap,
 };

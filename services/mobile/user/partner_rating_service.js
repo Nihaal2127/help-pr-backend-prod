@@ -4,6 +4,7 @@ const Service = require("../../../models/service");
 const OrderService = require("../../../models/order_services");
 const PartnerServiceRating = require("../../../models/partner_service_rating");
 const { USER_TYPE_PARTNER } = require("../../../constants/user_types");
+const { fieldLabel } = require('../../../utils/field_labels');
 const {
   mapRatingSummary,
   attachServiceRatingFields,
@@ -14,6 +15,7 @@ const {
 } = require("./franchise_partner_scope");
 
 const { fail, ok } = require('../../../utils/mobile_service_result');
+const { listPartnerServiceOrderRatings } = require('../shared/partner_service_ratings_list');
 
 const parseReviewLimit = (raw) => {
   const n = parseInt(String(raw ?? ""), 10);
@@ -24,7 +26,7 @@ const parseReviewLimit = (raw) => {
 const assertPartnerInFranchise = async (partnerId, franchiseId) => {
   const partnerKey = String(partnerId ?? "").trim();
   if (!partnerKey || !mongoose.Types.ObjectId.isValid(partnerKey)) {
-    return fail(400, "partnerId must be a valid ObjectId.");
+    return fail(400, `${fieldLabel("partnerId")} must be a valid ObjectId.`);
   }
 
   const franchiseIdRaw =
@@ -87,7 +89,7 @@ const getPartnerRatingsSummary = async (partnerId, query = {}) => {
         ? String(query.service_id).trim()
         : "";
     if (serviceIdRaw && !mongoose.Types.ObjectId.isValid(serviceIdRaw)) {
-      return fail(400, "service_id must be a valid ObjectId.");
+      return fail(400, `${fieldLabel("service_id")} must be a valid ObjectId.`);
     }
 
     const reviewLimit = parseReviewLimit(query.review_limit);
@@ -169,6 +171,22 @@ const getPartnerRatingsSummary = async (partnerId, query = {}) => {
     });
   } catch (err) {
     console.error("getPartnerRatingsSummary", err.message);
+    return fail(500, "Internal server error.");
+  }
+};
+
+const listPartnerServiceRatingsForCustomer = async (partnerId, query = {}) => {
+  try {
+    const partnerResult = await assertPartnerInFranchise(partnerId, query.franchise_id);
+    if (!partnerResult.ok) return partnerResult;
+
+    return listPartnerServiceOrderRatings({
+      partner: partnerResult.data.partner,
+      query,
+      includeCustomerContact: false,
+    });
+  } catch (err) {
+    console.error("listPartnerServiceRatingsForCustomer", err.message);
     return fail(500, "Internal server error.");
   }
 };
@@ -297,6 +315,7 @@ const enrichPartnerListRecordsWithServiceRatings = async (records) => {
 
 module.exports = {
   getPartnerRatingsSummary,
+  listPartnerServiceRatingsForCustomer,
   enrichPartnerCatalogWithRatings,
   enrichPartnerListRecordsWithServiceRatings,
 };

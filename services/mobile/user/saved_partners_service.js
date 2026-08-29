@@ -3,6 +3,7 @@ const CustomerSavedPartner = require('../../../models/customer_saved_partner');
 const Franchise = require('../../../models/franchise');
 const User = require('../../../models/user');
 const { USER_TYPE_PARTNER } = require('../../../constants/user_types');
+const { fieldLabel } = require('../../../utils/field_labels');
 const {
   parsePartnersListQuery,
   paginatePartnerRecords,
@@ -14,7 +15,7 @@ const { fail, ok } = require('../../../utils/mobile_service_result');
 const assertSavablePartner = async (partnerId) => {
   const partnerKey = String(partnerId ?? '').trim();
   if (!partnerKey || !mongoose.Types.ObjectId.isValid(partnerKey)) {
-    return fail(400, 'partnerId must be a valid ObjectId.');
+    return fail(400, `${fieldLabel('partnerId')} must be a valid ObjectId.`);
   }
 
   const partner = await User.findOne({
@@ -34,6 +35,7 @@ const assertSavablePartner = async (partnerId) => {
 
   const built = await buildFranchisePartnerListRecords(partner.franchise_id, {
     partnerIdAllowlist: [partner._id],
+    publishedOnly: true,
   });
 
   if (!built.ok) {
@@ -111,7 +113,7 @@ const unsavePartnerForCustomer = async (userId, partnerId) => {
   try {
     const partnerKey = String(partnerId ?? '').trim();
     if (!partnerKey || !mongoose.Types.ObjectId.isValid(partnerKey)) {
-      return fail(400, 'partnerId must be a valid ObjectId.');
+      return fail(400, `${fieldLabel('partnerId')} must be a valid ObjectId.`);
     }
 
     const removed = await CustomerSavedPartner.deleteOne({
@@ -191,6 +193,7 @@ const listSavedPartnersPaginated = async (userId, query) => {
     for (const [franchiseKey, partnerIdSet] of byFranchise) {
       const built = await buildFranchisePartnerListRecords(franchiseKey, {
         partnerIdAllowlist: [...partnerIdSet],
+        publishedOnly: true,
       });
       if (!built.ok) continue;
       const builtData = built.data || {};

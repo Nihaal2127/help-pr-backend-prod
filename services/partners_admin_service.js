@@ -3,6 +3,7 @@ const User = require('../models/user');
 const Franchise = require('../models/franchise');
 const { PLAN_NAMES } = require('../models/subscription_plan');
 const { USER_TYPE_PARTNER } = require('../constants/user_types');
+const { fieldLabel } = require('../utils/field_labels');
 const {
   listFranchisePartnersPaginated,
   getPartnerProfileForCustomer,
@@ -65,7 +66,7 @@ const resolveListFranchiseId = (scopeResult, queryFranchiseId) => {
     return { ok: true, allFranchises: true };
   }
   if (!mongoose.Types.ObjectId.isValid(queryRaw)) {
-    return fail(400, 'franchise_id must be a valid ObjectId.');
+    return fail(400, `${fieldLabel('franchise_id')} must be a valid ObjectId.`);
   }
 
   return { ok: true, franchiseId: queryRaw };
@@ -80,7 +81,9 @@ const listAllFranchisesPartnersPaginated = async (query) => {
 
     const merged = [];
     for (const franchise of franchises) {
-      const built = await buildFranchisePartnerListRecords(franchise._id);
+      const built = await buildFranchisePartnerListRecords(franchise._id, {
+        publishedOnly: true,
+      });
       if (!built.ok) continue;
 
       const builtData = built.data || {};
@@ -153,7 +156,9 @@ const collectAllFranchisesPartnerBrowseRecords = async () => {
   const merged = [];
 
   for (const franchise of franchises) {
-    const built = await buildFranchisePartnerListRecords(franchise._id);
+    const built = await buildFranchisePartnerListRecords(franchise._id, {
+      publishedOnly: true,
+    });
     if (!built.ok) continue;
 
     const builtData = built.data || {};
@@ -182,7 +187,9 @@ const collectPartnersBrowseRecords = async (scopeResult, queryFranchiseId) => {
     }
   }
 
-  const built = await buildFranchisePartnerListRecords(franchiseResolved.franchiseId);
+  const built = await buildFranchisePartnerListRecords(franchiseResolved.franchiseId, {
+    publishedOnly: true,
+  });
   if (!built.ok) {
     return built;
   }
@@ -219,16 +226,19 @@ const listPartnersForAdmin = async (scopeResult, query) => {
     return listAllFranchisesPartnersPaginated(query);
   }
 
-  return listFranchisePartnersPaginated({
-    ...query,
-    franchise_id: franchiseResolved.franchiseId,
-  });
+  return listFranchisePartnersPaginated(
+    {
+      ...query,
+      franchise_id: franchiseResolved.franchiseId,
+    },
+    { publishedOnly: true }
+  );
 };
 
 const loadPartnerForAccess = async (partnerIdRaw) => {
   const partnerKey = String(partnerIdRaw ?? '').trim();
   if (!partnerKey || !mongoose.Types.ObjectId.isValid(partnerKey)) {
-    return fail(400, 'partnerId must be a valid ObjectId.');
+    return fail(400, `${fieldLabel('partnerId')} must be a valid ObjectId.`);
   }
 
   const partner = await User.findOne({
