@@ -87,20 +87,32 @@ const app = express();
 
 // Razorpay webhook must verify HMAC against the raw body (before express.json parses it).
 const { handleRazorpayWebhook } = require('./controllers/razorpay_controller');
+const { handleAppleIapNotification } = require('./controllers/apple_iap_controller');
 const {
   handleWhatsAppWebhookVerify,
   handleWhatsAppWebhookEvent,
 } = require('./controllers/whatsapp_webhook_controller');
+const { handleBunnyStreamWebhook } = require('./controllers/bunny_stream_webhook_controller');
 app.post(
     '/api/razorpay/razorpayWebhook',
     express.raw({ type: 'application/json' }),
     handleRazorpayWebhook
+);
+app.post(
+    '/api/apple/iap/notifications',
+    express.raw({ type: 'application/json' }),
+    handleAppleIapNotification
 );
 app.get('/api/whatsapp/webhook', handleWhatsAppWebhookVerify);
 app.post(
     '/api/whatsapp/webhook',
     express.raw({ type: 'application/json' }),
     handleWhatsAppWebhookEvent
+);
+app.post(
+    '/api/webhooks/bunny-stream',
+    express.raw({ type: 'application/json' }),
+    handleBunnyStreamWebhook
 );
 
 // Middleware

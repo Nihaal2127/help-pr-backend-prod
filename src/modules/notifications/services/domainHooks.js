@@ -1,6 +1,8 @@
+const mongoose = require("mongoose");
 const { notify } = require("./notification.service");
 const OrderPayment = require("../../../../models/order_payment");
 const OrderAdditionalCharge = require("../../../../models/order_additional_charge");
+const OrderService = require("../../../../models/order_services");
 const { formatAmount } = require("../constants/notification_events");
 const { normalizeQuoteStatus, shouldIncludePartnerInQuoteNotify } = require("../../../../enum/quote_status_enum");
 const { resolveOrderRecipients } = require("../resolvers/orderRecipients");
@@ -38,6 +40,37 @@ const buildOrderMetadata = (order, extra = {}) => ({
   franchise_id: order?.franchise_id || null,
   ...extra,
 });
+
+const addRecipientId = (set, value) => {
+  if (value == null || value === "") return;
+  const id = typeof value === "object" && value._id != null ? value._id : value;
+  if (id == null || id === "") return;
+  const key = String(id);
+  if (!key || key === "[object Object]") return;
+  set.add(key);
+};
+
+const collectOrderPartnerUserIds = async (order) => {
+  const ids = new Set();
+  addRecipientId(ids, order?.partner_id);
+
+  const serviceItemIds = order?.service_items || [];
+  const objectIds = serviceItemIds
+    .map((item) =>
+      item && typeof item === "object" && item._id != null ? item._id : item
+    )
+    .filter((id) => mongoose.Types.ObjectId.isValid(String(id)))
+    .map((id) => new mongoose.Types.ObjectId(String(id)));
+
+  if (objectIds.length) {
+    const lines = await OrderService.find({ _id: { $in: objectIds } })
+      .select("partner_id")
+      .lean();
+    lines.forEach((line) => addRecipientId(ids, line.partner_id));
+  }
+
+  return [...ids];
+};
 
 const safeNotifyOrderCreated = async ({ order, actorUserId, serviceItems = [] }) => {
   await runSafe("order.created", async () => {
@@ -604,6 +637,25 @@ const safeNotifyQuoteAssigned = async ({ quote, actorUserId }) => {
       },
       dedupeKeyPrefix: `quote.assigned:${quote._id}`,
     });
+
+    if (!quote.user_id) return;
+
+    await notify({
+      eventKey: "QUOTE_STATUS_CHANGED",
+      actorUserId,
+      recipientUserIds: [quote.user_id],
+      context: { quote, previousStatus: "new", newStatus: "pending" },
+      entityType: "quote",
+      entityId: quote._id,
+      franchiseId: quote.franchise_id,
+      metadata: {
+        quote_id: quote._id,
+        quote_sequence_id: quote.quote_sequence_id,
+        previousStatus: "new",
+        newStatus: "pending",
+      },
+      dedupeKeyPrefix: `quote.status:${quote._id}:pending`,
+    });
   });
 };
 
@@ -667,6 +719,39 @@ const safeNotifyPartnerPostModerated = async ({
         status,
       },
       dedupeKeyPrefix: `partner.post.moderated:${post?._id}:${status}:${post?.updated_at ? new Date(post.updated_at).toISOString() : Date.now()}`,
+    });
+  });
+};
+
+const safeNotifyPartnerPostLiked = async ({
+  post,
+  partnerUserId,
+  customerName,
+  likeId,
+  actorUserId,
+}) => {
+  await runSafe("partner.post_liked", async () => {
+    if (!partnerUserId) return;
+    if (String(partnerUserId) === String(actorUserId)) return;
+
+    const postDescription = truncatePostDescription(post?.description);
+
+    await notify({
+      eventKey: "PARTNER_POST_LIKED",
+      actorUserId,
+      recipientUserIds: [partnerUserId],
+      context: { post, postDescription, customerName },
+      entityType: "partner_post",
+      entityId: post?._id,
+      franchiseId: post?.franchise_id || null,
+      metadata: {
+        post_id: post?._id || null,
+        like_id: likeId || null,
+        customer_name: customerName || "",
+      },
+      dedupeKeyPrefix: likeId
+        ? `partner.post.liked:${likeId}`
+        : `partner.post.liked:${post?._id}:${actorUserId}`,
     });
   });
 };
@@ -875,6 +960,28 @@ const safeNotifyOrderReviewReceived = async ({ order, partnerUserId, actorUserId
   });
 };
 
+const safeNotifyOrderInvoiceDownloaded = async ({ order }) => {
+  await runSafe("order.invoice_downloaded", async () => {
+    if (!order?._id) return;
+
+    const recipientUserIds = new Set();
+    addRecipientId(recipientUserIds, order.user_id);
+    const partnerUserIds = await collectOrderPartnerUserIds(order);
+    partnerUserIds.forEach((id) => recipientUserIds.add(String(id)));
+    if (!recipientUserIds.size) return;
+
+    await notify({
+      eventKey: "ORDER_INVOICE_DOWNLOADED",
+      recipientUserIds: [...recipientUserIds],
+      context: { order },
+      entityType: "order",
+      entityId: order._id,
+      franchiseId: order.franchise_id,
+      metadata: buildOrderMetadata(order),
+    });
+  });
+};
+
 const safeNotifySubscriptionPlanChanged = async ({
   subscription,
   planName,
@@ -1027,6 +1134,7 @@ module.exports = {
   safeNotifyQuoteAssigned,
   safeNotifyPartnerPostReviewed,
   safeNotifyPartnerPostModerated,
+  safeNotifyPartnerPostLiked,
   safeNotifyPartnerVerificationUpdated,
   safeNotifyOrderAdditionalChargeUpdated,
   safeNotifyOrderAdditionalChargeRemoved,
@@ -1034,6 +1142,7 @@ module.exports = {
   safeNotifyOrderRefundProcessed,
   safeNotifyDisputeStatusChanged,
   safeNotifyOrderReviewReceived,
+  safeNotifyOrderInvoiceDownloaded,
   safeNotifySubscriptionPlanChanged,
   safeNotifyAppointmentScheduled,
   safeNotifyAppointmentStatusChanged,
