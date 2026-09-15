@@ -17,6 +17,7 @@ const {
   safeNotifyBackofficeOrderPayment,
   safeNotifyBackofficeSubscriptionChanged,
   safeNotifyBackofficeOrderReviewReceived,
+  safeNotifyBackofficePartnerVerificationUpdated,
 } = require("./backofficeHooks");
 
 const runSafe = async (label, fn) => {
@@ -317,8 +318,8 @@ const safeNotifyOrderPaymentReceived = async ({
     }
 
     const stakeholderRecipients = excludeUserId(
-      await resolveOrderRecipients(order),
-      payerUserId
+      excludeUserId(await resolveOrderRecipients(order), payerUserId),
+      payerType === "partner" ? order.user_id : null
     );
     if (stakeholderRecipients.length) {
       await notify({
@@ -783,10 +784,7 @@ const safeNotifyPartnerVerificationUpdated = async ({
         metadata: { verification_status: status },
         dedupeKeyPrefix: `partner.verification:${partnerUserId}:approved`,
       });
-      return;
-    }
-
-    if (status === 3) {
+    } else if (status === 3) {
       await notify({
         eventKey: "PARTNER_VERIFICATION_REJECTED",
         actorUserId,
@@ -797,7 +795,15 @@ const safeNotifyPartnerVerificationUpdated = async ({
         metadata: { verification_status: status },
         dedupeKeyPrefix: `partner.verification:${partnerUserId}:rejected`,
       });
+    } else {
+      return;
     }
+
+    void safeNotifyBackofficePartnerVerificationUpdated({
+      partnerUserId,
+      verificationStatus: status,
+      actorUserId,
+    });
   });
 };
 
