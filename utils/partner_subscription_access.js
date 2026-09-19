@@ -42,19 +42,24 @@ const canManagePartnerSubscriptions = (caller) => {
     if (type === USER_TYPE_ADMIN) {
         return { ok: true };
     }
-    if (type === USER_TYPE_STAFF || type === USER_TYPE_EMPLOYEE) {
+    // Franchise employees use the same Partner Management screen as franchise admin.
+    // Do not require accessible_screens — empty screens mean full franchise access on web.
+    if (type === USER_TYPE_EMPLOYEE) {
+        if (!caller.franchise_id) {
+            return {
+                ok: false,
+                status: 403,
+                message: 'Your account is not linked to a franchise.',
+            };
+        }
+        return { ok: true };
+    }
+    if (type === USER_TYPE_STAFF) {
         if (!hasPartnerSubscriptionScreenAccess(caller.accessible_screens)) {
             return {
                 ok: false,
                 status: 403,
                 message: 'Partner subscription screen access required.',
-            };
-        }
-        if (type === USER_TYPE_EMPLOYEE && !caller.franchise_id) {
-            return {
-                ok: false,
-                status: 403,
-                message: 'Your account is not linked to a franchise.',
             };
         }
         return { ok: true };

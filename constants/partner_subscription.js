@@ -6,11 +6,13 @@ const AUTO_BASIC_SUBSCRIPTION_NOTES = {
   web: 'Auto-assigned on web partner create',
 };
 
-/** Matches `accessible_screens` page/url for staff and franchise employees. */
+/** Matches `accessible_screens` page/url for staff. */
 const PARTNER_SUBSCRIPTION_SCREEN_MARKERS = [
   'subscription',
   'partner-subscription',
   'partner_subscription',
+  'partner-management',
+  'partner_management',
 ];
 
 module.exports = {
