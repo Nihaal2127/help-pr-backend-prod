@@ -49,6 +49,7 @@ const {
   normalizeUserEmail,
   normalizeUserPhone,
   checkUserContactUniqueness,
+  getPhoneLookupVariants,
 } = require('../utils/user_contact_uniqueness');
 const { fieldLabel } = require('../utils/field_labels');
 const { resolveRegistrationTypeForUserCreate } = require('../constants/registration_types');
@@ -520,6 +521,97 @@ function buildPartnerListStatusFilter(query) {
     return { is_blocked: false };
   }
   return {};
+}
+
+function firstNonEmptyQueryValue(query, keys) {
+  for (const key of keys) {
+    const raw = query[key];
+    if (raw === undefined || raw === null) continue;
+    const value = String(Array.isArray(raw) ? raw[0] : raw).trim();
+    if (value) return value;
+  }
+  return '';
+}
+
+/** Admin list UIs send the same term as keyword, search, name, user_name, or partner_name. */
+function pickUserListSearchTerm(query) {
+  return firstNonEmptyQueryValue(query, [
+    'keyword',
+    'search',
+    'name',
+    'user_name',
+    'partner_name',
+    'email',
+    'phone_number',
+    'phone',
+  ]);
+}
+
+function buildUserListSearchOr(searchTerm) {
+  const sanitized = sanitizeInput(searchTerm);
+  const regex = new RegExp(sanitized, 'i');
+  const clauses = [
+    { name: regex },
+    { email: regex },
+    { phone_number: regex },
+    { user_id: regex },
+    { registration_id: regex },
+  ];
+  const digits = String(searchTerm).replace(/\D/g, '');
+  let phoneRegex = null;
+  if (digits.length >= 6) {
+    const core = digits.length >= 10 ? digits.slice(-10) : digits;
+    phoneRegex = new RegExp(sanitizeInput(core), 'i');
+    clauses.push({ phone_number: phoneRegex });
+    for (const variant of getPhoneLookupVariants(searchTerm)) {
+      clauses.push({ phone_number: variant });
+    }
+  }
+  return { regex, phoneRegex, clauses };
+}
+
+function applyRoleAndSearchOr(filter, roleOr, searchOr) {
+  const and = [];
+  if (Array.isArray(roleOr) && roleOr.length) {
+    and.push({ $or: roleOr });
+  }
+  if (Array.isArray(searchOr) && searchOr.length) {
+    and.push({ $or: searchOr });
+  }
+  if (and.length === 1) {
+    filter.$or = and[0].$or;
+  } else if (and.length > 1) {
+    filter.$and = and;
+  }
+}
+
+async function expandSearchOrWithRelatedContacts(searchOr, { regex, phoneRegex }, { includeAddress, includeBusinessInfo }) {
+  const extraOr = [{ name: regex }, { email: regex }, { phone_number: regex }];
+  if (phoneRegex) extraOr.push({ phone_number: phoneRegex });
+
+  if (includeAddress) {
+    const addressOr = [{ contact_name: regex }, { contact_number: regex }];
+    if (phoneRegex) addressOr.push({ contact_number: phoneRegex });
+    const addressUserIds = await Address.distinct('user_id', {
+      deleted_at: null,
+      user_id: { $ne: null },
+      $or: addressOr,
+    });
+    if (addressUserIds.length) {
+      searchOr.push({ _id: { $in: addressUserIds } });
+    }
+  }
+
+  if (includeBusinessInfo) {
+    const businessUserIds = await BusinessInfo.distinct('user_id', {
+      deleted_at: null,
+      user_id: { $ne: null },
+      $or: extraOr,
+    });
+    if (businessUserIds.length) {
+      searchOr.push({ _id: { $in: businessUserIds } });
+    }
+  }
 }
 
 /** GET /user/getAll ?is_verified= for type=2. Omitted → verified only (2), matching previous hardcoded filter. */
@@ -1253,31 +1345,31 @@ const getAll = async (req, res) => {
         ? parseBoolean(req.query.is_blocked)
         : null;
 
-    const searchTerm = req.query.keyword ?? req.query.search;
-    let regex;
+    const roleOr = roleFilter.$or;
+    const roleRest = { ...roleFilter };
+    delete roleRest.$or;
+
+    const searchTerm = pickUserListSearchTerm(req.query);
+    let searchOr = null;
     if (searchTerm) {
-      const sanitizedKeyword = sanitizeInput(searchTerm);
-      regex = new RegExp(sanitizedKeyword, 'i');
+      const built = buildUserListSearchOr(searchTerm);
+      searchOr = built.clauses;
+      await expandSearchOrWithRelatedContacts(searchOr, built, {
+        includeAddress: type === USER_TYPE_CUSTOMER || type === USER_TYPE_PARTNER,
+        includeBusinessInfo: type === USER_TYPE_PARTNER,
+      });
     }
 
     const filter = {
-      ...roleFilter,
+      ...roleRest,
       deleted_at: null,
       ...(req.query.type && { type: type }),
       ...(type === 2 && { verification_status: partnerListVerificationStatus }),
       ...partnerStatusFilter,
       ...(type !== 2 && req.query.is_active !== undefined && req.query.is_active !== null && String(req.query.is_active).trim() !== '' && { is_active: is_active }),
       ...(type !== 2 && req.query.is_blocked !== undefined && { is_blocked: is_blocked }),
-      ...(searchTerm && {
-        $or: type === 2
-          ? [{ name: regex }]
-          : [
-              { name: regex },
-              { email: regex },
-              { phone_number: regex },
-            ]
-      })
     };
+    applyRoleAndSearchOr(filter, roleOr, searchOr);
 
     const sortSpec = resolveGetAllSort(req.query);
 
@@ -1531,20 +1623,27 @@ const getVerificationAll = async (req, res) => {
     }
 
     const roleFilter = roleResult.roleFilter;
+    const roleOr = roleFilter.$or;
+    const roleRest = { ...roleFilter };
+    delete roleRest.$or;
 
-    const searchTerm = req.query.keyword ?? req.query.search;
-    let regex;
+    const searchTerm = pickUserListSearchTerm(req.query);
+    let searchOr = null;
     if (searchTerm) {
-      const sanitizedKeyword = sanitizeInput(searchTerm);
-      regex = new RegExp(sanitizedKeyword, 'i'); // Case-insensitive regex search
+      const built = buildUserListSearchOr(searchTerm);
+      searchOr = built.clauses;
+      await expandSearchOrWithRelatedContacts(searchOr, built, {
+        includeAddress: true,
+        includeBusinessInfo: true,
+      });
     }
     const filter = {
       deleted_at: null,
       type: USER_TYPE_PARTNER,
-      ...roleFilter,
+      ...roleRest,
       ...verificationFilter,
-      ...(searchTerm && { name: regex })
     };
+    applyRoleAndSearchOr(filter, roleOr, searchOr);
     
     const sortByRaw = req.query.sort_by ?? req.query.sortBy;
     const orderRaw = String(req.query.sort_order ?? req.query.sortOrder ?? '').toLowerCase();
