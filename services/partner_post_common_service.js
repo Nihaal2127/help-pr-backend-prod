@@ -13,7 +13,7 @@ const Service = require('../models/service');
 const { fieldLabel } = require('../utils/field_labels');
 const { USER_TYPE_PARTNER } = require('../constants/user_types');
 const { POST_TYPE_ORDER, POST_TYPE_LEGACY_WORK } = require('../enum/post_type_enum');
-const { POST_STATUS_PENDING, POST_STATUS_PUBLISHED } = require('../enum/post_report_reason_enum');
+const { POST_STATUS_PENDING, POST_STATUS_PUBLISHED, POST_STATUS_REMOVED } = require('../enum/post_report_reason_enum');
 const {
   POST_MEDIA_TYPE_IMAGE,
   POST_MEDIA_TYPE_VIDEO,
@@ -745,6 +745,8 @@ const getPartnersEngagementCountsByPartnerIds = async (
   if (publishedOnly) {
     postMatch.status = POST_STATUS_PUBLISHED;
     Object.assign(postMatch, customerVisibleMediaFilter());
+  } else {
+    postMatch.status = { $ne: POST_STATUS_REMOVED };
   }
 
   const savePostMatch = {
@@ -757,6 +759,8 @@ const getPartnersEngagementCountsByPartnerIds = async (
       { 'post.media_type': { $ne: POST_MEDIA_TYPE_VIDEO } },
       { 'post.media_type': POST_MEDIA_TYPE_VIDEO, 'post.video.status': VIDEO_STATUS_READY },
     ];
+  } else {
+    savePostMatch['post.status'] = { $ne: POST_STATUS_REMOVED };
   }
 
   const [postAgg, savesAgg] = await Promise.all([
@@ -836,7 +840,7 @@ const getPartnersEngagementCountsByPartnerIds = async (
  *
  * @param {string|import('mongoose').Types.ObjectId} partnerId
  * @param {{ publishedOnly?: boolean }} [options]
- *   - publishedOnly=false (default): all non-deleted posts (partner app list)
+ *   - publishedOnly=false (default): partner app — all non-deleted posts except `removed`
  *   - publishedOnly=true: published only (customer / admin partner gallery)
  */
 const getPartnerEngagementCounts = async (partnerId, { publishedOnly = false } = {}) => {
