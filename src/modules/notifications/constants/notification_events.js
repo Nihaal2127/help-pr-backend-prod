@@ -442,6 +442,16 @@ const NOTIFICATION_EVENTS = {
     body: (ctx) =>
       `Customer left a review for ${ctx.partnerName || "a partner"} on order #${ctx.orderUniqueId || ""}${ctx.franchiseName ? ` (${ctx.franchiseName})` : ""}.`,
   },
+  PARTNER_SERVICE_INACTIVE: {
+    category: "admin",
+    title: () => "Partner service inactive",
+    body: (ctx) => {
+      const partner = String(ctx.partnerName || "A partner").trim();
+      const service = String(ctx.serviceName || "a service").trim();
+      const suffix = ctx.franchiseName ? ` (${ctx.franchiseName})` : "";
+      return `${partner} marked "${service}" as inactive${suffix}.`;
+    },
+  },
   PARTNER_ACCOUNT_DELETED: {
     category: "admin",
     title: () => "Partner account deleted",

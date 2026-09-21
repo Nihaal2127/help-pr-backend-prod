@@ -27,9 +27,19 @@ const resolveSuperAdminStaffRecipients = async () => {
 const resolveFranchiseBackofficeRecipients = async (franchiseId) => {
   if (!franchiseId) return [];
 
+  const franchise = await Franchise.findById(franchiseId).select("admin_id").lean();
+  const orClauses = [
+    {
+      franchise_id: franchiseId,
+      type: { $in: [USER_TYPE_ADMIN, USER_TYPE_EMPLOYEE] },
+    },
+  ];
+  if (franchise?.admin_id) {
+    orClauses.push({ _id: franchise.admin_id, type: USER_TYPE_ADMIN });
+  }
+
   const users = await User.find({
-    franchise_id: franchiseId,
-    type: { $in: [USER_TYPE_ADMIN, USER_TYPE_EMPLOYEE] },
+    $or: orClauses,
     deleted_at: null,
     is_active: true,
   })

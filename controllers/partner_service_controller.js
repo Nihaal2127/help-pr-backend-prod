@@ -21,6 +21,7 @@ const {
   loadPartnerAvailabilityContext,
   enrichPartnerServiceApiRecord,
 } = require('../utils/catalog_availability_resolver');
+const { safeNotifyBackofficePartnerServiceInactive } = require('../src/modules/notifications/services/backofficeHooks');
 
 const getAll = async (req, res) => {
   try {
@@ -1075,6 +1076,7 @@ const updateMyService = async (req, res) => {
     }
 
     const { category_id, is_accept_request } = req.body;
+    const wasAcceptingRequests = partnerService.is_accept_request === true;
 
     if (category_id !== undefined) {
       const cv = validateObjectId(category_id, 'category');
@@ -1100,6 +1102,13 @@ const updateMyService = async (req, res) => {
     await partnerService.save();
 
     await rebuildPartnerCategoriesFromPartnerServices(partnerId);
+
+    if (wasAcceptingRequests && partnerService.is_accept_request === false) {
+      void safeNotifyBackofficePartnerServiceInactive({
+        partnerService,
+        actorUserId: partnerId,
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -1152,6 +1161,13 @@ const toggleMyServiceStatus = async (req, res) => {
     partnerService.is_accept_request = !partnerService.is_accept_request;
     partnerService.updated_at = new Date();
     await partnerService.save();
+
+    if (partnerService.is_accept_request === false) {
+      void safeNotifyBackofficePartnerServiceInactive({
+        partnerService,
+        actorUserId: partnerId,
+      });
+    }
 
     return res.status(200).json({
       success: true,

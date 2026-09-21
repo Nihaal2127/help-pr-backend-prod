@@ -1,5 +1,6 @@
 const { notify } = require("./notification.service");
 const User = require("../../../../models/user");
+const Service = require("../../../../models/service");
 const {
   resolveSuperAdminStaffRecipients,
   resolveFranchiseBackofficeRecipients,
@@ -581,6 +582,63 @@ const safeNotifyBackofficeChatMessage = async ({
 const accountDisplayName = (user) =>
   String(user?.name || user?.user_id || user?.phone_number || user?.email || "").trim();
 
+const safeNotifyBackofficePartnerServiceInactive = async ({
+  partnerService,
+  actorUserId,
+  partner: partnerOverride,
+}) => {
+  await runSafe("backoffice.partner_service_inactive", async () => {
+    if (!partnerService) return;
+
+    const partner =
+      partnerOverride ||
+      (await User.findById(partnerService.partner_id)
+        .select("name user_id phone_number email franchise_id")
+        .lean());
+    if (!partner) return;
+
+    const franchiseId = partner.franchise_id || null;
+    const franchiseName = await loadFranchiseName(franchiseId);
+    const recipients = await resolveSuperAdminAndFranchiseRecipients(franchiseId);
+    if (!recipients.length) return;
+
+    let serviceName = "";
+    if (partnerService.service_id) {
+      const service = await Service.findById(partnerService.service_id)
+        .select("name")
+        .lean();
+      serviceName = service?.name || "";
+    }
+
+    const partnerName = accountDisplayName(partner);
+
+    await notifyBackoffice({
+      eventKey: "PARTNER_SERVICE_INACTIVE",
+      actorUserId,
+      recipientUserIds: recipients,
+      context: {
+        partnerName,
+        serviceName,
+        franchiseName,
+      },
+      entityType: "partner_service",
+      entityId: partnerService._id,
+      franchiseId,
+      metadata: {
+        partner_id: partner._id,
+        partner_user_id: partner.user_id || "",
+        partner_name: partnerName,
+        partner_service_id: partnerService._id,
+        service_id: partnerService.service_id || null,
+        service_name: serviceName,
+      },
+      dedupeKeyPrefix: partnerService._id
+        ? `backoffice.partner.service.inactive:${partnerService._id}:${Date.now()}`
+        : null,
+    });
+  });
+};
+
 const safeNotifyBackofficeOrderReviewReceived = async ({
   order,
   partnerUserId,
@@ -699,6 +757,7 @@ module.exports = {
   safeNotifyBackofficePartnerPostReported,
   safeNotifyBackofficeChatMessage,
   safeNotifyBackofficeOrderReviewReceived,
+  safeNotifyBackofficePartnerServiceInactive,
   safeNotifyBackofficePartnerAccountDeleted,
   safeNotifyBackofficeCustomerAccountDeleted,
 };

@@ -9,6 +9,7 @@ const {
   assertActivePartner,
   assertVerifiedPartner,
 } = require('../shared/partner_access_helpers');
+const { safeNotifyBackofficePartnerServiceInactive } = require('../../../src/modules/notifications/services/backofficeHooks');
 
 const OBJECT_ID_HEX_24 = /^[a-fA-F0-9]{24}$/;
 
@@ -95,7 +96,9 @@ const assertCategoryAndServiceAvailable = async (categoryOid, serviceOid, franch
 };
 
 const mapPartnerServiceRow = (row) => {
-  const service = row.service_id;
+  const service = row.service_id && typeof row.service_id === 'object' ? row.service_id : null;
+  const partnerPaymentType = row.payment_type != null ? String(row.payment_type).trim() : '';
+  const catalogPaymentType = service?.payment_type != null ? String(service.payment_type).trim() : '';
   return {
     _id: row._id,
     service_id: service?._id ?? row.service_id ?? null,
@@ -106,7 +109,7 @@ const mapPartnerServiceRow = (row) => {
     price: row.price ?? 0,
     tax: row.tax ?? 0,
     minimum_deposit: row.minimum_deposit ?? 0,
-    payment_type: row.payment_type ?? '',
+    payment_type: partnerPaymentType || catalogPaymentType,
     commission: row.commission ?? 0,
     is_active: row.is_active !== false,
     is_accept_request: row.is_accept_request === true,
@@ -127,7 +130,7 @@ const listPartnerMyServices = async (partnerId) => {
     })
       .populate([
         { path: 'category_id', select: 'name desc image_url' },
-        { path: 'service_id', select: 'name desc image_url category_id' },
+        { path: 'service_id', select: 'name desc image_url category_id payment_type' },
       ])
       .sort({ category_id: 1, created_at: 1 })
       .lean();
@@ -297,9 +300,17 @@ const updateOnePartnerServiceStatus = async (partnerId, partnerServiceId, isActi
       return fail(404, 'Partner service not found.');
     }
 
+    const wasActive = existing.is_active !== false;
     existing.is_active = activeParsed.active;
     existing.updated_at = new Date();
     await existing.save();
+
+    if (wasActive && existing.is_active === false) {
+      void safeNotifyBackofficePartnerServiceInactive({
+        partnerService: existing,
+        actorUserId: partnerOid,
+      });
+    }
 
     return ok(200, {
       message: 'Service status updated successfully.',
@@ -365,13 +376,21 @@ const updateBulkPartnerServiceStatus = async (partnerId, updatesInput) => {
     const now = new Date();
 
     for (const row of rows) {
-      row.is_active = activeById.get(String(row._id));
+      const nextActive = activeById.get(String(row._id));
+      const wasActive = row.is_active !== false;
+      row.is_active = nextActive;
       row.updated_at = now;
       await row.save();
       updated.push({
         _id: row._id,
         is_active: row.is_active !== false,
       });
+      if (wasActive && row.is_active === false) {
+        void safeNotifyBackofficePartnerServiceInactive({
+          partnerService: row,
+          actorUserId: partnerOid,
+        });
+      }
     }
 
     return ok(200, {
