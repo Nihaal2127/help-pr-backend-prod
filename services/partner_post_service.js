@@ -254,7 +254,7 @@ const listAllPosts = async (req, query) => {
 
   await syncPostsVideosFromBunny(posts);
 
-  const records = await mapPostRecords(posts, { includePartner: true });
+  const records = await mapPostRecords(posts, { includePartner: true, includeReports: true });
   const totalPages = Math.ceil(totalItems / limit) || 0;
 
   return ok(200, {
@@ -358,7 +358,10 @@ const moderatePost = async (req, postId, body) => {
     });
   }
 
-  const mapped = await mapPostRecords([post.toObject()], { includePartner: true });
+  const mapped = await mapPostRecords([post.toObject()], {
+    includePartner: true,
+    includeReports: true,
+  });
   const message =
     currentStatus === POST_STATUS_PENDING || currentStatus === POST_STATUS_REJECTED
       ? 'Post review updated successfully.'

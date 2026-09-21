@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const PartnerPost = require('../models/partner_post');
 const PartnerPostLike = require('../models/partner_post_like');
 const PartnerPostSave = require('../models/partner_post_save');
+const PartnerPostReport = require('../models/partner_post_report');
 const User = require('../models/user');
 const Order = require('../models/order');
 const OrderService = require('../models/order_services');
@@ -521,6 +522,43 @@ const mapPostVideo = (post) => {
   };
 };
 
+const loadReportsByPostIds = async (postIds) => {
+  const reportsByPostId = new Map();
+  if (!postIds.length) {
+    return reportsByPostId;
+  }
+
+  const reports = await PartnerPostReport.find({ post_id: { $in: postIds } })
+    .sort({ created_at: -1 })
+    .lean();
+  if (!reports.length) {
+    return reportsByPostId;
+  }
+
+  const userIds = [...new Set(reports.map((r) => String(r.user_id)).filter(Boolean))];
+  const users = userIds.length
+    ? await User.find({ _id: { $in: userIds } }).select('_id name').lean()
+    : [];
+  const userById = new Map(users.map((u) => [String(u._id), u]));
+
+  for (const report of reports) {
+    const key = String(report.post_id);
+    if (!reportsByPostId.has(key)) {
+      reportsByPostId.set(key, []);
+    }
+    const reporter = userById.get(String(report.user_id));
+    reportsByPostId.get(key).push({
+      _id: report._id,
+      user_name: reporter?.name || '',
+      reason: report.reason,
+      details: report.details || '',
+      status: report.status,
+    });
+  }
+
+  return reportsByPostId;
+};
+
 const mapPostRecord = (post, options = {}) => {
   const {
     userId = null,
@@ -531,8 +569,10 @@ const mapPostRecord = (post, options = {}) => {
     serviceById = new Map(),
     orderById = new Map(),
     saveCountByPostId = new Map(),
+    reportsByPostId = new Map(),
     includePartner = true,
     includeSaveCount = false,
+    includeReports = false,
   } = options;
 
   const orderDetail =
@@ -580,11 +620,20 @@ const mapPostRecord = (post, options = {}) => {
     }
   }
 
+  if (includeReports) {
+    record.reports = reportsByPostId.get(String(post._id)) || [];
+  }
+
   return record;
 };
 
 const mapPostRecords = async (posts, options = {}) => {
-  const { userId = null, includePartner = true, includeSaveCount = false } = options;
+  const {
+    userId = null,
+    includePartner = true,
+    includeSaveCount = false,
+    includeReports = false,
+  } = options;
 
   if (posts.length === 0) {
     return [];
@@ -593,14 +642,18 @@ const mapPostRecords = async (posts, options = {}) => {
   const postIds = posts.map((p) => p._id);
   const partnerIds = [...new Set(posts.map((p) => String(p.partner_id)).filter(Boolean))];
 
-  const [likedPostIds, savedPostIds, partnerById, labelMaps, orderById, saveCountByPostId] = await Promise.all([
-    loadLikedPostIds(userId, postIds),
-    loadSavedPostIds(userId, postIds),
-    includePartner ? loadPartnerSummaries(partnerIds.map((id) => new mongoose.Types.ObjectId(id))) : Promise.resolve(new Map()),
-    loadLinkedLabels(posts),
-    loadLinkedOrderDetails(posts),
-    includeSaveCount ? loadSaveCountsByPostIds(postIds) : Promise.resolve(new Map()),
-  ]);
+  const [likedPostIds, savedPostIds, partnerById, labelMaps, orderById, saveCountByPostId, reportsByPostId] =
+    await Promise.all([
+      loadLikedPostIds(userId, postIds),
+      loadSavedPostIds(userId, postIds),
+      includePartner
+        ? loadPartnerSummaries(partnerIds.map((id) => new mongoose.Types.ObjectId(id)))
+        : Promise.resolve(new Map()),
+      loadLinkedLabels(posts),
+      loadLinkedOrderDetails(posts),
+      includeSaveCount ? loadSaveCountsByPostIds(postIds) : Promise.resolve(new Map()),
+      includeReports ? loadReportsByPostIds(postIds) : Promise.resolve(new Map()),
+    ]);
 
   return posts.map((post) =>
     mapPostRecord(post, {
@@ -612,8 +665,10 @@ const mapPostRecords = async (posts, options = {}) => {
       serviceById: labelMaps.serviceById,
       orderById,
       saveCountByPostId,
+      reportsByPostId,
       includePartner,
       includeSaveCount,
+      includeReports,
     })
   );
 };
