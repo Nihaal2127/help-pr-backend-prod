@@ -5,6 +5,7 @@ const { buildOrderInvoiceHtml } = require('../../../utils/order_invoice_html');
 const { embedOrderDetailForeignKeys } = require('../../../utils/list_aggregation');
 const { stripAdminDescriptionForPublicApi } = require('../../../utils/admin_description_access');
 const { fail, ok } = require('../../../utils/mobile_service_result');
+const { applyCustomerActiveServicePartnerRatings } = require('./partner_rating_service');
 const { assertValidCallerObjectId } = require('../shared/order_access_helpers');
 const { safeNotifyOrderInvoiceDownloaded } = require('../../../src/modules/notifications/services/domainHooks');
 const {
@@ -103,10 +104,16 @@ const listCustomerOrders = async (customerId, query = {}) => {
       searchFields: MOBILE_ORDER_LIST_SEARCH_FIELDS,
       includeCustomerReviews: true,
     });
+    const records = await applyCustomerActiveServicePartnerRatings(listData.records || [], {
+      partnerField: 'partner_id',
+    });
 
     return ok(200, {
       message: 'Orders fetched successfully.',
-      data: listData,
+      data: {
+        ...listData,
+        records,
+      },
     });
   } catch (err) {
     console.error('mobile user list orders', err.message);
@@ -139,9 +146,14 @@ const getCustomerOrderById = async (customerId, orderId) => {
       return fail(404, 'Order not found.');
     }
 
+    const [formatted] = await applyCustomerActiveServicePartnerRatings(
+      [stripAdminDescriptionForPublicApi(embedOrderDetailForeignKeys(record))],
+      { partnerField: 'partner_id' }
+    );
+
     return ok(200, {
       message: 'Order details fetched successfully.',
-      record: stripAdminDescriptionForPublicApi(embedOrderDetailForeignKeys(record)),
+      record: formatted,
     });
   } catch (err) {
     console.error('mobile user get order details', err.message);

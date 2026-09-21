@@ -17,6 +17,8 @@ const {
 const {
   enrichPartnerCatalogWithRatings,
   enrichPartnerListRecordsWithServiceRatings,
+  applyCustomerActiveServicePartnerRatings,
+  applyCustomerActiveServicePartnerRating,
 } = require('./partner_rating_service');
 const { attachPartnerRatingFields } = require('../../../utils/rating_format');
 const {
@@ -337,7 +339,11 @@ const listFranchisePartnersPaginated = async (query, options = {}) => {
       return fail(500, 'Technical issue. Please try again..');
     }
 
-    const paginated = paginatePartnerRecords(builtData.records, {
+    const listRecords = options.excludeInactiveServiceRatings
+      ? await applyCustomerActiveServicePartnerRatings(builtData.records)
+      : builtData.records;
+
+    const paginated = paginatePartnerRecords(listRecords, {
       filters: parsed.filters,
       serviceId: parsed.serviceId,
       categoryId: parsed.categoryId,
@@ -399,7 +405,12 @@ const mapPartnerBusinessInfo = (partner) => {
   };
 };
 
-const getPartnerProfileForCustomer = async (partnerId, franchiseId, userId = null) => {
+const getPartnerProfileForCustomer = async (
+  partnerId,
+  franchiseId,
+  userId = null,
+  options = {}
+) => {
   try {
     const partnerKey = String(partnerId ?? '').trim();
     if (!partnerKey || !mongoose.Types.ObjectId.isValid(partnerKey)) {
@@ -474,7 +485,9 @@ const getPartnerProfileForCustomer = async (partnerId, franchiseId, userId = nul
       partner._id,
       catalogResult.categories
     );
-    const partnerRatings = attachPartnerRatingFields(partner);
+    const partnerRatings = options.excludeInactiveServiceRatings
+      ? await applyCustomerActiveServicePartnerRating(partner)
+      : attachPartnerRatingFields(partner);
 
     return ok(200, {
       message: 'Partner profile fetched successfully.',

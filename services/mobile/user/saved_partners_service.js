@@ -10,6 +10,7 @@ const {
   paginatePartnerRecords,
   buildFranchisePartnerListRecords,
 } = require('./partners_service');
+const { applyCustomerActiveServicePartnerRatings } = require('./partner_rating_service');
 
 const { fail, ok } = require('../../../utils/mobile_service_result');
 
@@ -223,7 +224,8 @@ const listSavedPartnersPaginated = async (userId, query) => {
 
     const builtData = built.data || {};
     const builtRecords = Array.isArray(builtData.records) ? builtData.records : [];
-    const merged = builtRecords.map((record) => {
+    const ratedRecords = await applyCustomerActiveServicePartnerRatings(builtRecords);
+    const merged = ratedRecords.map((record) => {
       const partnerKey = String(record._id);
       return {
         ...record,

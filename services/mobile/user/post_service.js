@@ -26,6 +26,10 @@ const {
   findPublishedPostById,
 } = require('../../../services/partner_post_common_service');
 const { safeNotifyPartnerPostLiked } = require('../../../src/modules/notifications/services/domainHooks');
+const { applyCustomerActiveServicePartnerRatings } = require('./partner_rating_service');
+
+const withCustomerPartnerRatings = (records) =>
+  applyCustomerActiveServicePartnerRatings(records, { partnerField: 'partner' });
 
 const getVisiblePartnerIds = async (franchiseId) => {
   const franchiseResult = await resolveFranchiseById(franchiseId);
@@ -94,7 +98,9 @@ const listPostsFeed = async (userId, query) => {
     PartnerPost.find(filter).sort({ created_at: -1 }).skip(skip).limit(limit).lean(),
   ]);
 
-  const records = await mapPostRecords(posts, { userId, includePartner: true });
+  const records = await withCustomerPartnerRatings(
+    await mapPostRecords(posts, { userId, includePartner: true })
+  );
   const totalPages = Math.ceil(totalItems / limit) || 0;
 
   return ok(200, {
@@ -171,7 +177,9 @@ const getPostDetail = async (userId, postId, franchiseId) => {
     }
   }
 
-  const mapped = await mapPostRecords([post], { userId, includePartner: true });
+  const mapped = await withCustomerPartnerRatings(
+    await mapPostRecords([post], { userId, includePartner: true })
+  );
   return ok(200, { message: 'Post retrieved successfully.', post: mapped[0] });
 };
 
@@ -201,7 +209,9 @@ const resolvePostByShareToken = async (shareToken) => {
     return fail(404, 'Post not found.');
   }
 
-  const mapped = await mapPostRecords([post], { includePartner: true });
+  const mapped = await withCustomerPartnerRatings(
+    await mapPostRecords([post], { includePartner: true })
+  );
   return ok(200, {
     message: 'Post retrieved successfully.',
     post: mapped[0],
@@ -330,9 +340,11 @@ const paginateUserPostBookmarks = async (
   const totalItems = ordered.length;
   const totalPages = Math.ceil(totalItems / limit) || 0;
   const slice = ordered.slice(skip, skip + limit);
-  const records = await mapPostRecords(
-    slice.map((entry) => entry.post),
-    { userId, includePartner: true }
+  const records = await withCustomerPartnerRatings(
+    await mapPostRecords(
+      slice.map((entry) => entry.post),
+      { userId, includePartner: true }
+    )
   );
 
   records.forEach((record, index) => {

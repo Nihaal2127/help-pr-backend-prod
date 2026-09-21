@@ -16,6 +16,7 @@ const {
 } = require('../../../enum/order_status_enum');
 
 const HOME_ORDERS_PER_STATUS_LIMIT = 10;
+const { applyCustomerActiveServicePartnerRatings } = require('./partner_rating_service');
 
 /** 0 = schedule overlaps today, 1 = future, 2 = past, 3 = no usable schedule dates */
 const IN_PROGRESS_SCHEDULE_PRIORITY = {
@@ -166,7 +167,9 @@ const listCompletedHomeOrders = async (userId) => {
     .populate(HOME_ORDER_POPULATE)
     .lean();
 
-  return rows.map(mapMobileHomeOrder);
+  return applyCustomerActiveServicePartnerRatings(rows.map(mapMobileHomeOrder), {
+    partnerField: 'partner_id',
+  });
 };
 
 const listInProgressHomeOrders = async (userId) => {
@@ -191,7 +194,10 @@ const listInProgressHomeOrders = async (userId) => {
     .sort((left, right) => compareInProgressHomeOrders(left, right, todayStart, todayEnd))
     .slice(0, HOME_ORDERS_PER_STATUS_LIMIT);
 
-  return sorted.map(mapMobileHomeOrder);
+  return applyCustomerActiveServicePartnerRatings(
+    sorted.map(mapMobileHomeOrder),
+    { partnerField: 'partner_id' }
+  );
 };
 
 const loadCustomerHomeOrders = async (userId) => {

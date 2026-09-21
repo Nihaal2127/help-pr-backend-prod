@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const User = require("../../../models/user");
 const Service = require("../../../models/service");
 const OrderService = require("../../../models/order_services");
+const PartnerService = require("../../../models/partner_service");
 const PartnerServiceRating = require("../../../models/partner_service_rating");
 const { USER_TYPE_PARTNER } = require("../../../constants/user_types");
 const { fieldLabel } = require('../../../utils/field_labels');
@@ -21,6 +22,178 @@ const parseReviewLimit = (raw) => {
   const n = parseInt(String(raw ?? ""), 10);
   if (!Number.isFinite(n) || n <= 0) return 10;
   return Math.min(n, 20);
+};
+
+const emptyCustomerPartnerRatings = () => ({
+  average_rating: 0,
+  rating_count: 0,
+  ratings: { average_rating: 0, rating_count: 0 },
+});
+
+const rollupCustomerPartnerRatings = (total, count) => {
+  const safeCount = Math.max(0, Number(count) || 0);
+  const safeTotal = Math.max(0, Number(total) || 0);
+  const average_rating =
+    safeCount > 0 ? Math.round((safeTotal / safeCount) * 100) / 100 : 0;
+  return {
+    average_rating,
+    rating_count: safeCount,
+    ratings: { average_rating, rating_count: safeCount },
+  };
+};
+
+const parsePartnerObjectIds = (partnerIds) => {
+  const unique = [
+    ...new Set(
+      (partnerIds || [])
+        .map((id) => String(id ?? "").trim())
+        .filter(Boolean)
+    ),
+  ];
+  return unique
+    .filter((id) => mongoose.Types.ObjectId.isValid(id))
+    .map((id) => new mongoose.Types.ObjectId(id));
+};
+
+const loadActivePartnerServiceKeys = async (partnerOids, serviceOids) => {
+  if (!partnerOids.length || !serviceOids.length) {
+    return { activeServiceSet: new Set(), activeOfferingSet: new Set() };
+  }
+
+  const [activeServices, activeOfferings] = await Promise.all([
+    Service.find({
+      _id: { $in: serviceOids },
+      deleted_at: null,
+      is_active: true,
+    })
+      .select("_id")
+      .lean(),
+    PartnerService.find({
+      partner_id: { $in: partnerOids },
+      service_id: { $in: serviceOids },
+      deleted_at: null,
+      is_active: true,
+    })
+      .select("partner_id service_id")
+      .lean(),
+  ]);
+
+  return {
+    activeServiceSet: new Set(activeServices.map((row) => String(row._id))),
+    activeOfferingSet: new Set(
+      activeOfferings.map((row) => `${String(row.partner_id)}:${String(row.service_id)}`)
+    ),
+  };
+};
+
+const isActivePartnerServiceRating = (row, activeServiceSet, activeOfferingSet) => {
+  const serviceKey = String(row.service_id);
+  const partnerKey = String(row.partner_id);
+  return (
+    activeServiceSet.has(serviceKey) &&
+    activeOfferingSet.has(`${partnerKey}:${serviceKey}`)
+  );
+};
+
+const loadCustomerActiveServicePartnerRatingsByIds = async (partnerIds) => {
+  const oids = parsePartnerObjectIds(partnerIds);
+  const result = new Map();
+  const empty = emptyCustomerPartnerRatings();
+  for (const oid of oids) {
+    result.set(String(oid), empty);
+  }
+  if (!oids.length) {
+    return result;
+  }
+
+  const ratingRows = await PartnerServiceRating.find({
+    partner_id: { $in: oids },
+    deleted_at: null,
+    rating_count: { $gt: 0 },
+  })
+    .select("partner_id service_id rating_total rating_count")
+    .lean();
+  if (!ratingRows.length) {
+    return result;
+  }
+
+  const serviceOids = parsePartnerObjectIds(ratingRows.map((row) => row.service_id));
+  const { activeServiceSet, activeOfferingSet } = await loadActivePartnerServiceKeys(
+    oids,
+    serviceOids
+  );
+
+  const totals = new Map();
+  for (const row of ratingRows) {
+    if (!isActivePartnerServiceRating(row, activeServiceSet, activeOfferingSet)) {
+      continue;
+    }
+    const partnerKey = String(row.partner_id);
+    const prev = totals.get(partnerKey) || { total: 0, count: 0 };
+    prev.total += Number(row.rating_total) || 0;
+    prev.count += Number(row.rating_count) || 0;
+    totals.set(partnerKey, prev);
+  }
+
+  for (const [partnerKey, agg] of totals) {
+    result.set(partnerKey, rollupCustomerPartnerRatings(agg.total, agg.count));
+  }
+  return result;
+};
+
+const resolveRecordPartnerId = (record, partnerField) => {
+  if (!record) return null;
+  if (!partnerField) {
+    return record._id ?? record.id ?? null;
+  }
+  const ref = record[partnerField];
+  if (ref && typeof ref === "object") {
+    return ref._id ?? null;
+  }
+  return ref ?? null;
+};
+
+const applyCustomerActiveServicePartnerRatings = async (records, options = {}) => {
+  if (!Array.isArray(records) || records.length === 0) {
+    return records;
+  }
+
+  const { partnerField = null } = options;
+  const partnerIds = records
+    .map((record) => resolveRecordPartnerId(record, partnerField))
+    .filter(Boolean);
+  const ratingsByPartnerId = await loadCustomerActiveServicePartnerRatingsByIds(partnerIds);
+  const empty = emptyCustomerPartnerRatings();
+
+  return records.map((record) => {
+    const partnerId = resolveRecordPartnerId(record, partnerField);
+    const ratings = partnerId
+      ? ratingsByPartnerId.get(String(partnerId)) || empty
+      : empty;
+
+    if (!partnerField) {
+      return { ...record, ...ratings };
+    }
+
+    const ref = record[partnerField];
+    if (!ref || typeof ref !== "object") {
+      return record;
+    }
+    return {
+      ...record,
+      [partnerField]: { ...ref, ...ratings },
+    };
+  });
+};
+
+const applyCustomerActiveServicePartnerRating = async (partnerDoc) => {
+  if (!partnerDoc?._id) {
+    return emptyCustomerPartnerRatings();
+  }
+  const ratingsByPartnerId = await loadCustomerActiveServicePartnerRatingsByIds([
+    partnerDoc._id,
+  ]);
+  return ratingsByPartnerId.get(String(partnerDoc._id)) || emptyCustomerPartnerRatings();
 };
 
 const assertPartnerInFranchise = async (partnerId, franchiseId) => {
@@ -94,16 +267,24 @@ const getPartnerRatingsSummary = async (partnerId, query = {}) => {
 
     const reviewLimit = parseReviewLimit(query.review_limit);
 
-    const partnerServiceFilter = {
+    const partnerServiceBaseFilter = {
       partner_id: partnerOid,
       deleted_at: null,
       rating_count: { $gt: 0 },
     };
-    if (serviceIdRaw) {
-      partnerServiceFilter.service_id = new mongoose.Types.ObjectId(serviceIdRaw);
-    }
+    const partnerServiceFilter = {
+      ...partnerServiceBaseFilter,
+      ...(serviceIdRaw
+        ? { service_id: new mongoose.Types.ObjectId(serviceIdRaw) }
+        : {}),
+    };
 
-    const [partnerServiceRows, recentReviewLines] = await Promise.all([
+    const [allPartnerServiceRows, partnerServiceRows, recentReviewLines] = await Promise.all([
+      serviceIdRaw
+        ? PartnerServiceRating.find(partnerServiceBaseFilter)
+            .select("partner_id service_id rating_total rating_count")
+            .lean()
+        : Promise.resolve(null),
       PartnerServiceRating.find(partnerServiceFilter).sort({ average_rating: -1 }).lean(),
       OrderService.find({
         partner_id: partnerOid,
@@ -122,9 +303,28 @@ const getPartnerRatingsSummary = async (partnerId, query = {}) => {
         .lean(),
     ]);
 
+    const rollupRows = allPartnerServiceRows || partnerServiceRows;
     const serviceIds = [
-      ...new Set(partnerServiceRows.map((row) => String(row.service_id))),
+      ...new Set([
+        ...partnerServiceRows.map((row) => String(row.service_id)),
+        ...rollupRows.map((row) => String(row.service_id)),
+      ]),
     ];
+    const serviceOids = parsePartnerObjectIds(serviceIds);
+    const { activeServiceSet, activeOfferingSet } = await loadActivePartnerServiceKeys(
+      [partnerOid],
+      serviceOids
+    );
+    const activePartnerServiceRows = rollupRows.filter((row) =>
+      isActivePartnerServiceRating(row, activeServiceSet, activeOfferingSet)
+    );
+    const visiblePartnerServiceRows = serviceIdRaw
+      ? partnerServiceRows
+      : activePartnerServiceRows;
+    const partnerRatings = rollupCustomerPartnerRatings(
+      activePartnerServiceRows.reduce((sum, row) => sum + (Number(row.rating_total) || 0), 0),
+      activePartnerServiceRows.reduce((sum, row) => sum + (Number(row.rating_count) || 0), 0)
+    );
     const serviceDocs =
       serviceIds.length > 0
         ? await Service.find({ _id: { $in: serviceIds }, deleted_at: null })
@@ -133,7 +333,7 @@ const getPartnerRatingsSummary = async (partnerId, query = {}) => {
         : [];
     const serviceById = new Map(serviceDocs.map((s) => [String(s._id), s]));
 
-    const service_ratings = partnerServiceRows.map((row) => {
+    const service_ratings = visiblePartnerServiceRows.map((row) => {
       const svc = serviceById.get(String(row.service_id));
       const partnerSvc = mapRatingSummary(row);
       const globalSvc = mapRatingSummary(svc);
@@ -164,7 +364,7 @@ const getPartnerRatingsSummary = async (partnerId, query = {}) => {
         franchise_name: franchise.name,
         partner_id: partner._id,
         partner_name: partner.name,
-        ...mapRatingSummary(partner),
+        ...partnerRatings,
         service_ratings,
         recent_reviews,
       },
@@ -318,4 +518,7 @@ module.exports = {
   listPartnerServiceRatingsForCustomer,
   enrichPartnerCatalogWithRatings,
   enrichPartnerListRecordsWithServiceRatings,
+  loadCustomerActiveServicePartnerRatingsByIds,
+  applyCustomerActiveServicePartnerRatings,
+  applyCustomerActiveServicePartnerRating,
 };

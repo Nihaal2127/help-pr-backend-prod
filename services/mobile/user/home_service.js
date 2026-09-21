@@ -11,7 +11,10 @@ const {
   collectEffectivePartnerOfferings,
   mapFranchisePartnerRecords,
 } = require('./franchise_partner_scope');
-const { enrichPartnerListRecordsWithServiceRatings } = require('./partner_rating_service');
+const {
+  enrichPartnerListRecordsWithServiceRatings,
+  applyCustomerActiveServicePartnerRatings,
+} = require('./partner_rating_service');
 const { loadCustomerHomeOrders } = require('./home_orders_service');
 const { loadHomeCounts } = require('../common/home_counts_service');
 const { toPublicImageUrl } = require('../../../helper/publicImageUrl');
@@ -251,7 +254,10 @@ const getHomeForLocation = async ({ location, userId }) => {
       subscribed.planByPartnerId,
       catalogResult.effectiveOfferings || []
     );
-    const partnersWithRatings = await enrichPartnerListRecordsWithServiceRatings(partners);
+    const partnersWithServiceRatings = await enrichPartnerListRecordsWithServiceRatings(partners);
+    const partnersWithRatings = await applyCustomerActiveServicePartnerRatings(
+      partnersWithServiceRatings
+    );
 
     return ok(200, {
       message: 'Home data fetched successfully.',

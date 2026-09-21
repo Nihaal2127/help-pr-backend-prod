@@ -20,7 +20,9 @@ const {
 } = require('../../../utils/mobile_controller_helpers');
 
 const listPartnersHandler = wrapMobileHandler('mobile user partners list', async (req, res) => {
-  const result = await listFranchisePartnersPaginated(req.query);
+  const result = await listFranchisePartnersPaginated(req.query, {
+    excludeInactiveServiceRatings: true,
+  });
   return sendPaginatedListWithNestedData(res, result, (listData) => ({
     franchise_id: listData.franchise_id,
     franchise_name: listData.franchise_name,
@@ -64,7 +66,8 @@ const getPartnerProfileHandler = wrapMobileHandler('mobile user partner profile'
   const result = await getPartnerProfileForCustomer(
     req.params.partnerId,
     req.query.franchise_id,
-    req.user.id
+    req.user.id,
+    { excludeInactiveServiceRatings: true }
   );
   return sendDataResult(res, result);
 });

@@ -56,12 +56,35 @@ const { syncAllPartnerOrderPaymentsForOrder } = require('../../partner_wallet_or
 const { formatOrderForApi } = require('../../../utils/order_api_format');
 const { stripAdminDescriptionForPublicApi } = require('../../../utils/admin_description_access');
 
+const { applyCustomerActiveServicePartnerRatings } = require('./partner_rating_service');
+
 const formatMobileQuoteForApi = (quote) =>
   stripAdminDescriptionForPublicApi(formatQuoteForApi(quote));
 const formatMobileQuoteRecords = (records) =>
   formatQuoteRecords(records).map(stripAdminDescriptionForPublicApi);
 const formatMobileOrderForApi = (order) =>
   stripAdminDescriptionForPublicApi(formatOrderForApi(order));
+
+const formatMobileQuoteForCustomerApi = async (quote) => {
+  const [record] = await applyCustomerActiveServicePartnerRatings(
+    [formatMobileQuoteForApi(quote)],
+    { partnerField: 'partner_id' }
+  );
+  return record;
+};
+
+const formatMobileQuoteRecordsForCustomer = (records) =>
+  applyCustomerActiveServicePartnerRatings(formatMobileQuoteRecords(records), {
+    partnerField: 'partner_id',
+  });
+
+const formatMobileOrderForCustomerApi = async (order) => {
+  const [record] = await applyCustomerActiveServicePartnerRatings(
+    [formatMobileOrderForApi(order)],
+    { partnerField: 'partner_id' }
+  );
+  return record;
+};
 const {
   loadCustomerProfile,
   initiateQuoteDepositPayment,
@@ -252,7 +275,7 @@ const createCustomerQuote = async (customerId, body) => {
 
     return ok(200, {
       message: 'Quote created successfully.',
-      data: formatMobileQuoteForApi(populated),
+      data: await formatMobileQuoteForCustomerApi(populated),
     });
   } catch (err) {
     console.error('mobile user create quote', err.message);
@@ -297,7 +320,7 @@ const listCustomerQuotes = async (customerId, query) => {
         totalPages,
         currentPage,
         limit,
-        records: formatMobileQuoteRecords(data),
+        records: await formatMobileQuoteRecordsForCustomer(data),
       },
     });
   } catch (err) {
@@ -327,7 +350,7 @@ const getCustomerQuoteById = async (customerId, quoteId) => {
 
     return ok(200, {
       message: 'Quote fetched successfully.',
-      data: formatMobileQuoteForApi(quote),
+      data: await formatMobileQuoteForCustomerApi(quote),
     });
   } catch (err) {
     console.error('mobile user get quote', err.message);
@@ -453,7 +476,7 @@ const updateCustomerQuote = async (customerId, quoteId, body) => {
 
     return ok(200, {
       message: 'Quote updated successfully.',
-      data: formatMobileQuoteForApi(populated),
+      data: await formatMobileQuoteForCustomerApi(populated),
     });
   } catch (err) {
     console.error('mobile user update quote', err.message);
@@ -537,7 +560,7 @@ const cancelCustomerQuote = async (customerId, quoteId, body) => {
 
     return ok(200, {
       message: 'Quote cancelled successfully.',
-      data: formatMobileQuoteForApi(populated),
+      data: await formatMobileQuoteForCustomerApi(populated),
     });
   } catch (err) {
     console.error('mobile user cancel quote', err.message);
@@ -625,8 +648,10 @@ const convertCustomerQuoteToOrder = async (customerId, quoteId, body) => {
             ? 'Quote converted to order and payment completed successfully.'
             : 'Complete payment to convert quote to order.',
         data: {
-          quote: formatMobileQuoteForApi(linkedQuote),
-          ...(latestOrder ? { order: formatMobileOrderForApi(latestOrder) } : {}),
+          quote: await formatMobileQuoteForCustomerApi(linkedQuote),
+          ...(latestOrder
+            ? { order: await formatMobileOrderForCustomerApi(latestOrder) }
+            : {}),
           payment: {
             ...paymentRow,
             payment_url: onlineResult.payment_url || null,
@@ -700,8 +725,8 @@ const convertCustomerQuoteToOrder = async (customerId, quoteId, body) => {
     return ok(200, {
       message: 'Quote converted to order successfully.',
       data: {
-        quote: formatMobileQuoteForApi(linkedQuote),
-        order: formatMobileOrderForApi(created.order),
+        quote: await formatMobileQuoteForCustomerApi(linkedQuote),
+        order: await formatMobileOrderForCustomerApi(created.order),
         payment: orderPayment.toObject(),
         deposit: buildQuoteDepositSummary(
           minimumDeposit,
@@ -814,8 +839,10 @@ const getCustomerQuoteDepositPaymentStatus = async (customerId, quoteId, payment
         payment_url: paymentUrl,
         paid_at: latestPayment.paid_at,
         gateway_payment: gatewayPayment,
-        quote: formatMobileQuoteForApi(linkedQuote),
-        ...(latestOrder ? { order: formatMobileOrderForApi(latestOrder) } : {}),
+        quote: await formatMobileQuoteForCustomerApi(linkedQuote),
+        ...(latestOrder
+          ? { order: await formatMobileOrderForCustomerApi(latestOrder) }
+          : {}),
         deposit: buildQuoteDepositSummary(minimumDeposit, depositAmount, depositCollected),
         ...(syncResult
           ? {
