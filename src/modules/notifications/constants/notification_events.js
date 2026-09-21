@@ -421,6 +421,21 @@ const NOTIFICATION_EVENTS = {
       return `${partner} submitted a portfolio post for review${suffix}.`;
     },
   },
+  PARTNER_POST_REPORTED: {
+    category: "admin",
+    title: () => "Post reported",
+    body: (ctx) => {
+      const customer = String(ctx.customerName || "A customer").trim();
+      const partner = String(ctx.partnerName || "a partner").trim();
+      const reason = String(ctx.reason || "a policy issue").trim();
+      const suffix = ctx.franchiseName ? ` (${ctx.franchiseName})` : "";
+      const preview = String(ctx.postDescription || "").trim();
+      if (preview) {
+        return `${customer} reported ${partner}'s post for ${reason}${suffix}: "${preview}"`;
+      }
+      return `${customer} reported ${partner}'s post for ${reason}${suffix}.`;
+    },
+  },
   BACKOFFICE_ORDER_REVIEW_RECEIVED: {
     category: "admin",
     title: () => "New partner review",

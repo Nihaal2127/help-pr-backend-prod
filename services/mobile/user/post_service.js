@@ -26,6 +26,9 @@ const {
   findPublishedPostById,
 } = require('../../../services/partner_post_common_service');
 const { safeNotifyPartnerPostLiked } = require('../../../src/modules/notifications/services/domainHooks');
+const {
+  safeNotifyBackofficePartnerPostReported,
+} = require('../../../src/modules/notifications/services/backofficeHooks');
 const { applyCustomerActiveServicePartnerRatings } = require('./partner_rating_service');
 
 const withCustomerPartnerRatings = (records) =>
@@ -500,7 +503,7 @@ const reportPost = async (userId, postId, body) => {
   }
 
   const now = new Date();
-  await PartnerPostReport.create({
+  const report = await PartnerPostReport.create({
     post_id: postOid,
     user_id: userOid,
     reason,
@@ -511,6 +514,15 @@ const reportPost = async (userId, postId, body) => {
   });
 
   await PartnerPost.updateOne({ _id: postOid }, { $inc: { reports_count: 1 } });
+
+  const { post } = postResult.data;
+  const reporter = await User.findById(userOid).select('name').lean();
+  void safeNotifyBackofficePartnerPostReported({
+    post,
+    report,
+    actorUserId: userId,
+    customerName: reporter?.name || '',
+  });
 
   return ok(200, { message: 'Post reported successfully.' });
 };

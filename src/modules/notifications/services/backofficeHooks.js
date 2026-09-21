@@ -493,6 +493,49 @@ const safeNotifyBackofficePartnerPostPending = async ({ post, actorUserId }) => 
   });
 };
 
+const safeNotifyBackofficePartnerPostReported = async ({
+  post,
+  report,
+  actorUserId,
+  customerName,
+}) => {
+  await runSafe("backoffice.partner_post_reported", async () => {
+    if (!post?._id) return;
+
+    const franchiseId = post.franchise_id || null;
+    const franchiseName = await loadFranchiseName(franchiseId);
+    const recipients = await resolveSuperAdminAndFranchiseRecipients(franchiseId);
+    if (!recipients.length) return;
+
+    const partner = post.partner_id
+      ? await User.findById(post.partner_id).select("name").lean()
+      : null;
+
+    await notifyBackoffice({
+      eventKey: "PARTNER_POST_REPORTED",
+      actorUserId,
+      recipientUserIds: recipients,
+      context: {
+        customerName: customerName || "",
+        partnerName: partner?.name || "",
+        franchiseName,
+        postDescription: truncatePostDescription(post.description),
+        reason: report?.reason || "",
+      },
+      entityType: "partner_post",
+      entityId: post._id,
+      franchiseId,
+      metadata: {
+        post_id: post._id,
+        partner_id: post.partner_id || null,
+        report_id: report?._id || null,
+        reason: report?.reason || "",
+      },
+      dedupeKeyPrefix: `backoffice.partner_post.reported:${post._id}:${report?._id || actorUserId}`,
+    });
+  });
+};
+
 const safeNotifyBackofficeChatMessage = async ({
   recipientUserIds,
   senderName,
@@ -653,6 +696,7 @@ module.exports = {
   safeNotifyBackofficeOrderPayment,
   safeNotifyBackofficeSubscriptionChanged,
   safeNotifyBackofficePartnerPostPending,
+  safeNotifyBackofficePartnerPostReported,
   safeNotifyBackofficeChatMessage,
   safeNotifyBackofficeOrderReviewReceived,
   safeNotifyBackofficePartnerAccountDeleted,
