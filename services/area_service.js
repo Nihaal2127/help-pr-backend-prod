@@ -7,6 +7,10 @@ const Franchise = require('../models/franchise');
 const { applyPagination, applyDropDownFilter } = require('../utils/pagination');
 const { parseBoolean } = require('../utils/parser');
 const {
+    coerceIsActive,
+    assertCanActivateArea,
+} = require('./location_status_cascade_service');
+const {
     pickFranchiseIdRaw,
     parseFranchiseObjectId,
     assertFranchiseAccess,
@@ -376,6 +380,15 @@ const updateArea = async (id, body) => {
         if (body.pincodes !== undefined) {
             area.pincodes = normalizePincodes(body.pincodes);
             delete updateData.pincodes;
+        }
+
+        const statusInput = coerceIsActive(updateData.is_active);
+        if (statusInput.present) {
+            if (statusInput.value === true) {
+                const canActivate = await assertCanActivateArea(targetCityId);
+                if (!canActivate.ok) return fail(canActivate.status, canActivate.message);
+            }
+            updateData.is_active = statusInput.value;
         }
 
         Object.keys(updateData).forEach((key) => {

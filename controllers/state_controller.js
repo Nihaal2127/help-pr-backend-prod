@@ -2,6 +2,10 @@ const State = require('../models/state');
 const { applyPagination, applyDropDownFilter } = require('../utils/pagination');
 const { parseBoolean } = require('../utils/parser');
 const { validationResult } = require('express-validator');
+const {
+  coerceIsActive,
+  cascadeStateStatusToCitiesAndAreas,
+} = require('../services/location_status_cascade_service');
 
 const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const nameExistsRegex = (trimmedName) => ({
@@ -160,12 +164,22 @@ const update = async (req, res) => {
       updateData.name = trimmedName;
     }
 
+    const statusInput = coerceIsActive(updateData.is_active);
+    const previousActive = state.is_active === true;
+    if (statusInput.present) {
+      updateData.is_active = statusInput.value;
+    }
+
     Object.keys(updateData).forEach((key) => {
       state[key] = updateData[key];
     });
 
 
     const updatedPromo = await state.save();
+
+    if (statusInput.present && previousActive !== statusInput.value) {
+      await cascadeStateStatusToCitiesAndAreas(state._id, statusInput.value);
+    }
 
     res.status(200).json({
       success: true,

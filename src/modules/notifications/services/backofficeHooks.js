@@ -582,12 +582,15 @@ const safeNotifyBackofficeChatMessage = async ({
 const accountDisplayName = (user) =>
   String(user?.name || user?.user_id || user?.phone_number || user?.email || "").trim();
 
-const safeNotifyBackofficePartnerServiceInactive = async ({
+const safeNotifyBackofficePartnerServiceStatusChanged = async ({
   partnerService,
   actorUserId,
   partner: partnerOverride,
+  isActive,
 }) => {
-  await runSafe("backoffice.partner_service_inactive", async () => {
+  const becameActive = isActive === true;
+  const statusLabel = becameActive ? "active" : "inactive";
+  await runSafe(`backoffice.partner_service_${statusLabel}`, async () => {
     if (!partnerService) return;
 
     const partner =
@@ -613,7 +616,7 @@ const safeNotifyBackofficePartnerServiceInactive = async ({
     const partnerName = accountDisplayName(partner);
 
     await notifyBackoffice({
-      eventKey: "PARTNER_SERVICE_INACTIVE",
+      eventKey: becameActive ? "PARTNER_SERVICE_ACTIVE" : "PARTNER_SERVICE_INACTIVE",
       actorUserId,
       recipientUserIds: recipients,
       context: {
@@ -631,13 +634,17 @@ const safeNotifyBackofficePartnerServiceInactive = async ({
         partner_service_id: partnerService._id,
         service_id: partnerService.service_id || null,
         service_name: serviceName,
+        is_active: becameActive,
       },
       dedupeKeyPrefix: partnerService._id
-        ? `backoffice.partner.service.inactive:${partnerService._id}:${Date.now()}`
+        ? `backoffice.partner.service.${statusLabel}:${partnerService._id}:${Date.now()}`
         : null,
     });
   });
 };
+
+const safeNotifyBackofficePartnerServiceInactive = (args) =>
+  safeNotifyBackofficePartnerServiceStatusChanged({ ...args, isActive: false });
 
 const safeNotifyBackofficeOrderReviewReceived = async ({
   order,
@@ -757,6 +764,7 @@ module.exports = {
   safeNotifyBackofficePartnerPostReported,
   safeNotifyBackofficeChatMessage,
   safeNotifyBackofficeOrderReviewReceived,
+  safeNotifyBackofficePartnerServiceStatusChanged,
   safeNotifyBackofficePartnerServiceInactive,
   safeNotifyBackofficePartnerAccountDeleted,
   safeNotifyBackofficeCustomerAccountDeleted,

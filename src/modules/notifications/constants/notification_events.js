@@ -452,6 +452,16 @@ const NOTIFICATION_EVENTS = {
       return `${partner} marked "${service}" as inactive${suffix}.`;
     },
   },
+  PARTNER_SERVICE_ACTIVE: {
+    category: "admin",
+    title: () => "Partner service active",
+    body: (ctx) => {
+      const partner = String(ctx.partnerName || "A partner").trim();
+      const service = String(ctx.serviceName || "a service").trim();
+      const suffix = ctx.franchiseName ? ` (${ctx.franchiseName})` : "";
+      return `${partner} marked "${service}" as active${suffix}.`;
+    },
+  },
   PARTNER_ACCOUNT_DELETED: {
     category: "admin",
     title: () => "Partner account deleted",

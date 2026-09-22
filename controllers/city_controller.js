@@ -4,7 +4,11 @@ const State = require('../models/state');
 const { applyPagination, applyDropDownFilter } = require('../utils/pagination');
 const { validationResult } = require('express-validator');
 const { parseBoolean } = require('../utils/parser');
-const state = require('../models/state');
+const {
+  coerceIsActive,
+  cascadeCityStatusToAreas,
+  assertCanActivateCity,
+} = require('../services/location_status_cascade_service');
 
 const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const cityNameExistsRegex = (trimmedName) => ({
@@ -179,12 +183,34 @@ const update = async (req, res) => {
       const state = await State.findOne({ _id: state_id, deleted_at: null });
       city.state_name = state.name;
     }
+
+    const statusInput = coerceIsActive(updateData.is_active);
+    const previousActive = city.is_active === true;
+    if (statusInput.present) {
+      if (statusInput.value === true) {
+        const parentStateId = req.body.state_id || city.state_id;
+        const canActivate = await assertCanActivateCity(parentStateId);
+        if (!canActivate.ok) {
+          return res.status(canActivate.status).json({
+            success: false,
+            status: canActivate.status,
+            message: canActivate.message,
+          });
+        }
+      }
+      updateData.is_active = statusInput.value;
+    }
+
     Object.keys(updateData).forEach((key) => {
       city[key] = updateData[key];
     });
 
 
     const updatedCity = await city.save();
+
+    if (statusInput.present && previousActive !== statusInput.value) {
+      await cascadeCityStatusToAreas(city._id, statusInput.value);
+    }
 
     res.status(200).json({
       success: true,

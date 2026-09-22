@@ -9,7 +9,7 @@ const {
   assertActivePartner,
   assertVerifiedPartner,
 } = require('../shared/partner_access_helpers');
-const { safeNotifyBackofficePartnerServiceInactive } = require('../../../src/modules/notifications/services/backofficeHooks');
+const { safeNotifyBackofficePartnerServiceStatusChanged } = require('../../../src/modules/notifications/services/backofficeHooks');
 
 const OBJECT_ID_HEX_24 = /^[a-fA-F0-9]{24}$/;
 
@@ -305,10 +305,11 @@ const updateOnePartnerServiceStatus = async (partnerId, partnerServiceId, isActi
     existing.updated_at = new Date();
     await existing.save();
 
-    if (wasActive && existing.is_active === false) {
-      void safeNotifyBackofficePartnerServiceInactive({
+    if (wasActive !== (existing.is_active !== false)) {
+      void safeNotifyBackofficePartnerServiceStatusChanged({
         partnerService: existing,
         actorUserId: partnerOid,
+        isActive: existing.is_active !== false,
       });
     }
 
@@ -385,10 +386,11 @@ const updateBulkPartnerServiceStatus = async (partnerId, updatesInput) => {
         _id: row._id,
         is_active: row.is_active !== false,
       });
-      if (wasActive && row.is_active === false) {
-        void safeNotifyBackofficePartnerServiceInactive({
+      if (wasActive !== (row.is_active !== false)) {
+        void safeNotifyBackofficePartnerServiceStatusChanged({
           partnerService: row,
           actorUserId: partnerOid,
+          isActive: row.is_active !== false,
         });
       }
     }
