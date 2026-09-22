@@ -22,7 +22,7 @@ phases:
       - test -s resources/adminsdk-customer.json
       - test -s resources/adminsdk-partner.json
       - python -c "import json; json.load(open('resources/adminsdk-customer.json')); json.load(open('resources/adminsdk-partner.json'))"
-      - echo "Firebase JSON files written and parsed OK"
+      - echo "Firebase JSON files written and parsed Okay"
 
   build:
     commands:
