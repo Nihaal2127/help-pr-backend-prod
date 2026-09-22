@@ -13,6 +13,17 @@ phases:
       - echo "Installing dependencies..."
       - npm ci
 
+  pre_build:
+    commands:
+      - echo "Writing Firebase credentials from Secrets Manager..."
+      - mkdir -p resources
+      - aws secretsmanager get-secret-value --secret-id help-pr/firebase/adminsdk-customer --query SecretString --output text --region "$AWS_DEFAULT_REGION" > resources/adminsdk-customer.json
+      - aws secretsmanager get-secret-value --secret-id help-pr/firebase/adminsdk-partner --query SecretString --output text --region "$AWS_DEFAULT_REGION" > resources/adminsdk-partner.json
+      - test -s resources/adminsdk-customer.json
+      - test -s resources/adminsdk-partner.json
+      - python -c "import json; json.load(open('resources/adminsdk-customer.json')); json.load(open('resources/adminsdk-partner.json'))"
+      - echo "Firebase JSON files written and parsed OK"
+
   build:
     commands:
       - echo "Packaging Lambda artifact..."
