@@ -478,7 +478,7 @@ const listAllPincodes = async ({ search } = {}) => {
     const normalizedSearch =
       search !== undefined && search !== null ? String(search).trim().toLowerCase() : '';
 
-    const areas = await Area.find({ deleted_at: null })
+    const areas = await Area.find({ deleted_at: null, is_active: true })
       .select('name pincodes city_id state_name')
       .lean();
 
