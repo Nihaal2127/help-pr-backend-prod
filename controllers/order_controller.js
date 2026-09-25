@@ -1407,7 +1407,7 @@ const downloadOrderInvoice = async (req, res) => {
       });
     }
 
-    const html = buildOrderInvoiceHtml(record);
+    const html = buildOrderInvoiceHtml(record, { audience: 'user' });
     const safeId = String(record.unique_id || order._id).replace(/[^\w-]/g, '_');
 
     void safeNotifyOrderInvoiceDownloaded({
@@ -1467,7 +1467,7 @@ const sendInvoiceEmail = async (req, res) => {
       }
 
       if (!html) {
-        html = buildOrderInvoiceHtml(record);
+        html = buildOrderInvoiceHtml(record, { audience: 'user' });
       }
       if (!toEmail) {
         toEmail = record.user_info?.email ? String(record.user_info.email).trim() : '';
