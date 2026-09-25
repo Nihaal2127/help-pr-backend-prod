@@ -1272,9 +1272,16 @@ const partnerRegisterMiddleware = async (req, res, next) => {
   }
   req.body.phone_number = normalizedPhone;
 
-  const validatedDob = validateDateOfBirth(date_of_birth, res);
-  if (validatedDob === null) return;
-  req.body.date_of_birth = validatedDob;
+  if (
+    date_of_birth === undefined ||
+    date_of_birth === null ||
+    (typeof date_of_birth === 'string' && date_of_birth.trim() === '')
+  ) {
+    delete req.body.date_of_birth;
+  } else {
+    const birthDate = date_of_birth instanceof Date ? date_of_birth : new Date(date_of_birth);
+    req.body.date_of_birth = Number.isNaN(birthDate.getTime()) ? null : birthDate;
+  }
 
   if (!password || String(password).trim() === '') {
     return res.status(400).json({
