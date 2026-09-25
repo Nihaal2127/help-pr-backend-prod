@@ -978,12 +978,14 @@ const safeNotifyOrderReviewReceived = async ({ order, partnerUserId, actorUserId
 const safeNotifyOrderInvoiceDownloaded = async ({ order, audience, actorUserId }) => {
   await runSafe("order.invoice_downloaded", async () => {
     if (!order?._id) return;
+    // Admin download: no notification to anyone.
+    if (audience === "admin") return;
 
     const recipientUserIds = new Set();
     if (audience === "partner") {
       addRecipientId(recipientUserIds, actorUserId || order.partner_id);
     } else {
-      // User app + admin: notify the customer only (never partners).
+      // User app: notify the customer only (never partners).
       addRecipientId(recipientUserIds, order.user_id);
     }
     if (!recipientUserIds.size) return;
