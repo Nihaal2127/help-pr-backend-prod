@@ -975,16 +975,20 @@ const safeNotifyOrderReviewReceived = async ({ order, partnerUserId, actorUserId
   });
 };
 
-const safeNotifyOrderInvoiceDownloaded = async ({ order }) => {
+const safeNotifyOrderInvoiceDownloaded = async ({ order, audience, actorUserId }) => {
   await runSafe("order.invoice_downloaded", async () => {
     if (!order?._id) return;
 
     const recipientUserIds = new Set();
-    addRecipientId(recipientUserIds, order.user_id);
-    const partnerUserIds = await collectOrderPartnerUserIds(order);
-    partnerUserIds.forEach((id) => recipientUserIds.add(String(id)));
+    if (audience === "partner") {
+      addRecipientId(recipientUserIds, actorUserId || order.partner_id);
+    } else {
+      // User app + admin: notify the customer only (never partners).
+      addRecipientId(recipientUserIds, order.user_id);
+    }
     if (!recipientUserIds.size) return;
 
+    // Do not pass actorUserId — excludeActor would drop the downloader (the intended recipient).
     await notify({
       eventKey: "ORDER_INVOICE_DOWNLOADED",
       recipientUserIds: [...recipientUserIds],

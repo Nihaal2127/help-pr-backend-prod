@@ -29,8 +29,9 @@ const PARTNER_INVOICE_LOGO_URL = loadInvoiceLogoDataUrl(
   INVOICE_LOGO_URL,
   'partner'
 );
-const INVOICE_BRAND_NAME = 'Help PR';
-const INVOICE_TAGLINE = 'Trusted Home Services';
+const INVOICE_BRAND_NAME = 'HELPPR';
+const INVOICE_TAGLINE = 'One stop solution for all your needs.';
+const INVOICE_GST_NUMBER = process.env.INVOICE_GST_NUMBER || '';
 const INVOICE_SUPPORT_PHONE = '+91 1800-123-4567';
 const INVOICE_SUPPORT_EMAIL = 'support@helppr.in';
 const INVOICE_SUPPORT_WEBSITE = 'www.helppr.in';
@@ -94,6 +95,54 @@ const formatAddressLine = (record) => {
     return String(record.address).trim();
   }
   return '—';
+};
+
+const formatTimeValue = (value) => {
+  if (value == null || value === '') return null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const looksIso = /^\d{4}-\d{2}-\d{2}/.test(trimmed) || trimmed.includes('T');
+    if (!looksIso && Number.isNaN(Date.parse(trimmed))) {
+      return trimmed;
+    }
+  }
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) {
+    const fallback = String(value).trim();
+    return fallback || null;
+  }
+  return dt.toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+};
+
+const resolveServiceSchedule = (record) => {
+  const firstItem =
+    Array.isArray(record.service_items) && record.service_items.length > 0
+      ? record.service_items[0]
+      : null;
+
+  const serviceDate =
+    firstItem?.service_date || record.from_date || record.order_date || record.created_at || null;
+
+  const startTime =
+    formatTimeValue(firstItem?.service_from_time) || formatTimeValue(record.work_start_time);
+  const endTime =
+    formatTimeValue(firstItem?.service_to_time) || formatTimeValue(record.work_end_time);
+
+  let timeLabel = '—';
+  if (startTime && endTime) timeLabel = `${startTime} – ${endTime}`;
+  else if (startTime) timeLabel = startTime;
+  else if (endTime) timeLabel = endTime;
+
+  return {
+    date: formatDate(serviceDate),
+    time: timeLabel,
+    location: formatAddressLine(record),
+  };
 };
 
 const STATUS_COLOR_CLASS = {
@@ -202,12 +251,33 @@ const buildPaymentRows = (payments) => {
 };
 
 const buildTotalsTable = (record) => {
-  const rows = [
+  const serviceCharge = record.total_service_charge ?? record.service_price ?? 0;
+  const userPlatformFee = Number(record.user_paltform_fee) || 0;
+  const commissionAmount = Number(record.commission_amount) || 0;
+  const platformFee = userPlatformFee > 0 ? userPlatformFee : commissionAmount;
+  const taxPercent = Number(record.tax_percent) || 0;
+  const taxLabel =
+    taxPercent > 0 ? `Tax / GST (${formatMoney(taxPercent)}%)` : 'Tax / GST';
+
+  const rows = [{ label: 'Service Charge', value: serviceCharge }];
+
+  if (platformFee > 0) {
+    const commissionPercent = Number(record.commission_percent) || 0;
+    rows.push({
+      label:
+        userPlatformFee <= 0 && commissionPercent > 0
+          ? `Platform Fee (${formatMoney(commissionPercent)}%)`
+          : 'Platform Fee',
+      value: platformFee,
+    });
+  }
+
+  rows.push(
     { label: 'Subtotal', value: record.sub_total },
-    { label: `Tax (${formatMoney(record.tax_percent)}%)`, value: record.tax_amount ?? record.tax },
     { label: 'Discount', value: record.discount_amount ?? 0 },
-    { label: 'Additional Charges', value: record.additional_charges_total },
-  ];
+    { label: taxLabel, value: record.tax_amount ?? record.tax },
+    { label: 'Additional Charges', value: record.additional_charges_total }
+  );
 
   const body = rows
     .map(
@@ -279,8 +349,8 @@ const INVOICE_STYLES = `
 
   .top-bar {
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
+    justify-content: flex-start;
+    align-items: center;
     gap: 20px;
     flex-wrap: wrap;
     padding: 28px 32px 20px;
@@ -314,43 +384,15 @@ const INVOICE_STYLES = `
   }
 
   .brand-text {
-    flex: 0 0 auto;
-    min-width: max-content;
-  }
-
-  .brand-name {
-    margin: 0;
-    font-size: 28px;
-    font-weight: 800;
-    color: var(--navy);
-    letter-spacing: -0.02em;
-    line-height: 1.1;
-    white-space: nowrap;
-  }
-
-  .brand-name span { color: var(--success); }
-
-  .brand-name--accent span {
-    color: var(--partner-orange);
-    font-weight: 900;
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .brand-tagline {
-    margin: 4px 0 0;
+    margin: 0;
     font-size: 13px;
     color: var(--muted);
     font-weight: 500;
-  }
-
-  .invoice-title {
-    margin: 0;
-    font-size: 34px;
-    font-weight: 800;
-    color: var(--navy);
-    letter-spacing: 0.04em;
-    line-height: 1;
-    flex: 0 0 auto;
-    margin-left: auto;
   }
 
   .meta-row {
@@ -721,8 +763,7 @@ const INVOICE_STYLES = `
       padding-right: 18px;
     }
 
-    .top-bar { flex-direction: column; }
-    .invoice-title { font-size: 28px; }
+    .top-bar { flex-direction: column; align-items: flex-start; }
 
     .meta-row { grid-template-columns: 1fr; }
     .cards-grid { grid-template-columns: 1fr; }
@@ -757,7 +798,6 @@ const buildOrderInvoiceHtml = (record, options = {}) => {
       ? USER_INVOICE_LOGO_URL
       : INVOICE_LOGO_URL;
   const logoClass = isBadgeLogoInvoice ? 'brand-logo brand-logo--badge' : 'brand-logo';
-  const brandNameClass = isBadgeLogoInvoice ? 'brand-name brand-name--accent' : 'brand-name';
   const topBarClass = isBadgeLogoInvoice ? 'top-bar top-bar--badge' : 'top-bar';
   const orderId = record.unique_id || record._id;
   const invoiceNo = `INV-${orderId}`;
@@ -765,18 +805,14 @@ const buildOrderInvoiceHtml = (record, options = {}) => {
   const customerEmail = record.user_info?.email || '—';
   const customerPhone = record.user_info?.phone_number || '—';
   const franchiseName = record.franchise_info?.name || '—';
-  const address = formatAddressLine(record);
+  const gstNumber = String(INVOICE_GST_NUMBER || '').trim() || '—';
+  const schedule = resolveServiceSchedule(record);
   const category = record.category_info?.name || '—';
   const service = record.service_info?.name || '—';
   const paymentStatus = record.user_payment_status || record.payment_status || '—';
   const orderStatus = record.order_status || '—';
   const invoiceDate = formatDate(record.order_date || record.created_at);
   const generatedAt = formatDateTime(new Date());
-  const brandParts = String(INVOICE_BRAND_NAME).trim().split(/\s+/);
-  const brandNameHtml =
-    brandParts.length > 1
-      ? `${escapeHtml(brandParts[0])} <span>${escapeHtml(brandParts.slice(1).join(' '))}</span>`
-      : escapeHtml(INVOICE_BRAND_NAME);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -792,11 +828,9 @@ const buildOrderInvoiceHtml = (record, options = {}) => {
       <div class="brand-wrap">
         <img class="${logoClass}" src="${logoUrl}" alt="${escapeHtml(INVOICE_BRAND_NAME)} logo" />
         <div class="brand-text">
-          <h1 class="${brandNameClass}">${brandNameHtml}</h1>
           <p class="brand-tagline">${escapeHtml(INVOICE_TAGLINE)}</p>
         </div>
       </div>
-      <h2 class="invoice-title">INVOICE</h2>
     </div>
 
     <div class="meta-row">
@@ -812,6 +846,10 @@ const buildOrderInvoiceHtml = (record, options = {}) => {
         <div class="meta-item">
           <span class="meta-label">Invoice Date</span>
           <span class="meta-value">${escapeHtml(invoiceDate)}</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">GSTIN</span>
+          <span class="meta-value">${escapeHtml(gstNumber)}</span>
         </div>
         <div class="meta-item">
           <span class="meta-label">Order Status</span>
@@ -838,7 +876,6 @@ const buildOrderInvoiceHtml = (record, options = {}) => {
           <p class="customer-name">${escapeHtml(customerName)}</p>
           <p class="detail-line">${iconSvg('mail')}<span>${escapeHtml(customerEmail)}</span></p>
           <p class="detail-line">${iconSvg('phone')}<span>${escapeHtml(customerPhone)}</span></p>
-          <p class="detail-line">${iconSvg('pin')}<span>${escapeHtml(address)}</span></p>
         </div>
       </div>
       <div class="info-card">
@@ -846,6 +883,9 @@ const buildOrderInvoiceHtml = (record, options = {}) => {
         <div class="card-body">
           <p class="service-field"><strong>Category:</strong>${escapeHtml(category)}</p>
           <p class="service-field"><strong>Service:</strong>${escapeHtml(service)}</p>
+          <p class="service-field"><strong>Service Date:</strong>${escapeHtml(schedule.date)}</p>
+          <p class="service-field"><strong>Service Time:</strong>${escapeHtml(schedule.time)}</p>
+          <p class="service-field"><strong>Location:</strong>${escapeHtml(schedule.location)}</p>
         </div>
       </div>
     </div>
@@ -906,6 +946,7 @@ const buildOrderInvoiceHtml = (record, options = {}) => {
       <div class="footer-col footer-right">
         <div class="footer-head">${iconSvg('doc')} Generated On</div>
         <p class="footer-line">${escapeHtml(generatedAt)}</p>
+        <p class="footer-line">GSTIN: ${escapeHtml(gstNumber)}</p>
       </div>
     </footer>
   </div>

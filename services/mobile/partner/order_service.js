@@ -192,6 +192,7 @@ const getPartnerOrderInvoice = async (partnerId, orderId) => {
     void safeNotifyOrderInvoiceDownloaded({
       order,
       actorUserId: partnerId,
+      audience: 'partner',
     });
 
     return ok(200, {

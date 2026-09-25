@@ -1413,6 +1413,7 @@ const downloadOrderInvoice = async (req, res) => {
     void safeNotifyOrderInvoiceDownloaded({
       order,
       actorUserId: getCallerId(req),
+      audience: 'admin',
     });
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
