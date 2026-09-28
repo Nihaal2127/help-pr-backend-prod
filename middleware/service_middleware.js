@@ -182,7 +182,25 @@ const serviceUpdateParser = (req, res, next) => {
   next();
 };
 
+const SAC_CODE_REGEX = /^\d{4,8}$/;
+
+/** Optional SAC; when present and non-empty it must be 4–8 digits. */
+const rejectInvalidSacCode = (req, res) => {
+  const raw = req.body.sac_code;
+  if (raw === undefined || raw === null || String(raw).trim() === "") return false;
+  if (!SAC_CODE_REGEX.test(String(raw).trim())) {
+    res.status(400).json({
+      success: false,
+      status: 400,
+      message: "SAC code must be 4 to 8 digits.",
+    });
+    return true;
+  }
+  return false;
+};
+
 const createServiceMiddleware = (req, res, next) => {
+  if (rejectInvalidSacCode(req, res)) return;
   const {
     name,
     desc,
@@ -386,6 +404,7 @@ const updateServiceRequestMiddleware = (req, res, next) =>
   createServiceRequestMiddleware(req, res, next);
 
 const updateServiceMiddleware = (req, res, next) => {
+  if (rejectInvalidSacCode(req, res)) return;
   const {
     name,
     desc,

@@ -8,6 +8,8 @@ const serviceSchema = new mongoose.Schema(
         tax: { type: Number, required: false, default: 0 },
         commission: { type: Number, required: false, default: 0 },
         payment_type: { type: String, required: false, default: "" },
+        /** GST Services Accounting Code shown on invoices. */
+        sac_code: { type: String, required: false, default: "", trim: true },
         minimum_deposit: { type: Number, required: false, default: 0 },
         category_id: { type: mongoose.Schema.Types.ObjectId, default: null, ref: 'category' },
         image_url: { type: String, required: true, default: "" },

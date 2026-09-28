@@ -585,6 +585,7 @@ const create = async (req, res) => {
       commission,
       payment_type,
       minimum_deposit,
+      sac_code,
       category_id,
       city_ids = [],
       state_ids = [],
@@ -655,6 +656,7 @@ const create = async (req, res) => {
       commission: asBodyNumber(commission, 0),
       payment_type: normalizePaymentType(payment_type),
       minimum_deposit: asBodyNumber(minimum_deposit, 0),
+      sac_code: sac_code == null ? "" : String(sac_code).trim(),
       category_id,
       service_id,
       city_ids,
@@ -744,6 +746,9 @@ const update = async (req, res) => {
   }
   if (Object.prototype.hasOwnProperty.call(updateData, "payment_type")) {
     updateData.payment_type = normalizePaymentType(updateData.payment_type);
+  }
+  if (Object.prototype.hasOwnProperty.call(updateData, "sac_code")) {
+    updateData.sac_code = updateData.sac_code == null ? "" : String(updateData.sac_code).trim();
   }
 
   try {

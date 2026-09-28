@@ -31,10 +31,21 @@ const PARTNER_INVOICE_LOGO_URL = loadInvoiceLogoDataUrl(
 );
 const INVOICE_BRAND_NAME = 'HELPPR';
 const INVOICE_TAGLINE = 'One stop solution for all your needs.';
-const INVOICE_GST_NUMBER = process.env.INVOICE_GST_NUMBER || '';
 const INVOICE_SUPPORT_PHONE = '+91 1800-123-4567';
 const INVOICE_SUPPORT_EMAIL = 'support@helppr.in';
 const INVOICE_SUPPORT_WEBSITE = 'www.helppr.in';
+const INVOICE_TIME_ZONE = process.env.INVOICE_TIME_ZONE || 'Asia/Kolkata';
+
+const INVOICE_BUSINESS = {
+  legalName: process.env.INVOICE_BUSINESS_NAME || INVOICE_BRAND_NAME,
+  address: process.env.INVOICE_BUSINESS_ADDRESS || '',
+  state: process.env.INVOICE_BUSINESS_STATE || '',
+  stateCode: process.env.INVOICE_BUSINESS_STATE_CODE || '',
+  gstin: process.env.INVOICE_GST_NUMBER || '',
+  pan: process.env.INVOICE_BUSINESS_PAN || '',
+  phone: process.env.INVOICE_BUSINESS_PHONE || INVOICE_SUPPORT_PHONE,
+  email: process.env.INVOICE_BUSINESS_EMAIL || INVOICE_SUPPORT_EMAIL,
+};
 
 const escapeHtml = (value) =>
   String(value ?? '')
@@ -57,6 +68,7 @@ const formatDate = (value) => {
   const dt = new Date(value);
   if (Number.isNaN(dt.getTime())) return '—';
   return dt.toLocaleDateString('en-IN', {
+    timeZone: INVOICE_TIME_ZONE,
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -67,6 +79,7 @@ const formatDateTime = (value = new Date()) => {
   const dt = new Date(value);
   if (Number.isNaN(dt.getTime())) return '—';
   return dt.toLocaleString('en-IN', {
+    timeZone: INVOICE_TIME_ZONE,
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -113,6 +126,7 @@ const formatTimeValue = (value) => {
     return fallback || null;
   }
   return dt.toLocaleTimeString('en-IN', {
+    timeZone: INVOICE_TIME_ZONE,
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
@@ -128,21 +142,71 @@ const resolveServiceSchedule = (record) => {
   const serviceDate =
     firstItem?.service_date || record.from_date || record.order_date || record.created_at || null;
 
+  // Services are open-ended, so only the start time is shown.
   const startTime =
     formatTimeValue(firstItem?.service_from_time) || formatTimeValue(record.work_start_time);
-  const endTime =
-    formatTimeValue(firstItem?.service_to_time) || formatTimeValue(record.work_end_time);
-
-  let timeLabel = '—';
-  if (startTime && endTime) timeLabel = `${startTime} – ${endTime}`;
-  else if (startTime) timeLabel = startTime;
-  else if (endTime) timeLabel = endTime;
 
   return {
     date: formatDate(serviceDate),
-    time: timeLabel,
+    time: startTime || '—',
     location: formatAddressLine(record),
   };
+};
+
+const normalizeStateName = (value) =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z]/g, '');
+
+const resolveSupplierState = (record) => {
+  if (String(INVOICE_BUSINESS.state).trim()) return String(INVOICE_BUSINESS.state).trim();
+  return String(record.franchise_info?.state_name ?? '').trim();
+};
+
+const resolvePlaceOfSupplyState = (record) =>
+  String(record.address_info?.state ?? '').trim();
+
+/** IGST when supplier and place-of-supply states are both known and differ; otherwise CGST + SGST. */
+const isInterStateSupply = (record) => {
+  const supplier = normalizeStateName(resolveSupplierState(record));
+  const placeOfSupply = normalizeStateName(resolvePlaceOfSupplyState(record));
+  return Boolean(supplier && placeOfSupply && supplier !== placeOfSupply);
+};
+
+const roundMoney = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+};
+
+const buildGstRows = (record) => {
+  const taxPercent = Number(record.tax_percent) || 0;
+  const baseTax = Number(record.tax_amount ?? record.tax) || 0;
+  const chargesTax = Number(record.additional_charges_tax) || 0;
+  const totalTax = roundMoney(baseTax + chargesTax);
+
+  if (isInterStateSupply(record)) {
+    return [
+      {
+        label: taxPercent > 0 ? `IGST ${formatMoney(taxPercent)}%` : 'IGST',
+        value: totalTax,
+      },
+    ];
+  }
+
+  const halfPercent = taxPercent / 2;
+  const cgst = roundMoney(totalTax / 2);
+  const sgst = roundMoney(totalTax - cgst);
+  return [
+    { label: halfPercent > 0 ? `CGST ${formatMoney(halfPercent)}%` : 'CGST', value: cgst },
+    { label: halfPercent > 0 ? `SGST ${formatMoney(halfPercent)}%` : 'SGST', value: sgst },
+  ];
+};
+
+const resolveSacCode = (serviceInfo) => {
+  const code = String(serviceInfo?.sac_code ?? '').trim();
+  return code || '—';
 };
 
 const STATUS_COLOR_CLASS = {
@@ -198,7 +262,7 @@ const iconSvg = (name) => {
 
 const buildServiceRows = (serviceItems) => {
   if (!Array.isArray(serviceItems) || serviceItems.length === 0) {
-    return '<tr><td colspan="4" class="empty-row">No line items</td></tr>';
+    return '<tr><td colspan="5" class="empty-row">No line items</td></tr>';
   }
   return serviceItems
     .map((item) => {
@@ -209,6 +273,7 @@ const buildServiceRows = (serviceItems) => {
       );
       return `<tr>
         <td>${escapeHtml(name)}</td>
+        <td>${escapeHtml(resolveSacCode(item.service_info))}</td>
         <td>${escapeHtml(partner)}</td>
         <td>${statusText(item.service_status || '—')}</td>
         <td class="col-amount">₹ ${price}</td>
@@ -217,17 +282,22 @@ const buildServiceRows = (serviceItems) => {
     .join('');
 };
 
-const buildChargeRows = (charges) => {
+/** Additional charges are extra work on the booked service, so they carry its SAC. */
+const buildChargeRows = (charges, serviceInfo) => {
   if (!Array.isArray(charges) || charges.length === 0) {
     return '';
   }
+  const sac = resolveSacCode(serviceInfo);
   return charges
     .map(
       (c) => `<tr>
         <td>${escapeHtml(c.label || c.charge_type || 'Additional charge')}</td>
+        <td>${escapeHtml(sac)}</td>
         <td>—</td>
         <td><span class="text-muted">additional</span></td>
-        <td class="col-amount">${moneyCell(c.total_amount ?? c.amount)}</td>
+        <td class="col-amount">${moneyCell(
+          (Number(c.amount) || 0) + (Number(c.commission_amount) || 0)
+        )}</td>
       </tr>`
     )
     .join('');
@@ -255,9 +325,13 @@ const buildTotalsTable = (record) => {
   const userPlatformFee = Number(record.user_paltform_fee) || 0;
   const commissionAmount = Number(record.commission_amount) || 0;
   const platformFee = userPlatformFee > 0 ? userPlatformFee : commissionAmount;
-  const taxPercent = Number(record.tax_percent) || 0;
-  const taxLabel =
-    taxPercent > 0 ? `Tax / GST (${formatMoney(taxPercent)}%)` : 'Tax / GST';
+  const additionalChargesPreTax = roundMoney(
+    (Number(record.additional_charges_total) || 0) - (Number(record.additional_charges_tax) || 0)
+  );
+  const discount = Number(record.discount_amount) || 0;
+  const taxableValue = roundMoney(
+    (Number(record.sub_total) || 0) - discount + additionalChargesPreTax
+  );
 
   const rows = [{ label: 'Service Charge', value: serviceCharge }];
 
@@ -274,9 +348,10 @@ const buildTotalsTable = (record) => {
 
   rows.push(
     { label: 'Subtotal', value: record.sub_total },
-    { label: 'Discount', value: record.discount_amount ?? 0 },
-    { label: taxLabel, value: record.tax_amount ?? record.tax },
-    { label: 'Additional Charges', value: record.additional_charges_total }
+    { label: 'Discount', value: discount },
+    { label: 'Additional Charges', value: additionalChargesPreTax },
+    { label: 'Taxable Value', value: taxableValue },
+    ...buildGstRows(record)
   );
 
   const body = rows
@@ -349,7 +424,7 @@ const INVOICE_STYLES = `
 
   .top-bar {
     display: flex;
-    justify-content: flex-start;
+    justify-content: space-between;
     align-items: center;
     gap: 20px;
     flex-wrap: wrap;
@@ -393,6 +468,38 @@ const INVOICE_STYLES = `
     font-size: 13px;
     color: var(--muted);
     font-weight: 500;
+  }
+
+  .business-block {
+    flex: 0 1 340px;
+    text-align: right;
+    font-size: 12px;
+    color: var(--ink);
+    line-height: 1.55;
+  }
+
+  .business-title {
+    margin: 0 0 2px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .business-name {
+    margin: 0 0 4px;
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--navy);
+  }
+
+  .business-line { margin: 0; }
+
+  .business-line strong {
+    color: var(--muted);
+    font-weight: 600;
+    margin-right: 4px;
   }
 
   .meta-row {
@@ -764,6 +871,7 @@ const INVOICE_STYLES = `
     }
 
     .top-bar { flex-direction: column; align-items: flex-start; }
+    .business-block { text-align: left; flex-basis: auto; }
 
     .meta-row { grid-template-columns: 1fr; }
     .cards-grid { grid-template-columns: 1fr; }
@@ -805,14 +913,33 @@ const buildOrderInvoiceHtml = (record, options = {}) => {
   const customerEmail = record.user_info?.email || '—';
   const customerPhone = record.user_info?.phone_number || '—';
   const franchiseName = record.franchise_info?.name || '—';
-  const gstNumber = String(INVOICE_GST_NUMBER || '').trim() || '—';
   const schedule = resolveServiceSchedule(record);
   const category = record.category_info?.name || '—';
-  const service = record.service_info?.name || '—';
+  const lineServiceNames = [
+    ...new Set(
+      (record.service_items || [])
+        .map((item) => String(item?.service_info?.name ?? '').trim())
+        .filter(Boolean)
+    ),
+  ];
+  const service =
+    lineServiceNames.length > 0 ? lineServiceNames.join(', ') : record.service_info?.name || '—';
+  const primaryServiceInfo =
+    (record.service_items || []).find((item) => item?.service_info)?.service_info ||
+    record.service_info;
   const paymentStatus = record.user_payment_status || record.payment_status || '—';
   const orderStatus = record.order_status || '—';
   const invoiceDate = formatDate(record.order_date || record.created_at);
   const generatedAt = formatDateTime(new Date());
+  const placeOfSupply = resolvePlaceOfSupplyState(record) || '—';
+  const supplierState = resolveSupplierState(record);
+  const supplierStateLabel = supplierState
+    ? `${supplierState}${INVOICE_BUSINESS.stateCode ? ` (${INVOICE_BUSINESS.stateCode})` : ''}`
+    : '—';
+  const businessLine = (label, value) =>
+    `<p class="business-line"><strong>${escapeHtml(label)}:</strong>${escapeHtml(
+      String(value ?? '').trim() || '—'
+    )}</p>`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -831,6 +958,16 @@ const buildOrderInvoiceHtml = (record, options = {}) => {
           <p class="brand-tagline">${escapeHtml(INVOICE_TAGLINE)}</p>
         </div>
       </div>
+      <div class="business-block">
+        <p class="business-title">Tax Invoice · Billed by</p>
+        <p class="business-name">${escapeHtml(INVOICE_BUSINESS.legalName)}</p>
+        ${INVOICE_BUSINESS.address ? `<p class="business-line">${escapeHtml(INVOICE_BUSINESS.address)}</p>` : ''}
+        ${businessLine('GSTIN', INVOICE_BUSINESS.gstin)}
+        ${INVOICE_BUSINESS.pan ? businessLine('PAN', INVOICE_BUSINESS.pan) : ''}
+        ${businessLine('State', supplierStateLabel)}
+        ${businessLine('Phone', INVOICE_BUSINESS.phone)}
+        ${businessLine('Email', INVOICE_BUSINESS.email)}
+      </div>
     </div>
 
     <div class="meta-row">
@@ -848,8 +985,8 @@ const buildOrderInvoiceHtml = (record, options = {}) => {
           <span class="meta-value">${escapeHtml(invoiceDate)}</span>
         </div>
         <div class="meta-item">
-          <span class="meta-label">GSTIN</span>
-          <span class="meta-value">${escapeHtml(gstNumber)}</span>
+          <span class="meta-label">Place of Supply</span>
+          <span class="meta-value">${escapeHtml(placeOfSupply)}</span>
         </div>
         <div class="meta-item">
           <span class="meta-label">Order Status</span>
@@ -884,7 +1021,7 @@ const buildOrderInvoiceHtml = (record, options = {}) => {
           <p class="service-field"><strong>Category:</strong>${escapeHtml(category)}</p>
           <p class="service-field"><strong>Service:</strong>${escapeHtml(service)}</p>
           <p class="service-field"><strong>Service Date:</strong>${escapeHtml(schedule.date)}</p>
-          <p class="service-field"><strong>Service Time:</strong>${escapeHtml(schedule.time)}</p>
+          <p class="service-field"><strong>Start Time:</strong>${escapeHtml(schedule.time)}</p>
           <p class="service-field"><strong>Location:</strong>${escapeHtml(schedule.location)}</p>
         </div>
       </div>
@@ -897,6 +1034,7 @@ const buildOrderInvoiceHtml = (record, options = {}) => {
           <thead>
             <tr>
               <th>Service</th>
+              <th>SAC</th>
               <th>Partner</th>
               <th>Status</th>
               <th class="col-amount">Amount</th>
@@ -904,7 +1042,7 @@ const buildOrderInvoiceHtml = (record, options = {}) => {
           </thead>
           <tbody>
             ${buildServiceRows(record.service_items)}
-            ${buildChargeRows(record.additional_charges)}
+            ${buildChargeRows(record.additional_charges, primaryServiceInfo)}
           </tbody>
         </table>
       </div>
@@ -945,8 +1083,7 @@ const buildOrderInvoiceHtml = (record, options = {}) => {
       </div>
       <div class="footer-col footer-right">
         <div class="footer-head">${iconSvg('doc')} Generated On</div>
-        <p class="footer-line">${escapeHtml(generatedAt)}</p>
-        <p class="footer-line">GSTIN: ${escapeHtml(gstNumber)}</p>
+        <p class="footer-line">${escapeHtml(generatedAt)} IST</p>
       </div>
     </footer>
   </div>
