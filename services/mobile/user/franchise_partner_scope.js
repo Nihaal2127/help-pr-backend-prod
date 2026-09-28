@@ -551,7 +551,8 @@ const mapCustomerPartnerServiceRow = (row) => {
     description: row.description ?? '',
     price: row.price ?? 0,
     tax: row.tax ?? 0,
-    payment_type: row.payment_type ?? '',
+    payment_type:
+      String(row.payment_type ?? '').trim() || String(service?.payment_type ?? '').trim(),
     minimum_deposit: row.minimum_deposit ?? 0,
     is_accept_request: row.is_accept_request === true,
   };
