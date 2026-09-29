@@ -58,8 +58,28 @@ const { stripAdminDescriptionForPublicApi } = require('../../../utils/admin_desc
 
 const { applyCustomerActiveServicePartnerRatings } = require('./partner_rating_service');
 
+const roundMoney = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+};
+
+/** Intra-state GST: CGST and SGST are each half of the quote tax snapshot. */
+const attachQuoteGstSplit = (quote) => {
+  if (!quote || typeof quote !== 'object') return quote;
+  const taxPercent = Number(quote.tax_percent) || 0;
+  const taxAmount = roundMoney(quote.tax_amount);
+  const halfPercent = roundMoney(taxPercent / 2);
+  const cgstAmount = roundMoney(taxAmount / 2);
+  quote.cgst_percent = halfPercent;
+  quote.sgst_percent = halfPercent;
+  quote.cgst_amount = cgstAmount;
+  quote.sgst_amount = roundMoney(taxAmount - cgstAmount);
+  return quote;
+};
+
 const formatMobileQuoteForApi = (quote) =>
-  stripAdminDescriptionForPublicApi(formatQuoteForApi(quote));
+  attachQuoteGstSplit(stripAdminDescriptionForPublicApi(formatQuoteForApi(quote)));
 const formatMobileQuoteRecords = (records) =>
   formatQuoteRecords(records).map(stripAdminDescriptionForPublicApi);
 const formatMobileOrderForApi = (order) =>
