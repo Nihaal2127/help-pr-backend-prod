@@ -172,6 +172,9 @@ const resolveFranchiseById = async (rawFranchiseId) => {
   return { ok: true, franchise };
 };
 
+const buildFranchiseIdFilter = (franchiseIdOrIds) =>
+  Array.isArray(franchiseIdOrIds) ? { $in: franchiseIdOrIds } : franchiseIdOrIds;
+
 const isLocallyEnabled = (flag) => Boolean(flag);
 
 const loadPartnerLocalMapsByPartnerId = async (partnerIds) => {
@@ -227,19 +230,20 @@ const comparePartnerPlanPriority = (priorityA, priorityB) => {
 /**
  * Franchise partners with a non-expired active subscription on an active plan.
  * Sorted highest plan priority first, then name. Optional `limit` caps results.
+ * `franchiseId` may be a single id or an array of ids.
  */
 const loadSubscribedFranchisePartners = async (franchiseId, options = {}) => {
   const { limit } = options;
 
   const partnerRows = await User.find({
-    franchise_id: franchiseId,
+    franchise_id: buildFranchiseIdFilter(franchiseId),
     type: USER_TYPE_PARTNER,
     verification_status: 2,
     is_active: true,
     is_blocked: { $ne: true },
     deleted_at: null,
   })
-    .select('name profile_url user_id experience average_rating rating_count')
+    .select('name profile_url user_id experience average_rating rating_count franchise_id')
     .lean();
 
   if (partnerRows.length === 0) {
@@ -316,11 +320,11 @@ const pickRandomItems = (items, count) => {
 
 /**
  * Up to `limit` random banner URLs from active platinum partners in the franchise.
- * Franchise-scoped; one banner per partner; empty when none qualify.
+ * Franchise-scoped (single id or array of ids); one banner per partner; empty when none qualify.
  */
 const loadRandomPlatinumPartnerBanners = async (franchiseId, limit = HOME_PLATINUM_BANNERS_LIMIT) => {
   const partnerRows = await User.find({
-    franchise_id: franchiseId,
+    franchise_id: buildFranchiseIdFilter(franchiseId),
     type: USER_TYPE_PARTNER,
     verification_status: 2,
     is_active: true,
