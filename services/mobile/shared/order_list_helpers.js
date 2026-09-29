@@ -11,6 +11,7 @@ const Franchise = require('../../../models/franchise');
 const Quote = require('../../../models/quote');
 const { formatOrderRecords } = require('../../../utils/order_api_format');
 const { stripAdminDescriptionForPublicApi } = require('../../../utils/admin_description_access');
+const { attachOrderGstSplit } = require('../../../utils/gst_split');
 const { escapeRegExp } = require('../../../utils/string_helpers');
 const { fieldLabel } = require('../../../utils/field_labels');
 const {
@@ -332,6 +333,7 @@ const fetchPaginatedMobileOrderList = async ({
     formatOrderRecords(rows)
       .map(attachPartnerRatingsToOrderRecord)
       .map(stripAdminDescriptionForPublicApi)
+      .map(attachOrderGstSplit)
   );
 
   if (includeCustomerReviews) {

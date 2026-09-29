@@ -26,11 +26,14 @@ const {
 const { applyQuoteActionDeadline } = require('../../../utils/quote_action_deadline');
 const { safeNotifyQuoteStatusChanged } = require('../../../src/modules/notifications/services/domainHooks');
 const { stripAdminDescriptionForPublicApi } = require('../../../utils/admin_description_access');
+const { attachQuoteGstSplit } = require('../../../utils/gst_split');
 
 const formatMobileQuoteForApi = (quote) =>
-  stripAdminDescriptionForPublicApi(formatQuoteForApi(quote));
+  attachQuoteGstSplit(stripAdminDescriptionForPublicApi(formatQuoteForApi(quote)));
 const formatMobileQuoteRecords = (records) =>
-  formatQuoteRecords(records).map(stripAdminDescriptionForPublicApi);
+  formatQuoteRecords(records).map((record) =>
+    attachQuoteGstSplit(stripAdminDescriptionForPublicApi(record))
+  );
 
 const { fail, ok, parsePositiveInt } = require('../../../utils/mobile_service_result');
 

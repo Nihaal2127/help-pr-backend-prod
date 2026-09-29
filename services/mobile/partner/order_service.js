@@ -4,6 +4,7 @@ const { loadOrderDetailLean } = require('../../order_detail_service');
 const { buildOrderInvoiceHtml } = require('../../../utils/order_invoice_html');
 const { embedOrderDetailForeignKeys } = require('../../../utils/list_aggregation');
 const { stripAdminDescriptionForPublicApi } = require('../../../utils/admin_description_access');
+const { attachOrderGstSplit } = require('../../../utils/gst_split');
 const { attachPartnerOrderSummary } = require('../../../utils/partner_order_summary');
 const { fail, ok } = require('../../../utils/mobile_service_result');
 const { assertValidCallerObjectId } = require('../shared/order_access_helpers');
@@ -151,8 +152,10 @@ const getPartnerOrderById = async (partnerId, orderId) => {
 
     return ok(200, {
       message: 'Order details fetched successfully.',
-      record: stripAdminDescriptionForPublicApi(
-        attachPartnerOrderSummary(embedOrderDetailForeignKeys(record))
+      record: attachOrderGstSplit(
+        stripAdminDescriptionForPublicApi(
+          attachPartnerOrderSummary(embedOrderDetailForeignKeys(record))
+        )
       ),
     });
   } catch (err) {
