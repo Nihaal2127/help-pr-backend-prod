@@ -34,13 +34,15 @@ const { applyCustomerActiveServicePartnerRatings } = require('./partner_rating_s
 const withCustomerPartnerRatings = (records) =>
   applyCustomerActiveServicePartnerRatings(records, { partnerField: 'partner' });
 
-const getVisiblePartnerIds = async (franchiseId) => {
+const getVisiblePartnerIds = async (franchiseId, options = {}) => {
   const franchiseResult = await resolveFranchiseById(franchiseId);
   if (!franchiseResult.ok) {
     return franchiseResult;
   }
 
-  const { partnerIds } = await loadSubscribedFranchisePartners(franchiseResult.franchise._id);
+  const { partnerIds } = await loadSubscribedFranchisePartners(franchiseResult.franchise._id, {
+    cityId: options.cityId,
+  });
   return ok(200, {
     franchise: franchiseResult.franchise,
     partnerIds: partnerIds.map((id) => new mongoose.Types.ObjectId(String(id))),
@@ -68,8 +70,16 @@ const assertPartnerVisibleToCustomer = async (partnerId, franchiseId) => {
   });
 };
 
+/** City saved from the customer's last selected home location. */
+const loadCustomerSelectedCityId = async (userId) => {
+  if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) return null;
+  const user = await User.findOne({ _id: userId, deleted_at: null }).select('city_id').lean();
+  return user?.city_id ?? null;
+};
+
 const listPostsFeed = async (userId, query) => {
-  const visible = await getVisiblePartnerIds(query.franchise_id);
+  const cityId = await loadCustomerSelectedCityId(userId);
+  const visible = await getVisiblePartnerIds(query.franchise_id, { cityId });
   if (!visible.ok) return visible;
 
   if (visible.data.partnerIds.length === 0) {
