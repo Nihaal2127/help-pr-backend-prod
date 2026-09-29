@@ -187,6 +187,13 @@ const buildFranchisePartnerFilter = (franchiseId, cityId) => {
   return filter;
 };
 
+/** City saved from the customer's last selected home location. */
+const loadCustomerSelectedCityId = async (userId) => {
+  if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) return null;
+  const user = await User.findOne({ _id: userId, deleted_at: null }).select('city_id').lean();
+  return user?.city_id ?? null;
+};
+
 const isLocallyEnabled = (flag) => Boolean(flag);
 
 const loadPartnerLocalMapsByPartnerId = async (partnerIds) => {
@@ -777,6 +784,7 @@ module.exports = {
   resolveFranchiseFromLocation,
   resolveFranchiseForArea,
   resolveFranchiseById,
+  loadCustomerSelectedCityId,
   loadSubscribedFranchisePartners,
   loadRandomPlatinumPartnerBanners,
   collectEffectivePartnerOfferings,

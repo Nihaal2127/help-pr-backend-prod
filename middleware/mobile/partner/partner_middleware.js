@@ -1508,7 +1508,7 @@ const runPartnerUpdateIdentityChecks = async (req, res) => {
   const { name, email, phone_number, password, state_id, city_id, area_id, date_of_birth, gender } =
     req.body;
 
-  if (name !== undefined) {
+  if(name !== undefined) {
     if (String(name).trim() === '') {
       return res.status(400).json({
         success: false,

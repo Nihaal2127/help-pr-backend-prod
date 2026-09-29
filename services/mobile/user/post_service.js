@@ -10,6 +10,7 @@ const { normalizeReportReason } = require('../../../enum/post_report_reason_enum
 const { REPORT_STATUS_PENDING } = require('../../../enum/post_report_reason_enum');
 const {
   resolveFranchiseById,
+  loadCustomerSelectedCityId,
   loadSubscribedFranchisePartners,
 } = require('./franchise_partner_scope');
 const {
@@ -68,13 +69,6 @@ const assertPartnerVisibleToCustomer = async (partnerId, franchiseId) => {
     franchise: visible.data.franchise,
     partnerOid: partnerParsed.oid,
   });
-};
-
-/** City saved from the customer's last selected home location. */
-const loadCustomerSelectedCityId = async (userId) => {
-  if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) return null;
-  const user = await User.findOne({ _id: userId, deleted_at: null }).select('city_id').lean();
-  return user?.city_id ?? null;
 };
 
 const listPostsFeed = async (userId, query) => {

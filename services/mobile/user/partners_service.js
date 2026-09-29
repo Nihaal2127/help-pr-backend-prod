@@ -9,6 +9,7 @@ const { ORDER_STATUS_COMPLETED } = require('../../../enum/order_status_enum');
 const { fieldLabel } = require('../../../utils/field_labels');
 const {
   resolveFranchiseById,
+  loadCustomerSelectedCityId,
   loadSubscribedFranchisePartners,
   collectEffectivePartnerOfferings,
   mapFranchisePartnerRecords,
@@ -233,6 +234,7 @@ const paginatePartnerRecords = (records, { filters, serviceId, categoryId, page,
  * Optional partnerIdAllowlist limits to specific partner Mongo ids.
  * Optional publishedOnly controls post engagement scope.
  * Default true = published posts only (customer / admin partner cards and gallery).
+ * Optional cityId keeps only partners in that city.
  */
 const buildFranchisePartnerListRecords = async (franchiseId, options = {}) => {
   const franchiseCtx = await resolveFranchiseById(franchiseId);
@@ -246,7 +248,9 @@ const buildFranchisePartnerListRecords = async (franchiseId, options = {}) => {
       : null;
   const publishedOnly = options.publishedOnly !== false;
 
-  const subscribed = await loadSubscribedFranchisePartners(franchiseCtx.franchise._id);
+  const subscribed = await loadSubscribedFranchisePartners(franchiseCtx.franchise._id, {
+    cityId: options.cityId,
+  });
 
   let partners = subscribed.partners;
   if (allowSet) {
@@ -326,8 +330,12 @@ const listFranchisePartnersPaginated = async (query, options = {}) => {
 
     // Partner browse cards (customer + admin) count published posts only.
     const publishedOnly = options.publishedOnly !== false;
+    const cityId = options.customerUserId
+      ? await loadCustomerSelectedCityId(options.customerUserId)
+      : null;
     const built = await buildFranchisePartnerListRecords(franchiseCtx.franchise._id, {
       publishedOnly,
+      cityId,
     });
     if (!built.ok) return built;
     const builtData = built.data || {};
