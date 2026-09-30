@@ -1,10 +1,9 @@
 const mongoose = require('mongoose');
 const CustomerSavedPartner = require('../../../models/customer_saved_partner');
-const Area = require('../../../models/area');
 const User = require('../../../models/user');
 const { USER_TYPE_PARTNER } = require('../../../constants/user_types');
 const { fieldLabel } = require('../../../utils/field_labels');
-const { resolveFranchiseForArea } = require('./franchise_partner_scope');
+const { loadCustomerSelectedCityId } = require('./franchise_partner_scope');
 const {
   parsePartnersListQuery,
   paginatePartnerRecords,
@@ -154,37 +153,6 @@ const emptySavedPartnersData = (page, limit, franchiseId, franchiseName) =>
     },
   });
 
-const resolveSavedListFranchise = async (userId) => {
-  const customer = await User.findOne({
-    _id: userId,
-    deleted_at: null,
-  })
-    .select('area_id')
-    .lean();
-
-  if (!customer?.area_id) {
-    return { ok: true, franchise: null };
-  }
-
-  const area = await Area.findOne({
-    _id: customer.area_id,
-    deleted_at: null,
-  })
-    .select('_id state_id city_id')
-    .lean();
-
-  if (!area) {
-    return { ok: true, franchise: null };
-  }
-
-  const franchiseResult = await resolveFranchiseForArea(area);
-  if (!franchiseResult.ok) {
-    return { ok: true, franchise: null };
-  }
-
-  return franchiseResult;
-};
-
 const listSavedPartnersPaginated = async (userId, query) => {
   try {
     const parsed = parsePartnersListQuery(query);
@@ -192,55 +160,92 @@ const listSavedPartnersPaginated = async (userId, query) => {
 
     const { page, limit, filters, serviceId, categoryId } = parsed;
 
-    const franchiseCtx = await resolveSavedListFranchise(userId);
-    if (!franchiseCtx.ok) return franchiseCtx;
-    if (!franchiseCtx.franchise) {
+    const cityId = await loadCustomerSelectedCityId(userId);
+    if (!cityId) {
       return emptySavedPartnersData(page, limit, null, null);
     }
 
-    const franchiseId = franchiseCtx.franchise._id;
-    const franchiseName = franchiseCtx.franchise.name ?? null;
-
     const saves = await CustomerSavedPartner.find({
       user_id: new mongoose.Types.ObjectId(String(userId)),
-      franchise_id: franchiseId,
     })
       .sort({ created_at: -1 })
       .lean();
 
     if (saves.length === 0) {
-      return emptySavedPartnersData(page, limit, franchiseId, franchiseName);
+      return emptySavedPartnersData(page, limit, null, null);
+    }
+
+    const cityPartners = await User.find({
+      _id: { $in: saves.map((row) => row.partner_id) },
+      city_id: cityId,
+      type: USER_TYPE_PARTNER,
+      deleted_at: null,
+    })
+      .select('_id franchise_id')
+      .lean();
+
+    if (cityPartners.length === 0) {
+      return emptySavedPartnersData(page, limit, null, null);
     }
 
     const savedAtByPartnerId = new Map(
       saves.map((row) => [String(row.partner_id), row.created_at])
     );
 
-    const built = await buildFranchisePartnerListRecords(franchiseId, {
-      partnerIdAllowlist: saves.map((row) => row.partner_id),
-      publishedOnly: true,
-    });
-    if (!built.ok) return built;
+    const partnerIdsByFranchise = new Map();
+    for (const partner of cityPartners) {
+      if (!partner.franchise_id) continue;
+      const franchiseKey = String(partner.franchise_id);
+      if (!partnerIdsByFranchise.has(franchiseKey)) {
+        partnerIdsByFranchise.set(franchiseKey, []);
+      }
+      partnerIdsByFranchise.get(franchiseKey).push(partner._id);
+    }
 
-    const builtData = built.data || {};
-    const builtRecords = Array.isArray(builtData.records) ? builtData.records : [];
-    const ratedRecords = await applyCustomerActiveServicePartnerRatings(builtRecords);
-    const merged = ratedRecords.map((record) => {
-      const partnerKey = String(record._id);
-      return {
-        ...record,
-        franchise_id: builtData.franchise_id,
-        franchise_name: franchiseName,
-        saved_at: savedAtByPartnerId.get(partnerKey) ?? null,
-        is_saved: true,
-      };
-    });
+    const merged = [];
+
+    for (const [franchiseId, partnerIds] of partnerIdsByFranchise) {
+      const built = await buildFranchisePartnerListRecords(franchiseId, {
+        partnerIdAllowlist: partnerIds,
+        publishedOnly: true,
+        cityId,
+      });
+      if (!built.ok) return built;
+
+      const builtData = built.data || {};
+      const builtRecords = Array.isArray(builtData.records) ? builtData.records : [];
+      const ratedRecords = await applyCustomerActiveServicePartnerRatings(builtRecords);
+
+      for (const record of ratedRecords) {
+        const partnerKey = String(record._id);
+        merged.push({
+          ...record,
+          franchise_id: builtData.franchise_id ?? franchiseId,
+          franchise_name: builtData.franchise_name ?? null,
+          saved_at: savedAtByPartnerId.get(partnerKey) ?? null,
+          is_saved: true,
+        });
+      }
+    }
 
     merged.sort((a, b) => {
       const ta = a.saved_at ? new Date(a.saved_at).getTime() : 0;
       const tb = b.saved_at ? new Date(b.saved_at).getTime() : 0;
       return tb - ta;
     });
+
+    let rootFranchiseId = null;
+    let rootFranchiseName = null;
+    if (merged.length) {
+      const first = merged[0];
+      const allSameFranchise = merged.every(
+        (row) => String(row.franchise_id) === String(first.franchise_id)
+      );
+      if (allSameFranchise) {
+        rootFranchiseId = first.franchise_id;
+        rootFranchiseName = first.franchise_name ?? null;
+      }
+    }
 
     const paginated = paginatePartnerRecords(merged, {
       filters,
@@ -253,8 +258,8 @@ const listSavedPartnersPaginated = async (userId, query) => {
     return ok(200, {
       message: 'Saved partners fetched successfully.',
       data: {
-        franchise_id: franchiseId,
-        franchise_name: franchiseName,
+        franchise_id: rootFranchiseId,
+        franchise_name: rootFranchiseName,
         ...paginated,
       },
     });
