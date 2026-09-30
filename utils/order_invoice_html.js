@@ -4,10 +4,17 @@ const path = require('path');
 const INVOICE_LOGO_URL =
   'http://helper-admin-dashboard-staging.s3-website.ap-south-1.amazonaws.com/static/media/login_logo.dd37de4b8ee5c0dddd7a63cb3e3b7a5c.svg';
 
+const IMAGE_MIME_TYPES = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+};
+
 const loadInvoiceLogoDataUrl = (filePath, fallbackUrl, label) => {
   try {
     const logoBuffer = fs.readFileSync(filePath);
-    return `data:image/png;base64,${logoBuffer.toString('base64')}`;
+    const mime = IMAGE_MIME_TYPES[path.extname(filePath).toLowerCase()] || 'image/png';
+    return `data:${mime};base64,${logoBuffer.toString('base64')}`;
   } catch (err) {
     console.error(`Failed to load ${label} invoice logo:`, err.message);
     return fallbackUrl;
@@ -29,9 +36,19 @@ const PARTNER_INVOICE_LOGO_URL = loadInvoiceLogoDataUrl(
   INVOICE_LOGO_URL,
   'partner'
 );
+const INVOICE_TEXT_LOGO_URL = loadInvoiceLogoDataUrl(
+  path.join(__dirname, '../public/static/Helper_Logo.jpg'),
+  null,
+  'text'
+);
+const INVOICE_SIGNATURE_URL = loadInvoiceLogoDataUrl(
+  path.join(__dirname, '../public/static/Helppr_Signatory.png'),
+  null,
+  'signatory'
+);
 const INVOICE_BRAND_NAME = 'HELPPR';
 const INVOICE_TAGLINE = 'One stop solution for all your needs.';
-const INVOICE_SUPPORT_PHONE = '+91 1800-123-4567';
+const INVOICE_SUPPORT_PHONE = '+91 6301981170';
 const INVOICE_SUPPORT_EMAIL = 'support@helppr.in';
 const INVOICE_SUPPORT_WEBSITE = 'www.helppr.in';
 const INVOICE_TIME_ZONE = process.env.INVOICE_TIME_ZONE || 'Asia/Kolkata';
@@ -41,7 +58,7 @@ const INVOICE_BUSINESS = {
   address: process.env.INVOICE_BUSINESS_ADDRESS || '',
   state: process.env.INVOICE_BUSINESS_STATE || '',
   stateCode: process.env.INVOICE_BUSINESS_STATE_CODE || '',
-  gstin: process.env.INVOICE_GST_NUMBER || '',
+  gstin: process.env.INVOICE_GST_NUMBER || '36ABGCS6710B1ZM',
   pan: process.env.INVOICE_BUSINESS_PAN || '',
   phone: process.env.INVOICE_BUSINESS_PHONE || INVOICE_SUPPORT_PHONE,
   email: process.env.INVOICE_BUSINESS_EMAIL || INVOICE_SUPPORT_EMAIL,
@@ -252,6 +269,8 @@ const iconSvg = (name) => {
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.5 2.6a2 2 0 0 1-.5 1.9L8 9a16 16 0 0 0 6 6l.8-1.1a2 2 0 0 1 1.9-.5c.9.2 1.7.4 2.6.5A2 2 0 0 1 22 16.9z"/></svg>',
     pin:
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-4.5 7-11a7 7 0 1 0-14 0c0 6.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>',
+    globe:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>',
     headset:
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 14a8 8 0 0 1 16 0"/><path d="M4 14v3a2 2 0 0 0 2 2h1v-7H6a2 2 0 0 0-2 2z"/><path d="M20 14v3a2 2 0 0 1-2 2h-1v-7h1a2 2 0 0 1 2 2z"/></svg>',
     doc:
@@ -468,6 +487,62 @@ const INVOICE_STYLES = `
     font-size: 13px;
     color: var(--muted);
     font-weight: 500;
+  }
+
+  .brand-text-logo {
+    display: block;
+    height: 64px;
+    width: auto;
+    max-width: 100%;
+    object-fit: contain;
+    filter: brightness(1.15) contrast(1.2);
+    mix-blend-mode: multiply;
+  }
+
+  .contact-strip {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 6px 26px;
+    padding: 9px 32px;
+    background: var(--navy);
+    color: var(--white);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .contact-strip span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .contact-strip svg { width: 14px; height: 14px; }
+
+  .signatory {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 32px 22px;
+  }
+
+  .signatory-box {
+    text-align: center;
+    width: 260px;
+  }
+
+  .signatory-for {
+    margin: 0 0 4px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--navy);
+  }
+
+  .signatory-img {
+    display: block;
+    width: 100%;
+    height: auto;
+    filter: brightness(1.12) contrast(1.3);
+    mix-blend-mode: multiply;
   }
 
   .business-block {
@@ -851,6 +926,7 @@ const INVOICE_STYLES = `
     }
 
     .card-header,
+    .contact-strip,
     .section-header--dark,
     .section-header--light,
     .data-table thead th,
@@ -876,6 +952,8 @@ const INVOICE_STYLES = `
     .meta-row { grid-template-columns: 1fr; }
     .cards-grid { grid-template-columns: 1fr; }
     .section { margin-left: 18px; margin-right: 18px; }
+    .contact-strip { padding-left: 18px; padding-right: 18px; }
+    .signatory { padding-left: 18px; padding-right: 18px; justify-content: center; }
 
     .invoice-footer {
       grid-template-columns: 1fr;
@@ -955,7 +1033,11 @@ const buildOrderInvoiceHtml = (record, options = {}) => {
       <div class="brand-wrap">
         <img class="${logoClass}" src="${logoUrl}" alt="${escapeHtml(INVOICE_BRAND_NAME)} logo" />
         <div class="brand-text">
-          <p class="brand-tagline">${escapeHtml(INVOICE_TAGLINE)}</p>
+          ${
+            INVOICE_TEXT_LOGO_URL
+              ? `<img class="brand-text-logo" src="${INVOICE_TEXT_LOGO_URL}" alt="${escapeHtml(INVOICE_BRAND_NAME)}" />`
+              : `<p class="brand-tagline">${escapeHtml(INVOICE_TAGLINE)}</p>`
+          }
         </div>
       </div>
       <div class="business-block">
@@ -967,7 +1049,14 @@ const buildOrderInvoiceHtml = (record, options = {}) => {
         ${businessLine('State', supplierStateLabel)}
         ${businessLine('Phone', INVOICE_BUSINESS.phone)}
         ${businessLine('Email', INVOICE_BUSINESS.email)}
+        ${businessLine('Website', INVOICE_SUPPORT_WEBSITE)}
       </div>
+    </div>
+
+    <div class="contact-strip">
+      <span>${iconSvg('phone')}${escapeHtml(INVOICE_SUPPORT_PHONE)}</span>
+      <span>${iconSvg('mail')}${escapeHtml(INVOICE_SUPPORT_EMAIL)}</span>
+      <span>${iconSvg('globe')}${escapeHtml(INVOICE_SUPPORT_WEBSITE)}</span>
     </div>
 
     <div class="meta-row">
@@ -1070,12 +1159,24 @@ const buildOrderInvoiceHtml = (record, options = {}) => {
       </div>
     </section>
 
+    ${
+      INVOICE_SIGNATURE_URL
+        ? `<div class="signatory">
+      <div class="signatory-box">
+        <p class="signatory-for">For ${escapeHtml(INVOICE_BUSINESS.legalName)}</p>
+        <img class="signatory-img" src="${INVOICE_SIGNATURE_URL}" alt="Authorized Signatory" />
+      </div>
+    </div>`
+        : ''
+    }
+
     <footer class="invoice-footer">
       <div class="footer-col">
         <div class="footer-head">${iconSvg('headset')} Need Help?</div>
-        <p class="footer-line">${escapeHtml(INVOICE_SUPPORT_PHONE)}</p>
-        <p class="footer-line">${escapeHtml(INVOICE_SUPPORT_EMAIL)}</p>
-        <p class="footer-line">${escapeHtml(INVOICE_SUPPORT_WEBSITE)}</p>
+        <p class="footer-line">Phone: ${escapeHtml(INVOICE_SUPPORT_PHONE)}</p>
+        <p class="footer-line">Email: ${escapeHtml(INVOICE_SUPPORT_EMAIL)}</p>
+        <p class="footer-line">Web: ${escapeHtml(INVOICE_SUPPORT_WEBSITE)}</p>
+        <p class="footer-line">GSTIN: ${escapeHtml(INVOICE_BUSINESS.gstin || '—')}</p>
       </div>
       <div class="footer-col footer-center">
         <p class="footer-thanks">Thank You!</p>
