@@ -79,33 +79,44 @@ const listPostsFeed = async (userId, query) => {
   }
   const scope = scopeRaw || 'city';
 
-  const cityId = scope === 'city' ? await loadCustomerSelectedCityId(userId) : null;
-  const visible = await getVisiblePartnerIds(query.franchise_id, { cityId });
-  if (!visible.ok) return visible;
-
-  if (visible.data.partnerIds.length === 0) {
-    return ok(200, {
-      message: 'Feed retrieved successfully.',
-      data: {
-        franchise_id: visible.data.franchise._id,
-        franchise_name: visible.data.franchise.name,
-        records: [],
-        totalItems: 0,
-        totalPages: 0,
-        currentPage: 1,
-        limit: DEFAULT_LIMIT,
-      },
-    });
-  }
-
   const page = parsePositiveInt(query.page, DEFAULT_PAGE);
   const limit = Math.min(parsePositiveInt(query.limit, DEFAULT_LIMIT), MAX_LIMIT);
   const skip = (page - 1) * limit;
 
-  const filter = publishedPostFilter({
-    franchise_id: visible.data.franchise._id,
-    partner_id: { $in: visible.data.partnerIds },
-  });
+  let franchiseId = null;
+  let franchiseName = null;
+  let filter;
+
+  if (scope === 'all') {
+    filter = publishedPostFilter();
+  } else {
+    const cityId = await loadCustomerSelectedCityId(userId);
+    const visible = await getVisiblePartnerIds(query.franchise_id, { cityId });
+    if (!visible.ok) return visible;
+
+    franchiseId = visible.data.franchise._id;
+    franchiseName = visible.data.franchise.name;
+
+    if (visible.data.partnerIds.length === 0) {
+      return ok(200, {
+        message: 'Feed retrieved successfully.',
+        data: {
+          franchise_id: franchiseId,
+          franchise_name: franchiseName,
+          records: [],
+          totalItems: 0,
+          totalPages: 0,
+          currentPage: 1,
+          limit: DEFAULT_LIMIT,
+        },
+      });
+    }
+
+    filter = publishedPostFilter({
+      franchise_id: visible.data.franchise._id,
+      partner_id: { $in: visible.data.partnerIds },
+    });
+  }
 
   const [totalItems, posts] = await Promise.all([
     PartnerPost.countDocuments(filter),
@@ -120,8 +131,8 @@ const listPostsFeed = async (userId, query) => {
   return ok(200, {
     message: 'Feed retrieved successfully.',
     data: {
-      franchise_id: visible.data.franchise._id,
-      franchise_name: visible.data.franchise.name,
+      franchise_id: franchiseId,
+      franchise_name: franchiseName,
       records,
       totalItems,
       totalPages,
