@@ -398,7 +398,7 @@ const updatePartnerPost = async (partnerId, postId, body, files) => {
     }
 
     if (finalImages.length < MIN_IMAGES || finalImages.length > MAX_IMAGES) {
-      return fail(400, `Post must have between ${MIN_IMAGES} and ${MAX_IMAGES} images.`);
+      return fail(400, `You can upload up to ${MAX_IMAGES} images.`);
     }
 
     if (post.media_type === POST_MEDIA_TYPE_VIDEO) {
