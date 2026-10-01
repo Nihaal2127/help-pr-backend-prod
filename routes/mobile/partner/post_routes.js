@@ -19,7 +19,11 @@ const {
 const { uploadImages } = require('../../../utils/fileUpload');
 const { wrapMulterUpload } = require('../../../utils/multer_error_handler');
 
-const postImagesUpload = wrapMulterUpload(uploadImages.array('images', 4));
+const POST_IMAGE_MAX = 5;
+
+const postImagesUpload = wrapMulterUpload(uploadImages.array('images', POST_IMAGE_MAX), {
+  maxFiles: POST_IMAGE_MAX,
+});
 
 router.use(partnerAuthMiddleware, requirePartnerAccount);
 

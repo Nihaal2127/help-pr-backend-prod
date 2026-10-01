@@ -3,7 +3,7 @@ const multer = require('multer');
 /**
  * Map Multer / fileFilter errors to client-facing 400 responses (not 500).
  */
-const formatUploadErrorResponse = (err) => {
+const formatUploadErrorResponse = (err, options = {}) => {
   if (!err) return null;
 
   if (err instanceof multer.MulterError) {
@@ -21,7 +21,7 @@ const formatUploadErrorResponse = (err) => {
       case 'LIMIT_UNEXPECTED_FILE':
         return {
           status: 400,
-          message: `Unexpected file field "${err.field}".`,
+          message: `You can upload up to ${options.maxFiles} images.`,
         };
       case 'LIMIT_PART_COUNT':
         return {
@@ -47,11 +47,11 @@ const formatUploadErrorResponse = (err) => {
 };
 
 /** Wrap multer middleware so upload validation returns 400 JSON instead of falling through as 500. */
-const wrapMulterUpload = (uploadMiddleware) => (req, res, next) => {
+const wrapMulterUpload = (uploadMiddleware, options = {}) => (req, res, next) => {
   uploadMiddleware(req, res, (err) => {
     if (!err) return next();
 
-    const formatted = formatUploadErrorResponse(err);
+    const formatted = formatUploadErrorResponse(err, options);
     if (formatted) {
       return res.status(formatted.status).json({
         success: false,
