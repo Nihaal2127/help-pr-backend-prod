@@ -31,6 +31,7 @@ const {
   safeNotifyBackofficePartnerPostReported,
 } = require('../../../src/modules/notifications/services/backofficeHooks');
 const { applyCustomerActiveServicePartnerRatings } = require('./partner_rating_service');
+const { fieldLabel } = require('../../../utils/field_labels');
 
 const withCustomerPartnerRatings = (records) =>
   applyCustomerActiveServicePartnerRatings(records, { partnerField: 'partner' });
@@ -72,7 +73,13 @@ const assertPartnerVisibleToCustomer = async (partnerId, franchiseId) => {
 };
 
 const listPostsFeed = async (userId, query) => {
-  const cityId = await loadCustomerSelectedCityId(userId);
+  const scopeRaw = query.scope != null ? String(query.scope).trim().toLowerCase() : 'city';
+  if (scopeRaw && !['city', 'all'].includes(scopeRaw)) {
+    return fail(400, `${fieldLabel('scope')} must be one of: city, all.`);
+  }
+  const scope = scopeRaw || 'city';
+
+  const cityId = scope === 'city' ? await loadCustomerSelectedCityId(userId) : null;
   const visible = await getVisiblePartnerIds(query.franchise_id, { cityId });
   if (!visible.ok) return visible;
 
