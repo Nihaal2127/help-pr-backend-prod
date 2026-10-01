@@ -41,7 +41,7 @@ const validateCreatePostBody = (req, res, next) => {
   }
 
   if (files.length < MIN_IMAGES || files.length > MAX_IMAGES) {
-    return sendError(res, 400, `Provide between ${MIN_IMAGES} and ${MAX_IMAGES} images.`);
+    return sendError(res, 400, `You can upload up to ${MAX_IMAGES} images.`);
   }
 
   next();

@@ -121,7 +121,7 @@ const createPartnerPost = async (partnerId, body, files) => {
   }
 
   if (!isVideoPost && (imageFiles.length < MIN_IMAGES || imageFiles.length > MAX_IMAGES)) {
-    return fail(400, `Provide between ${MIN_IMAGES} and ${MAX_IMAGES} images.`);
+    return fail(400, `You can upload up to ${MAX_IMAGES} images.`);
   }
 
   let orderOid = null;

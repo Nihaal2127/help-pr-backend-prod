@@ -18,11 +18,10 @@ const {
 } = require('../../../controllers/mobile/partner/post_controller');
 const { uploadImages } = require('../../../utils/fileUpload');
 const { wrapMulterUpload } = require('../../../utils/multer_error_handler');
+const { MAX_IMAGES } = require('../../../services/partner_post_common_service');
 
-const POST_IMAGE_MAX = 5;
-
-const postImagesUpload = wrapMulterUpload(uploadImages.array('images', POST_IMAGE_MAX), {
-  maxFiles: POST_IMAGE_MAX,
+const postImagesUpload = wrapMulterUpload(uploadImages.array('images', MAX_IMAGES), {
+  maxFiles: MAX_IMAGES,
 });
 
 router.use(partnerAuthMiddleware, requirePartnerAccount);

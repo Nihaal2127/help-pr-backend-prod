@@ -230,7 +230,7 @@ const createOrderPostFromUrls = async (partnerId, orderId, imageUrls, descriptio
 
   const urls = Array.isArray(imageUrls) ? imageUrls.filter(Boolean) : [];
   if (urls.length < MIN_IMAGES || urls.length > MAX_IMAGES) {
-    return fail(400, `Provide between ${MIN_IMAGES} and ${MAX_IMAGES} images.`);
+    return fail(400, `You can upload up to ${MAX_IMAGES} images.`);
   }
 
   const descParsed = parsePostDescription(description);
