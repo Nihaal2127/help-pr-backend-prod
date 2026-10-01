@@ -147,8 +147,14 @@ const validateRefsForCreate = async (customerId, body) => {
   const cat = await checkObjectIdExists(Category, body.category_id, 'category');
   if (!cat.exists) return fail(400, cat.message);
 
-  const svc = await checkObjectIdExists(Service, body.service_id, 'service');
-  if (!svc.exists) return fail(400, svc.message);
+  if (
+    body.service_id !== undefined &&
+    body.service_id !== null &&
+    String(body.service_id).trim() !== ''
+  ) {
+    const svc = await checkObjectIdExists(Service, body.service_id, 'service');
+    if (!svc.exists) return fail(400, svc.message);
+  }
 
   if (
     body.partner_id !== undefined &&
@@ -215,14 +221,33 @@ const createCustomerQuote = async (customerId, body) => {
     const refCheck = await validateRefsForCreate(customerId, body);
     if (!refCheck.ok) return refCheck;
 
+    const hasService =
+      body.service_id !== undefined &&
+      body.service_id !== null &&
+      String(body.service_id).trim() !== '';
+
     let pricing;
-    try {
-      ({ pricing } = await resolveQuotePricing(body));
-    } catch (pricingErr) {
-      if (pricingErr instanceof OrderCreationError) {
-        return fail(pricingErr.status, pricingErr.message);
+    if (!hasService) {
+      pricing = {
+        total_service_charge: 0,
+        commission_percent: 0,
+        commission_amount: 0,
+        tax_percent: 0,
+        tax_amount: 0,
+        sub_total: 0,
+        total_price: 0,
+        minimum_deposit_percent: 0,
+        minimum_deposit_amount: 0,
+      };
+    } else {
+      try {
+        ({ pricing } = await resolveQuotePricing(body));
+      } catch (pricingErr) {
+        if (pricingErr instanceof OrderCreationError) {
+          return fail(pricingErr.status, pricingErr.message);
+        }
+        throw pricingErr;
       }
-      throw pricingErr;
     }
 
     const hasPartner =
@@ -238,7 +263,7 @@ const createCustomerQuote = async (customerId, body) => {
       employee_id: null,
       created_by_id: customerId,
       category_id: body.category_id,
-      service_id: body.service_id,
+      service_id: hasService ? body.service_id : null,
       franchise_id: body.franchise_id,
       address_id: body.address_id,
       status: 'new',

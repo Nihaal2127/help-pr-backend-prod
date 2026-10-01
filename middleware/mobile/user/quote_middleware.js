@@ -131,8 +131,12 @@ const validateCreateQuoteBody = (req, res, next) => {
   if (!body.category_id || !mongoose.Types.ObjectId.isValid(String(body.category_id))) {
     return sendError(res, 400, `Valid ${fieldLabel('category_id')} is required.`);
   }
-  if (!body.service_id || !mongoose.Types.ObjectId.isValid(String(body.service_id))) {
-    return sendError(res, 400, `Valid ${fieldLabel('service_id')} is required.`);
+  if (body.service_id !== undefined && body.service_id !== null && String(body.service_id).trim() !== '') {
+    if (!mongoose.Types.ObjectId.isValid(String(body.service_id))) {
+      return sendError(res, 400, `Invalid ${fieldLabel('service_id')}.`);
+    }
+  } else {
+    delete body.service_id;
   }
   if (!body.address_id || !mongoose.Types.ObjectId.isValid(String(body.address_id))) {
     return sendError(res, 400, `Valid ${fieldLabel('address_id')} is required.`);

@@ -160,8 +160,14 @@ const listSavedPartnersPaginated = async (userId, query) => {
 
     const { page, limit, filters, serviceId, categoryId } = parsed;
 
-    const cityId = await loadCustomerSelectedCityId(userId);
-    if (!cityId) {
+    const scopeRaw = query.scope != null ? String(query.scope).trim().toLowerCase() : 'city';
+    if (scopeRaw && !['city', 'all'].includes(scopeRaw)) {
+      return fail(400, `${fieldLabel('scope')} must be one of: city, all.`);
+    }
+    const scope = scopeRaw || 'city';
+
+    const cityId = scope === 'city' ? await loadCustomerSelectedCityId(userId) : null;
+    if (scope === 'city' && !cityId) {
       return emptySavedPartnersData(page, limit, null, null);
     }
 
@@ -175,16 +181,20 @@ const listSavedPartnersPaginated = async (userId, query) => {
       return emptySavedPartnersData(page, limit, null, null);
     }
 
-    const cityPartners = await User.find({
+    const partnerFilter = {
       _id: { $in: saves.map((row) => row.partner_id) },
-      city_id: cityId,
       type: USER_TYPE_PARTNER,
       deleted_at: null,
-    })
+    };
+    if (scope === 'city') {
+      partnerFilter.city_id = cityId;
+    }
+
+    const scopedPartners = await User.find(partnerFilter)
       .select('_id franchise_id')
       .lean();
 
-    if (cityPartners.length === 0) {
+    if (scopedPartners.length === 0) {
       return emptySavedPartnersData(page, limit, null, null);
     }
 
@@ -193,7 +203,7 @@ const listSavedPartnersPaginated = async (userId, query) => {
     );
 
     const partnerIdsByFranchise = new Map();
-    for (const partner of cityPartners) {
+    for (const partner of scopedPartners) {
       if (!partner.franchise_id) continue;
       const franchiseKey = String(partner.franchise_id);
       if (!partnerIdsByFranchise.has(franchiseKey)) {
@@ -208,7 +218,7 @@ const listSavedPartnersPaginated = async (userId, query) => {
       const built = await buildFranchisePartnerListRecords(franchiseId, {
         partnerIdAllowlist: partnerIds,
         publishedOnly: true,
-        cityId,
+        ...(scope === 'city' ? { cityId } : {}),
       });
       if (!built.ok) return built;
 
