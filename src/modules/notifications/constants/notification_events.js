@@ -1,9 +1,18 @@
 const { getOrderStatusLabel } = require("../../../../enum/order_status_enum");
+const { getQuoteActionDeadlineMinutes } = require("../../../../utils/quote_action_deadline");
 
 const formatAmount = (value) => {
   const n = Number(value);
   if (!Number.isFinite(n)) return "0";
   return n.toFixed(2);
+};
+
+const formatDeadlineWindow = (minutes) => {
+  if (minutes % 60 === 0) {
+    const hours = minutes / 60;
+    return `${hours} hour${hours === 1 ? "" : "s"}`;
+  }
+  return `${minutes} minute${minutes === 1 ? "" : "s"}`;
 };
 
 const NOTIFICATION_EVENTS = {
@@ -95,8 +104,8 @@ const NOTIFICATION_EVENTS = {
   QUOTE_ACCEPTED: {
     category: "quote",
     title: () => "Quote status update",
-    body: (ctx) =>
-      `Quote #${ctx.quote?.quote_sequence_id || ""} received - proceed to pay`,
+    body: () =>
+      `Quote received. Accept within ${formatDeadlineWindow(getQuoteActionDeadlineMinutes())}.`,
   },
   SUBSCRIPTION_ASSIGNED: {
     category: "subscription",

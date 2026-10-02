@@ -410,8 +410,12 @@ const createPartnerPayout = async (body) => {
             updated_at: now,
         });
 
+        const notifyDescription = /to your bank/i.test(description)
+            ? description
+            : `${description} to your bank`.trim();
+
         void safeNotifyWalletTransaction({
-            ledgerEntry,
+            ledgerEntry: { ...ledgerEntry.toObject(), description: notifyDescription },
             actorUserId: null,
         });
 
