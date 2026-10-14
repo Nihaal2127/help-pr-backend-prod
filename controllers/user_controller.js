@@ -1655,6 +1655,7 @@ const create = async (req, res) => {
       address,
       state_id,
       city_id,
+      service_cities,
       area_id,
       pincode,
       profile_url,
@@ -1777,6 +1778,7 @@ const create = async (req, res) => {
       address,
       state_id,
       city_id,
+      ...(userType === 2 ? { service_cities: Array.isArray(service_cities) ? service_cities : [] } : {}),
       ...(area_id != null &&
       String(area_id).trim() !== '' &&
       mongoose.Types.ObjectId.isValid(String(area_id))
@@ -2252,6 +2254,7 @@ const update = async (req, res) => {
       'address',
       'state_id',
       'city_id',
+      'service_cities',
       'area_id',
       'pincode',
       'profile_url',
