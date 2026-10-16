@@ -228,15 +228,8 @@ const comparePartnerPlanPriority = (priorityA, priorityB) => {
  * Franchise partners with a non-expired active subscription on an active plan.
  * Sorted highest plan priority first, then name. Optional `limit` caps results.
  */
-const serviceCityFilter = (serviceCityId) => {
-  if (!serviceCityId || !mongoose.Types.ObjectId.isValid(String(serviceCityId))) {
-    return {};
-  }
-  return { service_cities: serviceCityId };
-};
-
 const loadSubscribedFranchisePartners = async (franchiseId, options = {}) => {
-  const { limit, serviceCityId } = options;
+  const { limit } = options;
 
   const partnerRows = await User.find({
     franchise_id: franchiseId,
@@ -245,7 +238,6 @@ const loadSubscribedFranchisePartners = async (franchiseId, options = {}) => {
     is_active: true,
     is_blocked: { $ne: true },
     deleted_at: null,
-    ...serviceCityFilter(serviceCityId),
   })
     .select('name profile_url user_id experience average_rating rating_count')
     .lean();
@@ -326,11 +318,7 @@ const pickRandomItems = (items, count) => {
  * Up to `limit` random banner URLs from active platinum partners in the franchise.
  * Franchise-scoped; one banner per partner; empty when none qualify.
  */
-const loadRandomPlatinumPartnerBanners = async (
-  franchiseId,
-  limit = HOME_PLATINUM_BANNERS_LIMIT,
-  serviceCityId = null
-) => {
+const loadRandomPlatinumPartnerBanners = async (franchiseId, limit = HOME_PLATINUM_BANNERS_LIMIT) => {
   const partnerRows = await User.find({
     franchise_id: franchiseId,
     type: USER_TYPE_PARTNER,
@@ -338,7 +326,6 @@ const loadRandomPlatinumPartnerBanners = async (
     is_active: true,
     is_blocked: { $ne: true },
     deleted_at: null,
-    ...serviceCityFilter(serviceCityId),
   })
     .select('_id')
     .lean();

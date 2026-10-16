@@ -232,17 +232,11 @@ const getHomeForLocation = async ({ location, userId }) => {
       .lean();
     const servicePrice = city?.city_service_price ?? 0;
 
-    const serviceCityId = franchiseCtx.area?.city_id ?? null;
     const [subscribed, banners] = await Promise.all([
       loadSubscribedFranchisePartners(franchiseCtx.franchise._id, {
         limit: HOME_PARTNERS_LIMIT,
-        serviceCityId,
       }),
-      loadRandomPlatinumPartnerBanners(
-        franchiseCtx.franchise._id,
-        HOME_BANNERS_LIMIT,
-        serviceCityId
-      ),
+      loadRandomPlatinumPartnerBanners(franchiseCtx.franchise._id, HOME_BANNERS_LIMIT),
     ]);
 
     const catalogResult = await buildFranchiseCategories(
