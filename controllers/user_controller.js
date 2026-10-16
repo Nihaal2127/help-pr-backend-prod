@@ -11,6 +11,7 @@ const { applyPagination, applyDropDownFilter } = require('../utils/pagination');
 const { parseBoolean } = require('../utils/parser');
 const BusinessInfo = require('../models/business_info');
 const Franchise = require('../models/franchise');
+const City = require('../models/city');
 const { getNewId } = require('../helper/id_generator');
 const { sanitizeInput } = require('../validator/search_keyword_validator');
 const {
@@ -2655,6 +2656,57 @@ const getById = async (req, res) => {
 
       response.is_verified = verificationStatusToIsVerified(user.verification_status);
       Object.assign(response, partnerRejectionReasonFields(user));
+
+      const userCityRef = response.city_id;
+      const userCityId =
+        userCityRef && typeof userCityRef === 'object' ? userCityRef._id : userCityRef;
+      let franchiseName = null;
+      let franchiseEmail = null;
+      let franchiseCities = [];
+      response.franchise_id = null;
+      if (userCityId && mongoose.Types.ObjectId.isValid(String(userCityId))) {
+        const franchise = await Franchise.findOne({
+          deleted_at: null,
+          city_id: userCityId,
+        })
+          .select('name admin_id city_id')
+          .populate({ path: 'city_id', select: 'name' })
+          .lean();
+        if (franchise) {
+          response.franchise_id = franchise._id;
+          franchiseName = franchise.name ?? null;
+          franchiseCities = (Array.isArray(franchise.city_id) ? franchise.city_id : [])
+            .filter((city) => String(city?._id ?? city) !== String(userCityId))
+            .map((city) => ({
+              _id: city?._id ?? city,
+              name: city?.name ?? null,
+            }));
+          if (franchise.admin_id) {
+            const franchiseAdmin = await User.findOne({
+              _id: franchise.admin_id,
+              deleted_at: null,
+            })
+              .select('email')
+              .lean();
+            franchiseEmail = franchiseAdmin?.email ?? null;
+          }
+        }
+      }
+      response.franchise_name = franchiseName;
+      response.franchise_email = franchiseEmail;
+      response.franchise_cities = franchiseCities;
+
+      const serviceCityIds = (Array.isArray(response.service_cities) ? response.service_cities : [])
+        .map((city) => (city && typeof city === 'object' ? city._id : city))
+        .filter((id) => id && mongoose.Types.ObjectId.isValid(String(id)));
+      const serviceCityRows = serviceCityIds.length
+        ? await City.find({ _id: { $in: serviceCityIds } }).select('name').lean()
+        : [];
+      const serviceCityNameById = new Map(serviceCityRows.map((city) => [String(city._id), city.name ?? null]));
+      response.service_cities = serviceCityIds.map((id) => ({
+        _id: id,
+        name: serviceCityNameById.get(String(id)) ?? null,
+      }));
     }
     return res.status(200).json({
       success: true,
