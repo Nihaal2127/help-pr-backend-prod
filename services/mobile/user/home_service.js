@@ -202,7 +202,7 @@ const getHomeForLocation = async ({ location, userId }) => {
     }
 
     const [franchiseCtx, orders, home_counts] = await Promise.all([
-      resolveFranchiseFromLocation(location, { requireFranchise: false }),
+      resolveFranchiseFromLocation(location, { requireFranchise: false, byCity: true }),
       loadCustomerHomeOrders(userId),
       loadHomeCounts(),
     ]);
