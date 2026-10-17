@@ -224,13 +224,24 @@ const comparePartnerPlanPriority = (priorityA, priorityB) => {
   return b - a;
 };
 
+/**
+ * City visibility for franchise partners:
+ * - empty / missing service_cities → franchise-wide (legacy)
+ * - service_cities set → location city must be home city_id or listed in service_cities
+ */
 const buildPartnerServesCityFilter = (cityId) => {
   if (cityId == null || !mongoose.Types.ObjectId.isValid(String(cityId))) {
     return null;
   }
   const cityOid = new mongoose.Types.ObjectId(String(cityId));
   return {
-    $or: [{ city_id: cityOid }, { service_cities: cityOid }],
+    $or: [
+      { service_cities: { $exists: false } },
+      { service_cities: null },
+      { service_cities: { $size: 0 } },
+      { city_id: cityOid },
+      { service_cities: cityOid },
+    ],
   };
 };
 
