@@ -122,15 +122,40 @@ const resolveFranchiseForArea = async (area) => {
   return { ok: true, franchise };
 };
 
+/** Franchise covering the area's city (ignores specific area_id). */
+const resolveFranchiseForCity = async (area) => {
+  if (!area?.state_id || !area?.city_id) {
+    return fail(400, 'No services are available in this location');
+  }
+
+  const franchise = await Franchise.findOne({
+    deleted_at: null,
+    is_active: true,
+    state_id: area.state_id,
+    city_id: area.city_id,
+  })
+    .sort({ updated_at: -1 })
+    .select('_id name')
+    .lean();
+
+  if (!franchise) {
+    return fail(400, 'No services are available in this location');
+  }
+
+  return { ok: true, franchise };
+};
+
 const resolveFranchiseFromLocation = async (rawLocation, options = {}) => {
-  const { requireFranchise = true } = options;
+  const { requireFranchise = true, byCity = false } = options;
   const parsed = parseLocationPayload(rawLocation);
   if (!parsed.ok) return parsed;
 
   const areaResult = await resolveAreaFromLocation(parsed.location);
   if (!areaResult.ok) return areaResult;
 
-  const franchiseResult = await resolveFranchiseForArea(areaResult.area);
+  const franchiseResult = byCity
+    ? await resolveFranchiseForCity(areaResult.area)
+    : await resolveFranchiseForArea(areaResult.area);
   if (!franchiseResult.ok) {
     if (requireFranchise) return franchiseResult;
     return {
