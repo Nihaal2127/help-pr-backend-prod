@@ -224,21 +224,38 @@ const comparePartnerPlanPriority = (priorityA, priorityB) => {
   return b - a;
 };
 
+const buildPartnerServesCityFilter = (cityId) => {
+  if (cityId == null || !mongoose.Types.ObjectId.isValid(String(cityId))) {
+    return null;
+  }
+  const cityOid = new mongoose.Types.ObjectId(String(cityId));
+  return {
+    $or: [{ city_id: cityOid }, { service_cities: cityOid }],
+  };
+};
+
 /**
  * Franchise partners with a non-expired active subscription on an active plan.
  * Sorted highest plan priority first, then name. Optional `limit` caps results.
+ * Optional `cityId` keeps partners whose home city or service_cities include that city.
  */
 const loadSubscribedFranchisePartners = async (franchiseId, options = {}) => {
-  const { limit } = options;
+  const { limit, cityId } = options;
 
-  const partnerRows = await User.find({
+  const partnerFilter = {
     franchise_id: franchiseId,
     type: USER_TYPE_PARTNER,
     verification_status: 2,
     is_active: true,
     is_blocked: { $ne: true },
     deleted_at: null,
-  })
+  };
+  const cityFilter = buildPartnerServesCityFilter(cityId);
+  if (cityFilter) {
+    Object.assign(partnerFilter, cityFilter);
+  }
+
+  const partnerRows = await User.find(partnerFilter)
     .select('name profile_url user_id experience average_rating rating_count')
     .lean();
 
@@ -317,16 +334,27 @@ const pickRandomItems = (items, count) => {
 /**
  * Up to `limit` random banner URLs from active platinum partners in the franchise.
  * Franchise-scoped; one banner per partner; empty when none qualify.
+ * Optional `options.cityId` keeps partners whose home city or service_cities include that city.
  */
-const loadRandomPlatinumPartnerBanners = async (franchiseId, limit = HOME_PLATINUM_BANNERS_LIMIT) => {
-  const partnerRows = await User.find({
+const loadRandomPlatinumPartnerBanners = async (
+  franchiseId,
+  limit = HOME_PLATINUM_BANNERS_LIMIT,
+  options = {}
+) => {
+  const partnerFilter = {
     franchise_id: franchiseId,
     type: USER_TYPE_PARTNER,
     verification_status: 2,
     is_active: true,
     is_blocked: { $ne: true },
     deleted_at: null,
-  })
+  };
+  const cityFilter = buildPartnerServesCityFilter(options.cityId);
+  if (cityFilter) {
+    Object.assign(partnerFilter, cityFilter);
+  }
+
+  const partnerRows = await User.find(partnerFilter)
     .select('_id')
     .lean();
 
