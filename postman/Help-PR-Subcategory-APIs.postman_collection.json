@@ -1,0 +1,267 @@
+{
+  "info": {
+    "_postman_id": "help-pr-subcategory-catalog-2026",
+    "name": "Help PR — Subcategory (catalog)",
+    "description": "CRUD + franchise request/approve APIs for **/api/subcategory**.\n\n**Setup**\n1. Set `baseUrl` (e.g. `http://localhost:5001`)\n2. Login via main collection **00 — Auth → Login** (or set `accessToken`)\n3. Set `categoryId` and `serviceId` to real ObjectIds from category/service\n4. After create, copy `_id` into `subcategoryId`\n\n**Hierarchy:** Category → Subcategory → Services\n\n**Roles**\n- Super Admin / Staff → `POST /create`, approve via `PUT /update/:id`\n- Franchise Admin → `POST /create-request`, `PUT /update-request/:id`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5001" },
+    { "key": "accessToken", "value": "" },
+    { "key": "categoryId", "value": "" },
+    { "key": "serviceId", "value": "" },
+    { "key": "subcategoryId", "value": "" },
+    { "key": "subcategoryRequestId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 — Create (Super Admin / Staff)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const j = pm.response.json();",
+              "  if (j.record && j.record._id) {",
+              "    pm.collectionVariables.set('subcategoryId', j.record._id);",
+              "  }",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Deep Cleaning\",\n  \"desc\": \"Deep cleaning subcategory under Home Cleaning\",\n  \"category_id\": \"{{categoryId}}\",\n  \"image_url\": \"https://example.com/subcategory.png\",\n  \"service_ids\": [\"{{serviceId}}\"]\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/subcategory/create",
+        "description": "Platform create. Server sets `is_request=false`, `approval_status=approve`, `is_active=true`, `requested_by=null`.\n\nRequired: `name`, `desc`, `category_id`, `image_url`, non-empty `service_ids` (or `services`).\n\nMultipart alternate: field `image` instead of `image_url`; `description` maps to `desc`; `category` maps to `category_id`."
+      }
+    },
+    {
+      "name": "01b — Create (multipart with image)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "name", "value": "Deep Cleaning", "type": "text" },
+            { "key": "description", "value": "Deep cleaning subcategory", "type": "text" },
+            { "key": "category_id", "value": "{{categoryId}}", "type": "text" },
+            { "key": "service_ids", "value": "[\"{{serviceId}}\"]", "type": "text" },
+            { "key": "image", "type": "file", "src": [], "description": "JPG/JPEG/PNG — select a file before send" }
+          ]
+        },
+        "url": "{{baseUrl}}/api/subcategory/create",
+        "description": "Same as create with multipart `image` upload."
+      }
+    },
+    {
+      "name": "02 — Create-request (Franchise Admin)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const j = pm.response.json();",
+              "  if (j.record && j.record._id) {",
+              "    pm.collectionVariables.set('subcategoryRequestId', j.record._id);",
+              "    pm.collectionVariables.set('subcategoryId', j.record._id);",
+              "  }",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Requested Subcategory\",\n  \"desc\": \"Franchise request for approval\",\n  \"category_id\": \"{{categoryId}}\",\n  \"image_url\": \"https://example.com/subcategory.png\",\n  \"service_ids\": [\"{{serviceId}}\"]\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/subcategory/create-request",
+        "description": "Franchise request. Server sets `is_request=true`, `approval_status=pending`, `requested_by`=JWT user, `is_active=false` by default."
+      }
+    },
+    {
+      "name": "03 — Get by id",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/subcategory/get/{{subcategoryId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "subcategory", "get", "{{subcategoryId}}"]
+        },
+        "description": "Returns subcategory with enriched `category_id` ({_id,name}), `services` ([{_id,name}]), and `requested_by` ({id,name}) when present."
+      }
+    },
+    {
+      "name": "04 — GetAll (catalog)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/subcategory/getAll?page=1&limit=10&category_id={{categoryId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "subcategory", "getAll"],
+          "query": [
+            { "key": "page", "value": "1" },
+            { "key": "limit", "value": "10" },
+            { "key": "category_id", "value": "{{categoryId}}" },
+            { "key": "keyword", "value": "", "disabled": true },
+            { "key": "is_active", "value": "true", "disabled": true },
+            { "key": "status", "value": "active", "disabled": true }
+          ]
+        },
+        "description": "Query: `page`, `limit`, `category_id`, `keyword`/`search`, `name`/`subcategory_name`, `is_active`, `is_request`, `approval_status`, `status=active|inactive|requested`.\n\nSuper Admin default list excludes requests (`is_request=false`) unless you pass `is_request` / `status=requested`."
+      }
+    },
+    {
+      "name": "05 — GetAll — requested (pending queue)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/subcategory/getAll?page=1&limit=10&status=requested&approval_status=pending",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "subcategory", "getAll"],
+          "query": [
+            { "key": "page", "value": "1" },
+            { "key": "limit", "value": "10" },
+            { "key": "status", "value": "requested" },
+            { "key": "approval_status", "value": "pending" },
+            { "key": "franchise_id", "value": "", "disabled": true }
+          ]
+        },
+        "description": "Franchise Admin sees requests from their franchise. Super Admin/Staff can optionally filter with `franchise_id`."
+      }
+    },
+    {
+      "name": "06 — GetDropDown",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/subcategory/getDropDown?category_id={{categoryId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "subcategory", "getDropDown"],
+          "query": [
+            { "key": "category_id", "value": "{{categoryId}}" }
+          ]
+        },
+        "description": "Active approved only (`is_active=true`, `is_request=false`). Optional `category_id`."
+      }
+    },
+    {
+      "name": "07 — Update (edit + is_active)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Deep Cleaning Updated\",\n  \"desc\": \"Updated description\",\n  \"category_id\": \"{{categoryId}}\",\n  \"image_url\": \"https://example.com/subcategory.png\",\n  \"service_ids\": [\"{{serviceId}}\"],\n  \"is_active\": true\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/subcategory/update/{{subcategoryId}}",
+        "description": "Edit fields including `is_active`. Partial updates allowed (omit fields you don't change). If sending `service_ids`, must be non-empty array."
+      }
+    },
+    {
+      "name": "08 — Update — approve request",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"approval_status\": \"approve\",\n  \"is_active\": true\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/subcategory/update/{{subcategoryRequestId}}",
+        "description": "Super Admin/Staff approve. Sets `is_request=false`, `approval_status=approve`, clears `rejection_reason`."
+      }
+    },
+    {
+      "name": "09 — Update — reject request",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"approval_status\": \"rejected\",\n  \"rejection_reason\": \"Incomplete details — please resubmit\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/subcategory/update/{{subcategoryRequestId}}",
+        "description": "`rejection_reason` is required when rejecting."
+      }
+    },
+    {
+      "name": "10 — Update-request (Franchise resubmit)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Requested Subcategory Revised\",\n  \"desc\": \"Updated after rejection feedback\",\n  \"category_id\": \"{{categoryId}}\",\n  \"image_url\": \"https://example.com/subcategory.png\",\n  \"service_ids\": [\"{{serviceId}}\"]\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/subcategory/update-request/{{subcategoryRequestId}}",
+        "description": "Requires all create-request fields. Server keeps/sets `is_request=true`, `approval_status=pending`."
+      }
+    },
+    {
+      "name": "11 — Delete (soft)",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/subcategory/delete/{{subcategoryId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "subcategory", "delete", "{{subcategoryId}}"]
+        },
+        "description": "Soft delete — sets `deleted_at`."
+      }
+    }
+  ]
+}

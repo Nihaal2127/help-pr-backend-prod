@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "help-pr-all-apis-merged",
     "name": "Help PR — All APIs (single collection)",
-    "description": "**Single Postman collection** for `help-pr-backend-staging`. Import only this file.\n\n**Generated:** 2026-05-20 via `node postman/merge-all-collections.mjs`\n\n**Sources merged (8) from `postman/archive/`:**\n- `archive/Help-PR-Orders-Module.postman_collection.json`\n- `archive/Help-PR-Order-Charges-Payments.postman_collection.json`\n- `archive/Help-PR-Partner-Franchise-Dropdowns.postman_collection.json`\n- `archive/content-expense-expense-category-management.postman_collection (1).json`\n- `archive/Area-Management.postman_collection.json`\n- `archive/Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json`\n- `archive/Help-PR-Area-Franchise-Subscription.postman_collection.json`\n- `archive/Help-PR-Admin-Dashboard.postman_collection.json`\n- Built-in: Partner payout (4 requests)\n- Built-in: Order refunds (4 requests)\n- Built-in: Partners browse — admin `GET /api/partners` (2 requests)\n- Built-in: Partner post management — admin `/api/partner-post` (4 requests)\n- Built-in: Appointment calendar — admin `/api/appointment` (6 requests)\n\n**Dedup:** Same HTTP method + path template (+ getCount `type` in body) → one request; higher-priority source wins.\n\n**Setup:** Set `baseUrl`. Run **00 — Auth → Login** to set `accessToken` / `token`.\n\n**Docs:** `docs/ORDER_MODULE_FRONTEND.md`, `docs/RAZORPAY_ONLINE_PAYMENTS_AUDIT.md`, `docs/SUBSCRIPTION_CHANGE_FRONTEND.md`, `docs/ORDER_GETALL_API_CHANGES.md`, `docs/APPOINTMENT_MODULE_FRONTEND.md`, `docs/PARTNER_PAYOUT_FRONTEND.md`, `docs/PARTNER_POST_FRONTEND.md`, `docs/REFUND_API.md`, `docs/REFUND_FRONTEND.md`, `postman/Help-PR-Refunds.postman_collection.json`\n\n**Mobile:** folder **Mobile → Partner** / **Mobile → User** — run `node postman/build-mobile-folder.mjs` to refresh.",
+    "description": "**Single Postman collection** for `help-pr-backend-staging`. Import only this file.\n\n**Generated:** 2026-05-20 via `node postman/merge-all-collections.mjs`\n\n**Sources merged (8) from `postman/archive/`:**\n- `archive/Help-PR-Orders-Module.postman_collection.json`\n- `archive/Help-PR-Order-Charges-Payments.postman_collection.json`\n- `archive/Help-PR-Partner-Franchise-Dropdowns.postman_collection.json`\n- `archive/content-expense-expense-category-management.postman_collection (1).json`\n- `archive/Area-Management.postman_collection.json`\n- `archive/Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json`\n- `archive/Help-PR-Area-Franchise-Subscription.postman_collection.json`\n- `archive/Help-PR-Admin-Dashboard.postman_collection.json`\n- Built-in: Partner payout (4 requests)\n- Built-in: Order refunds (4 requests)\n- Built-in: Partners browse — admin `GET /api/partners` (2 requests)\n- Built-in: Partner post management — admin `/api/partner-post` (4 requests)\n- Built-in: Appointment calendar — admin `/api/appointment` (6 requests)\n\n**Dedup:** Same HTTP method + path template (+ getCount `type` in body) → one request; higher-priority source wins.\n\n**Setup:** Set `baseUrl`. Run **00 — Auth → Login** to set `accessToken` / `token`.\n\n**Docs:** `docs/ORDER_MODULE_FRONTEND.md`, `docs/RAZORPAY_ONLINE_PAYMENTS_AUDIT.md`, `docs/SUBSCRIPTION_CHANGE_FRONTEND.md`, `docs/ORDER_GETALL_API_CHANGES.md`, `docs/APPOINTMENT_MODULE_FRONTEND.md`, `docs/PARTNER_PAYOUT_FRONTEND.md`, `docs/PARTNER_POST_FRONTEND.md`, `docs/REFUND_API.md`, `docs/REFUND_FRONTEND.md`, `postman/Help-PR-Refunds.postman_collection.json`\n\n**Mobile:** folder **Mobile → Partner** / **Mobile → User** — run `node postman/build-mobile-folder.mjs` to refresh.\n\n*** Subcategory patch 2026-10-17: added folder **10b — Subcategory (catalog)** (`/api/subcategory`). ***",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -3618,6 +3618,578 @@
       ]
     },
     {
+      "name": "10b — Subcategory (catalog)",
+      "description": "**/api/subcategory** — Category → Subcategory → Services.\n\nOrganized by role:\n- **Super Admin** — platform create, list, approve/reject, delete\n- **Franchise Admin** — create-request, list own requests, update-request",
+      "item": [
+        {
+          "name": "Super Admin",
+          "description": "Use Super Admin / Staff JWT (`accessToken`). Direct catalog create + approve/reject franchise requests.",
+          "item": [
+            {
+              "name": "Create",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "name",
+                      "value": "Deep Cleaning",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Deep cleaning subcategory",
+                      "type": "text"
+                    },
+                    {
+                      "key": "category_id",
+                      "value": "{{categoryId}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "service_ids",
+                      "value": "[\"{{serviceId}}\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "image",
+                      "type": "file",
+                      "src": [],
+                      "description": "JPG/JPEG/PNG — select a file before send"
+                    }
+                  ]
+                },
+                "url": "{{baseUrl}}/api/subcategory/create",
+                "description": "Platform create via multipart/form-data (same as UI). Fields: name, description/desc, category_id, service_ids, image (file). Server sets is_request=false, approval_status=approve, is_active=true."
+              }
+            },
+            {
+              "name": "Get by id",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/subcategory/get/{{subcategoryId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subcategory",
+                    "get",
+                    "{{subcategoryId}}"
+                  ]
+                },
+                "description": "Returns subcategory with enriched `category_id` ({_id,name}), `services` ([{_id,name}]), and `requested_by` ({id,name}) when present."
+              }
+            },
+            {
+              "name": "GetAll (catalog)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/subcategory/getAll?page=1&limit=10&category_id={{categoryId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subcategory",
+                    "getAll"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "category_id",
+                      "value": "{{categoryId}}"
+                    },
+                    {
+                      "key": "keyword",
+                      "value": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "is_active",
+                      "value": "true",
+                      "disabled": true
+                    },
+                    {
+                      "key": "status",
+                      "value": "active",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "Query: `page`, `limit`, `category_id`, `keyword`/`search`, `name`/`subcategory_name`, `is_active`, `is_request`, `approval_status`, `status=active|inactive|requested`.\n\nSuper Admin default list excludes requests (`is_request=false`) unless you pass `is_request` / `status=requested`."
+              }
+            },
+            {
+              "name": "GetAll — requested (pending queue)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/subcategory/getAll?page=1&limit=10&status=requested&approval_status=pending",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subcategory",
+                    "getAll"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "status",
+                      "value": "requested"
+                    },
+                    {
+                      "key": "approval_status",
+                      "value": "pending"
+                    },
+                    {
+                      "key": "franchise_id",
+                      "value": "",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "Franchise Admin sees requests from their franchise. Super Admin/Staff can optionally filter with `franchise_id`."
+              }
+            },
+            {
+              "name": "GetDropDown",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/subcategory/getDropDown?category_id={{categoryId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subcategory",
+                    "getDropDown"
+                  ],
+                  "query": [
+                    {
+                      "key": "category_id",
+                      "value": "{{categoryId}}"
+                    }
+                  ]
+                },
+                "description": "Active approved only (`is_active=true`, `is_request=false`). Optional `category_id`."
+              }
+            },
+            {
+              "name": "Update (edit + is_active)",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "name",
+                      "value": "Deep Cleaning Updated",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Updated description",
+                      "type": "text"
+                    },
+                    {
+                      "key": "category_id",
+                      "value": "{{categoryId}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "service_ids",
+                      "value": "[\"{{serviceId}}\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "is_active",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "image",
+                      "type": "file",
+                      "src": [],
+                      "description": "Optional new image"
+                    }
+                  ]
+                },
+                "url": "{{baseUrl}}/api/subcategory/update/{{subcategoryId}}",
+                "description": "Update via multipart/form-data. Includes editable is_active."
+              }
+            },
+            {
+              "name": "Approve request",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"approval_status\": \"approve\",\n  \"is_active\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": "{{baseUrl}}/api/subcategory/update/{{subcategoryRequestId}}",
+                "description": "Super Admin/Staff approve. Sets `is_request=false`, `approval_status=approve`, clears `rejection_reason`."
+              }
+            },
+            {
+              "name": "Reject request",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"approval_status\": \"rejected\",\n  \"rejection_reason\": \"Incomplete details — please resubmit\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": "{{baseUrl}}/api/subcategory/update/{{subcategoryRequestId}}",
+                "description": "`rejection_reason` is required when rejecting."
+              }
+            },
+            {
+              "name": "Delete (soft)",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/subcategory/delete/{{subcategoryId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subcategory",
+                    "delete",
+                    "{{subcategoryId}}"
+                  ]
+                },
+                "description": "Soft delete — sets `deleted_at`."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Franchise Admin",
+          "description": "Use Franchise Admin JWT (`accessToken`). Submit and resubmit subcategory requests for approval.",
+          "item": [
+            {
+              "name": "Create-request",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "  const j = pm.response.json();",
+                      "  if (j.record && j.record._id) {",
+                      "    pm.collectionVariables.set('subcategoryRequestId', j.record._id);",
+                      "    pm.collectionVariables.set('subcategoryId', j.record._id);",
+                      "  }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "name",
+                      "value": "Requested Subcategory",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Franchise request for approval",
+                      "type": "text"
+                    },
+                    {
+                      "key": "category_id",
+                      "value": "{{categoryId}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "service_ids",
+                      "value": "[\"{{serviceId}}\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "image",
+                      "type": "file",
+                      "src": [],
+                      "description": "JPG/JPEG/PNG — select a file before send"
+                    }
+                  ]
+                },
+                "url": "{{baseUrl}}/api/subcategory/create-request",
+                "description": "Franchise create-request via multipart/form-data (same as UI)."
+              }
+            },
+            {
+              "name": "Get by id",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/subcategory/get/{{subcategoryId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subcategory",
+                    "get",
+                    "{{subcategoryId}}"
+                  ]
+                },
+                "description": "Returns subcategory with enriched `category_id` ({_id,name}), `services` ([{_id,name}]), and `requested_by` ({id,name}) when present."
+              }
+            },
+            {
+              "name": "GetAll — my requested (pending queue)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/subcategory/getAll?page=1&limit=10&status=requested&approval_status=pending",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subcategory",
+                    "getAll"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "status",
+                      "value": "requested"
+                    },
+                    {
+                      "key": "approval_status",
+                      "value": "pending"
+                    },
+                    {
+                      "key": "franchise_id",
+                      "value": "",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "Franchise Admin sees requests from their franchise. Super Admin/Staff can optionally filter with `franchise_id`."
+              }
+            },
+            {
+              "name": "GetDropDown",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/subcategory/getDropDown?category_id={{categoryId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subcategory",
+                    "getDropDown"
+                  ],
+                  "query": [
+                    {
+                      "key": "category_id",
+                      "value": "{{categoryId}}"
+                    }
+                  ]
+                },
+                "description": "Active approved only (`is_active=true`, `is_request=false`). Optional `category_id`."
+              }
+            },
+            {
+              "name": "Update-request (resubmit)",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "name",
+                      "value": "Requested Subcategory Revised",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Updated after rejection feedback",
+                      "type": "text"
+                    },
+                    {
+                      "key": "category_id",
+                      "value": "{{categoryId}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "service_ids",
+                      "value": "[\"{{serviceId}}\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "image",
+                      "type": "file",
+                      "src": [],
+                      "description": "Optional new image"
+                    }
+                  ]
+                },
+                "url": "{{baseUrl}}/api/subcategory/update-request/{{subcategoryRequestId}}",
+                "description": "Franchise update-request via multipart/form-data."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "11 — Service (catalog)",
       "description": "**/api/service** — 16 request(s). Duplicates merged across source collections.",
       "item": [
@@ -4216,8 +4788,14 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/user/create",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "user", "create"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "create"
+              ]
             },
             "description": "POST /api/user/create. Partner (`type` 2). `service_cities` is an array of city ObjectIds. The test script stores `record._id` in `partnerId` and `userId`."
           }
@@ -4249,8 +4827,15 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/api/user/get/{{partnerId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "user", "get", "{{partnerId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "get",
+                "{{partnerId}}"
+              ]
             },
             "description": "GET /api/user/get/:id. Dashboard read. `record.service_cities` is the stored city id list."
           }
@@ -4295,8 +4880,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/user/update/{{partnerId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "user", "update", "{{partnerId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "update",
+                "{{partnerId}}"
+              ]
             },
             "description": "PUT /api/user/update/:id. Replaces the stored list. Set `serviceCityId3` before sending, or reuse `serviceCityId`."
           }
@@ -4341,8 +4933,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/user/update/{{partnerId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "user", "update", "{{partnerId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "update",
+                "{{partnerId}}"
+              ]
             },
             "description": "Omits `service_cities`. The previous city list must stay unchanged. Compare `record.service_cities` with the get from step 2 after the replace."
           }
@@ -4387,8 +4986,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/user/update/{{partnerId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "user", "update", "{{partnerId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "update",
+                "{{partnerId}}"
+              ]
             },
             "description": "Sends an empty array. The stored list is cleared."
           }
@@ -26320,6 +26926,18 @@
       "value": "Internal ops note — franchise scoped",
       "type": "string",
       "description": "Optional admin-only note for POST /api/quote/create, PUT /api/quote/update/:id, POST /api/order/create, PUT /api/order/update/:id. Omit or null if unset. Not available on mobile customer APIs."
+    },
+    {
+      "key": "subcategoryId",
+      "value": ""
+    },
+    {
+      "key": "subcategoryRequestId",
+      "value": ""
+    },
+    {
+      "key": "categoryId",
+      "value": ""
     }
   ]
 }

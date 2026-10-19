@@ -4,7 +4,8 @@ Use **one** collection for all APIs:
 
 | File | Purpose |
 |------|---------|
-| **`Help-PR-All-APIs.postman_collection.json`** | All modules, deduplicated |
+| **`Help-PR-All-APIs.postman_collection.json`** | All modules, deduplicated (includes **10b — Subcategory**) |
+| **`Help-PR-Subcategory-APIs.postman_collection.json`** | **Subcategory catalog only** — `/api/subcategory` CRUD + request/approve |
 | **`Help-PR-Refunds.postman_collection.json`** | **Order refunds** — `/api/refund` (4 requests) |
 | **`Help-PR-Financial-Order-Payments.postman_collection.json`** | Financial order payments grid |
 | **`Help-PR-Mobile-APIs.postman_collection.json`** | **Mobile only** — `/api/mobile/partner` register & login |
@@ -23,6 +24,8 @@ Legacy per-module collections live in **`archive/`** (not for import).
 **Order refunds:** see `docs/REFUND_API.md` and folder **38 — Refunds** (or import `Help-PR-Refunds.postman_collection.json`).
 
 **Partner mobile app (full collection):** **Mobile → Partner**. **Mobile-only collection:** import **`Help-PR-Mobile-APIs.postman_collection.json`** — **Register** / **Login**; **Subscription → List plans**; **Catalog → Categories**; **My services → List** / **Update** (`GET`/`PUT /api/mobile/partner/my-services`).
+
+**Subcategory catalog:** folder **10b — Subcategory (catalog)** in All-APIs, or import **`Help-PR-Subcategory-APIs.postman_collection.json`**. Set `categoryId` + `serviceId`, then run create / create-request / approve.
 
 ## Regenerate after API changes
 
