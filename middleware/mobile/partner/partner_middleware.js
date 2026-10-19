@@ -661,20 +661,50 @@ const validatePartnerCatalogIfPresent = (req, res) => {
         return false;
       }
 
-      if (Array.isArray(item.services)) {
+      const hasSubcategories = Array.isArray(item.subcategories);
+      const hasServices = Array.isArray(item.services);
+
+      if (hasSubcategories || hasServices) {
         const missing = [];
         const categoryErr = getCategoryStep1Error(item.category_id);
         if (categoryErr) missing.push(categoryErr);
-        if (!Array.isArray(item.services) || item.services.length === 0) {
-          missing.push('Service is required.');
-        } else {
-          for (let j = 0; j < item.services.length; j++) {
-            const svcMissing = getMissingNestedServiceFields(item.services[j]);
-            for (const msg of svcMissing) {
-              if (!missing.includes(msg)) missing.push(msg);
+
+        if (hasSubcategories) {
+          if (item.subcategories.length === 0) {
+            missing.push('Sub category is required.');
+          }
+          for (let s = 0; s < item.subcategories.length; s++) {
+            const sub = item.subcategories[s];
+            const subId = sub?.subcategory_id ?? sub?.subcategoryId;
+            if (!subId || !mongoose.Types.ObjectId.isValid(String(subId))) {
+              missing.push('Sub category is required.');
+            }
+            if (!Array.isArray(sub?.services) || sub.services.length === 0) {
+              missing.push('Service is required.');
+            } else {
+              for (let j = 0; j < sub.services.length; j++) {
+                const svcMissing = getMissingNestedServiceFields(sub.services[j]);
+                for (const msg of svcMissing) {
+                  if (!missing.includes(msg)) missing.push(msg);
+                }
+              }
             }
           }
         }
+
+        if (hasServices) {
+          if (item.services.length === 0 && !hasSubcategories) {
+            missing.push('Service is required.');
+          } else {
+            for (let j = 0; j < item.services.length; j++) {
+              const svcMissing = getMissingNestedServiceFields(item.services[j]);
+              for (const msg of svcMissing) {
+                if (!missing.includes(msg)) missing.push(msg);
+              }
+            }
+          }
+        }
+
         if (missing.length > 0) {
           return respondPartnerCatalogValidationErrors(res, missing);
         }
@@ -769,6 +799,23 @@ const collectPartnerCatalogRows = (body) => {
   if (Array.isArray(partnerServices) && partnerServices.length > 0) {
     for (const item of partnerServices) {
       if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+      if (Array.isArray(item.subcategories)) {
+        const parentCategoryId = item.category_id;
+        for (const sub of item.subcategories) {
+          if (!sub || typeof sub !== 'object' || Array.isArray(sub)) continue;
+          if (!Array.isArray(sub.services)) continue;
+          for (const svc of sub.services) {
+            if (!svc || typeof svc !== 'object' || Array.isArray(svc)) continue;
+            const categoryId = svc.category_id ?? parentCategoryId;
+            const serviceId = svc.service_id ?? svc.serviceId;
+            if (getCategoryStep1Error(categoryId) || getServiceStep1Error(serviceId)) continue;
+            rows.push({
+              category_id: String(categoryId).trim(),
+              service_id: String(serviceId).trim(),
+            });
+          }
+        }
+      }
       if (Array.isArray(item.services)) {
         const parentCategoryId = item.category_id;
         for (const svc of item.services) {
@@ -781,7 +828,7 @@ const collectPartnerCatalogRows = (body) => {
             service_id: String(serviceId).trim(),
           });
         }
-      } else {
+      } else if (!Array.isArray(item.subcategories)) {
         const categoryId = item.category_id;
         const serviceId = item.service_id ?? item.serviceId;
         if (getCategoryStep1Error(categoryId) || getServiceStep1Error(serviceId)) continue;

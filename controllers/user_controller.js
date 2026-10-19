@@ -4,6 +4,8 @@ const User = require('../models/user');
 const Address = require('../models/address');
 const Area = require('../models/area');
 const PartnerServices = require('../models/partner_service');
+const PartnerCategory = require('../models/partner_category');
+const PartnerSubcategory = require('../models/partner_subcategory');
 const notificationSetting = require('../models/notification_settings');
 const { validationResult } = require('express-validator');
 const { createOtp } = require('./otp_controller')
@@ -599,6 +601,117 @@ function partnerServiceRowsToCategoriesAndServices(rows) {
   };
 }
 
+/**
+ * Nest flat partner_service rows into Category → Subcategory → Service
+ * for partner add/edit forms.
+ */
+function nestPartnerServicesCatalog(rows, categoryActiveMap = new Map(), subcategoryActiveMap = new Map()) {
+  const byCat = new Map();
+
+  for (const r of rows || []) {
+    const catRef = r.category_id;
+    const catId =
+      catRef && typeof catRef === 'object' && catRef._id
+        ? String(catRef._id)
+        : catRef
+          ? String(catRef)
+          : null;
+    if (!catId) continue;
+
+    if (!byCat.has(catId)) {
+      byCat.set(catId, {
+        category_id:
+          catRef && typeof catRef === 'object' && catRef._id
+            ? { _id: catRef._id, name: catRef.name ?? null }
+            : catRef,
+        is_active: categoryActiveMap.has(catId) ? categoryActiveMap.get(catId) !== false : true,
+        subcategories: new Map(),
+        services: [],
+      });
+    }
+    const catNode = byCat.get(catId);
+
+    const servicePayload = {
+      _id: r._id,
+      service_id:
+        r.service_id && typeof r.service_id === 'object' && r.service_id._id
+          ? { _id: r.service_id._id, name: r.service_id.name ?? null }
+          : r.service_id,
+      description: r.description ?? '',
+      price: r.price ?? 0,
+      payment_type: r.payment_type ?? '',
+      tax: r.tax ?? 0,
+      minimum_deposit: r.minimum_deposit ?? 0,
+      is_active: r.is_active !== false,
+      is_accept_request: r.is_accept_request === true,
+    };
+
+    const subRef = r.subcategory_id;
+    const subId =
+      subRef && typeof subRef === 'object' && subRef._id
+        ? String(subRef._id)
+        : subRef
+          ? String(subRef)
+          : null;
+
+    if (subId) {
+      if (!catNode.subcategories.has(subId)) {
+        catNode.subcategories.set(subId, {
+          subcategory_id:
+            subRef && typeof subRef === 'object' && subRef._id
+              ? {
+                  _id: subRef._id,
+                  name: subRef.name ?? null,
+                  subcategory_id: subRef.subcategory_id ?? '',
+                }
+              : subRef,
+          is_active: subcategoryActiveMap.has(subId)
+            ? subcategoryActiveMap.get(subId) !== false
+            : true,
+          services: [],
+        });
+      }
+      catNode.subcategories.get(subId).services.push(servicePayload);
+    } else {
+      catNode.services.push(servicePayload);
+    }
+  }
+
+  return [...byCat.values()].map((cat) => ({
+    category_id: cat.category_id,
+    is_active: cat.is_active,
+    subcategories: [...cat.subcategories.values()],
+    ...(cat.services.length > 0 ? { services: cat.services } : {}),
+  }));
+}
+
+async function loadNestedPartnerServicesForPartner(partnerId) {
+  const [psRows, pcRows, pscRows] = await Promise.all([
+    PartnerServices.find({ partner_id: partnerId, deleted_at: null })
+      .populate([
+        { path: 'category_id', select: 'name' },
+        { path: 'subcategory_id', select: 'name subcategory_id' },
+        { path: 'service_id', select: 'name' },
+      ])
+      .lean(),
+    PartnerCategory.find({ partner_id: partnerId, deleted_at: null })
+      .select('category_id is_active')
+      .lean(),
+    PartnerSubcategory.find({ partner_id: partnerId, deleted_at: null })
+      .select('subcategory_id is_active')
+      .lean(),
+  ]);
+
+  const categoryActiveMap = new Map(
+    pcRows.map((r) => [String(r.category_id), r.is_active !== false])
+  );
+  const subcategoryActiveMap = new Map(
+    pscRows.map((r) => [String(r.subcategory_id), r.is_active !== false])
+  );
+
+  return nestPartnerServicesCatalog(psRows, categoryActiveMap, subcategoryActiveMap);
+}
+
 const parseBooleanInput = (value) => {
   if (typeof value === 'boolean') return value;
   if (typeof value === 'string') {
@@ -664,6 +777,59 @@ const parseJsonIfString = (value, fallback) => {
   return value;
 };
 
+const pushNormalizedPartnerServiceRows = (
+  rows,
+  {
+    categoryId,
+    subcategoryId = null,
+    categoryIsActive = true,
+    subcategoryIsActive = true,
+    services,
+  }
+) => {
+  if (!Array.isArray(services)) return;
+  for (const svc of services) {
+    if (svc === undefined || svc === null) continue;
+    let sid = null;
+    let description = '';
+    let price = null;
+    let payment_type = '';
+    let tax = null;
+    let minimum_deposit = null;
+    let serviceIsActive = true;
+    let rowCategoryId = categoryId;
+    let rowSubcategoryId = subcategoryId;
+    if (typeof svc === 'string' || typeof svc === 'number') {
+      const s = String(svc).trim();
+      if (mongoose.Types.ObjectId.isValid(s)) sid = s;
+    } else if (typeof svc === 'object' && !Array.isArray(svc)) {
+      sid = svc.service_id ?? svc.serviceId ?? null;
+      description = svc.description != null ? String(svc.description) : '';
+      price = svc.price;
+      payment_type = svc.payment_type != null ? String(svc.payment_type).trim() : '';
+      tax = svc.tax;
+      minimum_deposit = svc.minimum_deposit;
+      if (svc.is_active !== undefined) serviceIsActive = svc.is_active !== false;
+      if (svc.category_id) rowCategoryId = svc.category_id;
+      if (svc.subcategory_id) rowSubcategoryId = svc.subcategory_id;
+    }
+    if (!sid || !mongoose.Types.ObjectId.isValid(String(sid))) continue;
+    rows.push({
+      category_id: rowCategoryId,
+      subcategory_id: rowSubcategoryId,
+      service_id: sid,
+      description,
+      price,
+      payment_type,
+      tax,
+      minimum_deposit,
+      is_active: serviceIsActive,
+      category_is_active: categoryIsActive,
+      subcategory_is_active: subcategoryIsActive,
+    });
+  }
+};
+
 const normalizePartnerServices = (payload) => {
   const parsed = parseJsonIfString(payload, []);
   if (!Array.isArray(parsed)) return [];
@@ -671,49 +837,42 @@ const normalizePartnerServices = (payload) => {
   for (const item of parsed) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
     const categoryIsActive = item.is_active !== undefined ? item.is_active !== false : true;
-    if (Array.isArray(item.services)) {
-      const parentCategoryId = item.category_id ?? null;
-      for (const svc of item.services) {
-        if (svc === undefined || svc === null) continue;
-        let sid = null;
-        let description = '';
-        let price = null;
-        let payment_type = '';
-        let tax = null;
-        let minimum_deposit = null;
-        let serviceIsActive = true;
-        if (typeof svc === 'string' || typeof svc === 'number') {
-          const s = String(svc).trim();
-          if (mongoose.Types.ObjectId.isValid(s)) sid = s;
-        } else if (typeof svc === 'object' && !Array.isArray(svc)) {
-          sid = svc.service_id ?? svc.serviceId ?? null;
-          description = svc.description != null ? String(svc.description) : '';
-          price = svc.price;
-          payment_type = svc.payment_type != null ? String(svc.payment_type).trim() : '';
-          tax = svc.tax;
-          minimum_deposit = svc.minimum_deposit;
-          if (svc.is_active !== undefined) serviceIsActive = svc.is_active !== false;
-        }
-        if (!sid || !mongoose.Types.ObjectId.isValid(String(sid))) continue;
-        rows.push({
-          category_id: svc && typeof svc === 'object' && !Array.isArray(svc) && svc.category_id
-            ? svc.category_id
-            : parentCategoryId,
-          service_id: sid,
-          description,
-          price,
-          payment_type,
-          tax,
-          minimum_deposit,
-          is_active: serviceIsActive,
-          category_is_active: categoryIsActive,
+    const parentCategoryId = item.category_id ?? null;
+
+    if (Array.isArray(item.subcategories)) {
+      for (const sub of item.subcategories) {
+        if (!sub || typeof sub !== 'object' || Array.isArray(sub)) continue;
+        const subcategoryId = sub.subcategory_id ?? sub.subcategoryId ?? null;
+        if (!subcategoryId || !mongoose.Types.ObjectId.isValid(String(subcategoryId))) continue;
+        const subcategoryIsActive =
+          sub.is_active !== undefined ? sub.is_active !== false : true;
+        pushNormalizedPartnerServiceRows(rows, {
+          categoryId: parentCategoryId,
+          subcategoryId,
+          categoryIsActive,
+          subcategoryIsActive,
+          services: sub.services,
         });
       }
-    } else {
+    }
+
+    if (Array.isArray(item.services)) {
+      pushNormalizedPartnerServiceRows(rows, {
+        categoryId: parentCategoryId,
+        subcategoryId: item.subcategory_id ?? item.subcategoryId ?? null,
+        categoryIsActive,
+        subcategoryIsActive:
+          item.subcategory_is_active !== undefined
+            ? item.subcategory_is_active !== false
+            : true,
+        services: item.services,
+      });
+    } else if (!Array.isArray(item.subcategories)) {
       const sid = item.service_id ?? item.serviceId ?? null;
       if (!sid || !mongoose.Types.ObjectId.isValid(String(sid))) continue;
       rows.push({
         category_id: item.category_id ?? null,
+        subcategory_id: item.subcategory_id ?? item.subcategoryId ?? null,
         service_id: sid,
         description: item.description != null ? String(item.description) : '',
         price: item.price,
@@ -722,6 +881,10 @@ const normalizePartnerServices = (payload) => {
         minimum_deposit: item.minimum_deposit,
         is_active: item.is_active !== undefined ? item.is_active !== false : true,
         category_is_active: categoryIsActive,
+        subcategory_is_active:
+          item.subcategory_is_active !== undefined
+            ? item.subcategory_is_active !== false
+            : true,
       });
     }
   }
@@ -1310,6 +1473,8 @@ const getAll = async (req, res) => {
     const customerIdsInPage = populatedUser.filter((u) => Number(u.type) === 4).map((u) => u._id);
     const customerSubmittedRatings = await buildCustomerSubmittedRatingMap(customerIdsInPage);
     const partnerIdToServiceRows = new Map();
+    const partnerIdToCategoryActive = new Map();
+    const partnerIdToSubcategoryActive = new Map();
     const partnerIdToRichUser = new Map();
     const partnerIdToBank = new Map();
     const partnerIdToSubs = new Map();
@@ -1321,6 +1486,7 @@ const getAll = async (req, res) => {
       })
         .populate([
           { path: 'category_id', select: 'name' },
+          { path: 'subcategory_id', select: 'name subcategory_id' },
           { path: 'service_id', select: 'name' },
         ])
         .lean();
@@ -1329,6 +1495,33 @@ const getAll = async (req, res) => {
         const key = row.partner_id.toString();
         if (!partnerIdToServiceRows.has(key)) partnerIdToServiceRows.set(key, []);
         partnerIdToServiceRows.get(key).push(row);
+      }
+
+      const [pcRowsForPage, pscRowsForPage] = await Promise.all([
+        PartnerCategory.find({
+          partner_id: { $in: partnerIdsInPage },
+          deleted_at: null,
+        })
+          .select('partner_id category_id is_active')
+          .lean(),
+        PartnerSubcategory.find({
+          partner_id: { $in: partnerIdsInPage },
+          deleted_at: null,
+        })
+          .select('partner_id subcategory_id is_active')
+          .lean(),
+      ]);
+      for (const r of pcRowsForPage) {
+        const key = String(r.partner_id);
+        if (!partnerIdToCategoryActive.has(key)) partnerIdToCategoryActive.set(key, new Map());
+        partnerIdToCategoryActive.get(key).set(String(r.category_id), r.is_active !== false);
+      }
+      for (const r of pscRowsForPage) {
+        const key = String(r.partner_id);
+        if (!partnerIdToSubcategoryActive.has(key)) partnerIdToSubcategoryActive.set(key, new Map());
+        partnerIdToSubcategoryActive
+          .get(key)
+          .set(String(r.subcategory_id), r.is_active !== false);
       }
 
       const richPartners = await User.find({ _id: { $in: partnerIdsInPage } })
@@ -1422,7 +1615,11 @@ const getAll = async (req, res) => {
         row.bank_account = partnerIdToBank.get(pid) ?? null;
 
         const psRows = partnerIdToServiceRows.get(pid) || [];
-        row.partner_services = psRows;
+        row.partner_services = nestPartnerServicesCatalog(
+          psRows,
+          partnerIdToCategoryActive.get(pid) || new Map(),
+          partnerIdToSubcategoryActive.get(pid) || new Map()
+        );
         const agg = partnerServiceRowsToCategoriesAndServices(psRows);
         row.categories = agg.categories;
         row.services = agg.services;
@@ -2629,15 +2826,7 @@ const getById = async (req, res) => {
       response.documents = mappedDocuments;
       response.partner_documents = mappedDocuments;
 
-      response.partner_services = await PartnerServices.find({
-        partner_id: user._id,
-        deleted_at: null,
-      })
-        .populate([
-          { path: 'category_id', select: 'name' },
-          { path: 'service_id', select: 'name' },
-        ])
-        .lean();
+      response.partner_services = await loadNestedPartnerServicesForPartner(user._id);
 
       response.partner_subscriptions = await PartnerSubscription.find({
         partner_id: user._id,

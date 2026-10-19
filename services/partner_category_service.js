@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const PartnerCategory = require('../models/partner_category');
+const PartnerSubcategory = require('../models/partner_subcategory');
 const PartnerService = require('../models/partner_service');
 const Service = require('../models/service');
 const { onPartnerCategoriesDeactivated } = require('./catalog_cascade_service');
@@ -260,6 +261,38 @@ async function replacePartnerCategoriesFromSignupRows(partnerId, normalizedRows)
     await PartnerCategory.insertMany(pcDocs);
   }
 
+  const bySub = new Map();
+  const subActiveBySub = new Map();
+  const subCategoryBySub = new Map();
+  for (const r of normalizedRows) {
+    if (!r.category_id || !r.service_id || !r.subcategory_id) continue;
+    const subStr = String(r.subcategory_id);
+    const s = String(r.service_id);
+    if (!bySub.has(subStr)) bySub.set(subStr, new Set());
+    bySub.get(subStr).add(s);
+    subCategoryBySub.set(subStr, String(r.category_id));
+    if (r.subcategory_is_active !== undefined) {
+      subActiveBySub.set(subStr, r.subcategory_is_active !== false);
+    }
+  }
+
+  const pscDocs = [];
+  for (const [subStr, set] of bySub) {
+    pscDocs.push({
+      partner_id: partnerOid,
+      category_id: toOid(subCategoryBySub.get(subStr)),
+      subcategory_id: toOid(subStr),
+      services: [...set].map((id) => toOid(id)),
+      is_active: subActiveBySub.has(subStr) ? subActiveBySub.get(subStr) : true,
+      created_at: new Date(),
+      updated_at: new Date(),
+      deleted_at: null,
+    });
+  }
+  if (pscDocs.length > 0) {
+    await PartnerSubcategory.insertMany(pscDocs);
+  }
+
   const detailLastByService = new Map();
   for (const r of normalizedRows) {
     if (!r.category_id || !r.service_id) continue;
@@ -274,6 +307,7 @@ async function replacePartnerCategoriesFromSignupRows(partnerId, normalizedRows)
     psRows.push({
       partner_id: partnerOid,
       category_id: toOid(catStr),
+      subcategory_id: r.subcategory_id ? toOid(r.subcategory_id) : null,
       service_id: toOid(sidStr),
       description: r.description != null ? String(r.description) : '',
       price: coerceNumber(r.price, 0),
@@ -323,6 +357,10 @@ async function replacePartnerCatalogFromNormalizedRows(partnerId, normalizedRows
     { partner_id: partnerOid, deleted_at: null },
     { $set: { deleted_at: now, updated_at: now } }
   );
+  await PartnerSubcategory.updateMany(
+    { partner_id: partnerOid, deleted_at: null },
+    { $set: { deleted_at: now, updated_at: now } }
+  );
   await PartnerService.updateMany(
     { partner_id: partnerOid, deleted_at: null },
     { $set: { deleted_at: now, updated_at: now } }
@@ -343,6 +381,8 @@ async function mergePartnerCatalogFromNormalizedRows(partnerId, normalizedRows) 
   if (!Array.isArray(normalizedRows) || normalizedRows.length === 0) return;
 
   const byCat = new Map();
+  const bySub = new Map();
+  const subCategoryBySub = new Map();
   const detailLastByService = new Map();
 
   for (const r of normalizedRows) {
@@ -352,6 +392,12 @@ async function mergePartnerCatalogFromNormalizedRows(partnerId, normalizedRows) 
     if (!byCat.has(catStr)) byCat.set(catStr, new Set());
     byCat.get(catStr).add(sidStr);
     detailLastByService.set(sidStr, r);
+    if (r.subcategory_id) {
+      const subStr = String(r.subcategory_id);
+      if (!bySub.has(subStr)) bySub.set(subStr, new Set());
+      bySub.get(subStr).add(sidStr);
+      subCategoryBySub.set(subStr, catStr);
+    }
   }
 
   for (const [catStr, serviceSet] of byCat) {
@@ -376,6 +422,33 @@ async function mergePartnerCatalogFromNormalizedRows(partnerId, normalizedRows) 
     );
   }
 
+  for (const [subStr, serviceSet] of bySub) {
+    const catOid = toOid(subCategoryBySub.get(subStr));
+    await PartnerSubcategory.findOneAndUpdate(
+      {
+        partner_id: partnerOid,
+        subcategory_id: toOid(subStr),
+        deleted_at: null,
+      },
+      {
+        $set: {
+          updated_at: new Date(),
+          category_id: catOid,
+        },
+        $setOnInsert: {
+          partner_id: partnerOid,
+          subcategory_id: toOid(subStr),
+          category_id: catOid,
+          is_active: true,
+          created_at: new Date(),
+          deleted_at: null,
+        },
+        $addToSet: { services: { $each: [...serviceSet].map((id) => toOid(id)) } },
+      },
+      { upsert: true, new: true }
+    );
+  }
+
   const masterPaymentTypes = await loadMasterPaymentTypesByServiceId([...detailLastByService.keys()]);
 
   for (const [sidStr, r] of detailLastByService) {
@@ -384,6 +457,7 @@ async function mergePartnerCatalogFromNormalizedRows(partnerId, normalizedRows) 
     const requestedPaymentType = trimPaymentType(r.payment_type);
     const updateFields = {
       category_id: catOid,
+      subcategory_id: r.subcategory_id ? toOid(r.subcategory_id) : null,
       description: r.description != null ? String(r.description) : '',
       price: coerceNumber(r.price, 0),
       payment_type: requestedPaymentType,

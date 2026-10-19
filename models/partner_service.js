@@ -6,6 +6,7 @@ var partnerServiceSchema = new schema(
     {
         partner_id: { type: mongoose.Schema.Types.ObjectId, default: null, ref: 'user' },
         category_id: { type: mongoose.Schema.Types.ObjectId, default: null, ref: 'category' },
+        subcategory_id: { type: mongoose.Schema.Types.ObjectId, default: null, ref: 'subcategory' },
         service_id: { type: mongoose.Schema.Types.ObjectId, default: null, ref: 'service' },
         is_accept_request: { type: Boolean, default: false },
 
@@ -31,6 +32,7 @@ var partnerServiceSchema = new schema(
 partnerServiceSchema.index({ partner_id: 1, service_id: 1, deleted_at: 1 }, { unique: true });
 partnerServiceSchema.index({ partner_id: 1 });
 partnerServiceSchema.index({ service_id: 1 });
+partnerServiceSchema.index({ subcategory_id: 1 });
 partnerServiceSchema.index({ is_accept_request: 1 });
 
 

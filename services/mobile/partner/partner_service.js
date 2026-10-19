@@ -160,6 +160,59 @@ const createAddressRecord = async ({
   });
 };
 
+const pushNormalizedPartnerServiceRows = (
+  rows,
+  {
+    categoryId,
+    subcategoryId = null,
+    categoryIsActive = true,
+    subcategoryIsActive = true,
+    services,
+  }
+) => {
+  if (!Array.isArray(services)) return;
+  for (const svc of services) {
+    if (svc === undefined || svc === null) continue;
+    let sid = null;
+    let description = '';
+    let price = null;
+    let payment_type = '';
+    let tax = null;
+    let minimum_deposit = null;
+    let serviceIsActive = true;
+    let rowCategoryId = categoryId;
+    let rowSubcategoryId = subcategoryId;
+    if (typeof svc === 'string' || typeof svc === 'number') {
+      const s = String(svc).trim();
+      if (mongoose.Types.ObjectId.isValid(s)) sid = s;
+    } else if (typeof svc === 'object' && !Array.isArray(svc)) {
+      sid = svc.service_id ?? svc.serviceId ?? null;
+      description = svc.description != null ? String(svc.description) : '';
+      price = svc.price;
+      payment_type = svc.payment_type != null ? String(svc.payment_type).trim() : '';
+      tax = svc.tax;
+      minimum_deposit = svc.minimum_deposit;
+      if (svc.is_active !== undefined) serviceIsActive = svc.is_active !== false;
+      if (svc.category_id) rowCategoryId = svc.category_id;
+      if (svc.subcategory_id) rowSubcategoryId = svc.subcategory_id;
+    }
+    if (!sid || !mongoose.Types.ObjectId.isValid(String(sid))) continue;
+    rows.push({
+      category_id: rowCategoryId,
+      subcategory_id: rowSubcategoryId,
+      service_id: sid,
+      description,
+      price,
+      payment_type,
+      tax,
+      minimum_deposit,
+      is_active: serviceIsActive,
+      category_is_active: categoryIsActive,
+      subcategory_is_active: subcategoryIsActive,
+    });
+  }
+};
+
 const normalizePartnerServices = (payload) => {
   const parsed = parseJsonIfString(payload, []);
   if (!Array.isArray(parsed)) return [];
@@ -167,50 +220,42 @@ const normalizePartnerServices = (payload) => {
   for (const item of parsed) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
     const categoryIsActive = item.is_active !== undefined ? item.is_active !== false : true;
-    if (Array.isArray(item.services)) {
-      const parentCategoryId = item.category_id ?? null;
-      for (const svc of item.services) {
-        if (svc === undefined || svc === null) continue;
-        let sid = null;
-        let description = '';
-        let price = null;
-        let payment_type = '';
-        let tax = null;
-        let minimum_deposit = null;
-        let serviceIsActive = true;
-        if (typeof svc === 'string' || typeof svc === 'number') {
-          const s = String(svc).trim();
-          if (mongoose.Types.ObjectId.isValid(s)) sid = s;
-        } else if (typeof svc === 'object' && !Array.isArray(svc)) {
-          sid = svc.service_id ?? svc.serviceId ?? null;
-          description = svc.description != null ? String(svc.description) : '';
-          price = svc.price;
-          payment_type = svc.payment_type != null ? String(svc.payment_type).trim() : '';
-          tax = svc.tax;
-          minimum_deposit = svc.minimum_deposit;
-          if (svc.is_active !== undefined) serviceIsActive = svc.is_active !== false;
-        }
-        if (!sid || !mongoose.Types.ObjectId.isValid(String(sid))) continue;
-        rows.push({
-          category_id:
-            svc && typeof svc === 'object' && !Array.isArray(svc) && svc.category_id
-              ? svc.category_id
-              : parentCategoryId,
-          service_id: sid,
-          description,
-          price,
-          payment_type,
-          tax,
-          minimum_deposit,
-          is_active: serviceIsActive,
-          category_is_active: categoryIsActive,
+    const parentCategoryId = item.category_id ?? null;
+
+    if (Array.isArray(item.subcategories)) {
+      for (const sub of item.subcategories) {
+        if (!sub || typeof sub !== 'object' || Array.isArray(sub)) continue;
+        const subcategoryId = sub.subcategory_id ?? sub.subcategoryId ?? null;
+        if (!subcategoryId || !mongoose.Types.ObjectId.isValid(String(subcategoryId))) continue;
+        const subcategoryIsActive =
+          sub.is_active !== undefined ? sub.is_active !== false : true;
+        pushNormalizedPartnerServiceRows(rows, {
+          categoryId: parentCategoryId,
+          subcategoryId,
+          categoryIsActive,
+          subcategoryIsActive,
+          services: sub.services,
         });
       }
-    } else {
+    }
+
+    if (Array.isArray(item.services)) {
+      pushNormalizedPartnerServiceRows(rows, {
+        categoryId: parentCategoryId,
+        subcategoryId: item.subcategory_id ?? item.subcategoryId ?? null,
+        categoryIsActive,
+        subcategoryIsActive:
+          item.subcategory_is_active !== undefined
+            ? item.subcategory_is_active !== false
+            : true,
+        services: item.services,
+      });
+    } else if (!Array.isArray(item.subcategories)) {
       const sid = item.service_id ?? item.serviceId ?? null;
       if (!sid || !mongoose.Types.ObjectId.isValid(String(sid))) continue;
       rows.push({
         category_id: item.category_id ?? null,
+        subcategory_id: item.subcategory_id ?? item.subcategoryId ?? null,
         service_id: sid,
         description: item.description != null ? String(item.description) : '',
         price: item.price,
@@ -219,6 +264,10 @@ const normalizePartnerServices = (payload) => {
         minimum_deposit: item.minimum_deposit,
         is_active: item.is_active !== undefined ? item.is_active !== false : true,
         category_is_active: categoryIsActive,
+        subcategory_is_active:
+          item.subcategory_is_active !== undefined
+            ? item.subcategory_is_active !== false
+            : true,
       });
     }
   }
