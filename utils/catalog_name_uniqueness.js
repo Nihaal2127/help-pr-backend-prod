@@ -20,6 +20,20 @@ const categoryNameExistsQuery = (name, excludeId = null) =>
 const serviceNameExistsQuery = (name, excludeId = null) =>
     globalCatalogNameExistsQuery(normalizeCatalogName(name), excludeId);
 
+/** Case-insensitive name uniqueness within a parent category among non-deleted subcategories. */
+const subcategoryNameExistsQuery = (name, categoryId, excludeId = null) => {
+    const trimmedName = normalizeCatalogName(name);
+    const query = {
+        deleted_at: null,
+        category_id: categoryId,
+        name: new RegExp(`^${escapeRegExp(trimmedName)}$`, 'i'),
+    };
+    if (excludeId) {
+        query._id = { $ne: excludeId };
+    }
+    return query;
+};
+
 const findExistingCatalogNames = async (Model, names) => {
     const trimmed = [...new Set(names.map(normalizeCatalogName).filter(Boolean))];
     if (trimmed.length === 0) return [];
@@ -47,6 +61,7 @@ module.exports = {
     normalizeCatalogName,
     categoryNameExistsQuery,
     serviceNameExistsQuery,
+    subcategoryNameExistsQuery,
     findExistingCatalogNames,
     importFileDuplicateNamesMessage,
 };

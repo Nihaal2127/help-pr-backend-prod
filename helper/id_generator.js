@@ -2,6 +2,7 @@ const User = require('../models/user');
 const PartnerDocument = require('../models/partner_document');
 const Category = require('../models/category');
 const Service = require('../models/service');
+const Subcategory = require('../models/subcategory');
 const Order = require('../models/order');
 const Quote = require('../models/quote');
 const Ticket = require('../models/ticket');
@@ -173,6 +174,18 @@ const getServiceId = async () => {
         return 'S1001';
     }
 };
+const getSubcategoryId = async () => {
+    let records = await Subcategory.find().sort({ _id: -1 });
+    if (records.length > 0) {
+        const lastRecord = records[0];
+        const subcategory_id = lastRecord.subcategory_id;
+        const result = extractNumber(subcategory_id);
+        const incId = result + 1;
+        return 'SC' + incId;
+    } else {
+        return 'SC1001';
+    }
+};
 const getOrderId = async () => {
     let records = await Order.find().sort({ _id: -1 });
     if (records.length > 0) {
@@ -265,6 +278,7 @@ module.exports = {
     getVerificationId,
     getCategoryId,
     getServiceId,
+    getSubcategoryId,
     getOrderId,
     getOfferId,
     getTicketId,
