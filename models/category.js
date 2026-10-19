@@ -1,5 +1,22 @@
 const mongoose = require("mongoose");
 
+const embeddedSubcategorySchema = new mongoose.Schema(
+  {
+    subcategory_id: { type: String, default: "", trim: true },
+    name: { type: String, required: true, trim: true },
+    services: {
+      type: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "service",
+        },
+      ],
+      default: [],
+    },
+  }
+  // _id defaults true — set to subcategory document _id when syncing
+);
+
 const categorySchema = new mongoose.Schema(
   {
     category_id: { type: String, required: true, trim: true },
@@ -12,6 +29,10 @@ const categorySchema = new mongoose.Schema(
           ref: "service",
         },
       ],
+      default: [],
+    },
+    subcategories: {
+      type: [embeddedSubcategorySchema],
       default: [],
     },
     image_url: { type: String, required: true, trim: true },

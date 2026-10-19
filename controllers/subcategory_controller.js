@@ -17,6 +17,9 @@ const {
   normalizeCatalogName,
   subcategoryNameExistsQuery,
 } = require("../utils/catalog_name_uniqueness");
+const {
+  syncCategoryEmbeddedSubcategories,
+} = require("../utils/sync_category_subcategories");
 
 const asBodyBool = (value, defaultValue) => {
   if (value === undefined) return defaultValue;
@@ -493,6 +496,13 @@ const create = async (req, res) => {
     });
 
     const savedSubcategory = await newSubcategory.save();
+    if (!isRequest) {
+      try {
+        await syncCategoryEmbeddedSubcategories(savedSubcategory.category_id);
+      } catch (syncErr) {
+        console.error("subcategory create category sync failed:", syncErr.message);
+      }
+    }
     return res.status(200).json({
       success: true,
       status: 200,
@@ -544,6 +554,8 @@ const update = async (req, res) => {
         message: "No record found",
       });
     }
+
+    const previousCategoryId = subcategory.category_id;
 
     const nextCategoryId =
       updateData.category_id !== undefined
@@ -697,6 +709,18 @@ const update = async (req, res) => {
     subcategory.updated_at = Date.now();
     const updatedSubcategory = await subcategory.save();
 
+    try {
+      await syncCategoryEmbeddedSubcategories(updatedSubcategory.category_id);
+      if (
+        previousCategoryId &&
+        String(previousCategoryId) !== String(updatedSubcategory.category_id)
+      ) {
+        await syncCategoryEmbeddedSubcategories(previousCategoryId);
+      }
+    } catch (syncErr) {
+      console.error("subcategory update category sync failed:", syncErr.message);
+    }
+
     return res.status(200).json({
       success: true,
       status: 200,
@@ -802,9 +826,16 @@ const deleteSubcategory = async (req, res) => {
       });
     }
 
+    const categoryIdForSync = subcategory.category_id;
     subcategory.deleted_at = new Date();
     subcategory.updated_at = Date.now();
     await subcategory.save();
+
+    try {
+      await syncCategoryEmbeddedSubcategories(categoryIdForSync);
+    } catch (syncErr) {
+      console.error("subcategory delete category sync failed:", syncErr.message);
+    }
 
     return res.status(200).json({
       success: true,

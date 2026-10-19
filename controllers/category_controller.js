@@ -4,6 +4,7 @@ const User = require('../models/user');
 const City = require('../models/city');
 const State = require('../models/state');
 const Service = require('../models/service');
+const Subcategory = require('../models/subcategory');
 const franchiseCategoryService = require('../services/franchise_category_service');
 const { applyCatalogRequestScopeForCaller } = require('../utils/franchise_catalog_request_scope');
 const { applyPagination, applyDropDownFilter } = require('../utils/pagination');
@@ -227,6 +228,79 @@ const attachServiceNames = async (records) => {
   });
 };
 
+/** Attach subcategories (+ service names) for category getAll / getById. */
+const attachSubcategories = async (records) => {
+  if (!Array.isArray(records) || records.length === 0) return records;
+
+  const categoryIds = [
+    ...new Set(
+      records
+        .map((record) => record?._id)
+        .filter((id) => mongoose.Types.ObjectId.isValid(String(id)))
+        .map((id) => String(id))
+    ),
+  ];
+
+  if (categoryIds.length === 0) {
+    return records.map((record) => {
+      const plainRecord =
+        record && typeof record.toObject === "function" ? record.toObject() : record;
+      return { ...plainRecord, subcategories: [] };
+    });
+  }
+
+  const objectIds = categoryIds.map((id) => new mongoose.Types.ObjectId(id));
+  const subRows = await Subcategory.find({
+    category_id: { $in: objectIds },
+    deleted_at: null,
+    is_request: false,
+  })
+    .select("_id subcategory_id name services category_id")
+    .lean();
+
+  const nestedServiceIds = [
+    ...new Set(
+      subRows
+        .flatMap((row) => (Array.isArray(row.services) ? row.services : []))
+        .filter((id) => mongoose.Types.ObjectId.isValid(String(id)))
+        .map((id) => String(id))
+    ),
+  ];
+
+  let serviceMap = new Map();
+  if (nestedServiceIds.length > 0) {
+    const services = await Service.find({
+      _id: { $in: nestedServiceIds },
+      deleted_at: null,
+    }).select("name");
+    serviceMap = new Map(services.map((s) => [String(s._id), s.name]));
+  }
+
+  const byCategory = new Map();
+  for (const row of subRows) {
+    const key = String(row.category_id);
+    if (!byCategory.has(key)) byCategory.set(key, []);
+    byCategory.get(key).push({
+      _id: row._id,
+      subcategory_id: row.subcategory_id || "",
+      name: row.name || "",
+      services: (Array.isArray(row.services) ? row.services : []).map((id) => ({
+        _id: String(id),
+        name: serviceMap.get(String(id)) || null,
+      })),
+    });
+  }
+
+  return records.map((record) => {
+    const plainRecord =
+      record && typeof record.toObject === "function" ? record.toObject() : record;
+    return {
+      ...plainRecord,
+      subcategories: byCategory.get(String(plainRecord._id)) || [],
+    };
+  });
+};
+
 const getAll = async (req, res) => {
 
   try {
@@ -439,7 +513,8 @@ const getAll = async (req, res) => {
     }
 
     const requestedByEnrichedCategories = await attachRequestedByUser(categories);
-    const enrichedCategories = await attachServiceNames(requestedByEnrichedCategories);
+    const withServices = await attachServiceNames(requestedByEnrichedCategories);
+    const enrichedCategories = await attachSubcategories(withServices);
 
     res.status(200).json({
       success: true,
@@ -769,7 +844,8 @@ const getById = async (req, res) => {
     }
 
     const [requestedByEnrichedCategory] = await attachRequestedByUser([category]);
-    const [enrichedCategory] = await attachServiceNames([requestedByEnrichedCategory]);
+    const [withServices] = await attachServiceNames([requestedByEnrichedCategory]);
+    const [enrichedCategory] = await attachSubcategories([withServices]);
 
     res.status(200).json({
       success: true,
