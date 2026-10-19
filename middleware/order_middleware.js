@@ -4,6 +4,8 @@ const City = require('../models/city')
 
 const Category = require('../models/category')
 
+const Subcategory = require('../models/subcategory')
+
 const Service = require('../models/service')
 const Offer = require('../models/offer')
 
@@ -21,6 +23,69 @@ const isValidPositiveAmount = (value) => {
 
 };
 
+const validateOptionalSubcategory = async ({
+    subcategory_id,
+    category_id,
+    service_id,
+}) => {
+    const hasSubcategory =
+        subcategory_id !== undefined &&
+        subcategory_id !== null &&
+        String(subcategory_id).trim() !== '';
+
+    if (!hasSubcategory) {
+        return { ok: true };
+    }
+
+    const sub = await checkObjectIdExists(
+        Subcategory,
+        subcategory_id,
+        'subcategory'
+    );
+    if (!sub.exists) {
+        return { ok: false, message: sub.message };
+    }
+
+    const subDoc = await Subcategory.findOne({
+        _id: subcategory_id,
+        deleted_at: null,
+    })
+        .select('category_id services')
+        .lean();
+    if (!subDoc) {
+        return { ok: false, message: 'Subcategory not found.' };
+    }
+
+    if (
+        category_id !== undefined &&
+        category_id !== null &&
+        String(category_id).trim() !== '' &&
+        subDoc.category_id &&
+        String(subDoc.category_id) !== String(category_id)
+    ) {
+        return {
+            ok: false,
+            message: 'Subcategory does not belong to the selected category.',
+        };
+    }
+
+    if (
+        service_id !== undefined &&
+        service_id !== null &&
+        String(service_id).trim() !== ''
+    ) {
+        const serviceIds = (subDoc.services || []).map((id) => String(id));
+        if (!serviceIds.includes(String(service_id))) {
+            return {
+                ok: false,
+                message: 'Service does not belong to the selected subcategory.',
+            };
+        }
+    }
+
+    return { ok: true };
+};
+
 
 
 const createOrderMiddleware = async (req, res, next) => {
@@ -36,6 +101,8 @@ const createOrderMiddleware = async (req, res, next) => {
         city_id,
 
         category_id,
+
+        subcategory_id,
 
         is_paid,
 
@@ -118,6 +185,44 @@ const createOrderMiddleware = async (req, res, next) => {
             status: 409,
 
             message: categoryResult.message,
+
+        });
+
+    }
+
+    const singleItemForSub =
+
+        Array.isArray(service_items) && service_items.length === 1
+
+            ? service_items[0]
+
+            : {};
+
+    const resolvedServiceIdForSub = service_id ?? singleItemForSub.service_id;
+
+    const resolvedSubcategoryId =
+
+        subcategory_id ?? singleItemForSub.subcategory_id;
+
+    const subcategoryCheck = await validateOptionalSubcategory({
+
+        subcategory_id: resolvedSubcategoryId,
+
+        category_id,
+
+        service_id: resolvedServiceIdForSub,
+
+    });
+
+    if (!subcategoryCheck.ok) {
+
+        return res.status(409).json({
+
+            success: false,
+
+            status: 409,
+
+            message: subcategoryCheck.message,
 
         });
 
@@ -359,6 +464,8 @@ const checkItemsMiddleware = async (req, res, next) => {
 
             category_id,
 
+            subcategory_id,
+
             service_id,
 
             service_date,
@@ -422,6 +529,30 @@ const checkItemsMiddleware = async (req, res, next) => {
                 status: 409,
 
                 message: categoryResult.message,
+
+            });
+
+        }
+
+        const itemSubcategoryCheck = await validateOptionalSubcategory({
+
+            subcategory_id,
+
+            category_id,
+
+            service_id,
+
+        });
+
+        if (!itemSubcategoryCheck.ok) {
+
+            return res.status(409).json({
+
+                success: false,
+
+                status: 409,
+
+                message: itemSubcategoryCheck.message,
 
             });
 

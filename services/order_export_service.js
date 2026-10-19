@@ -4,6 +4,7 @@ const Quote = require('../models/quote');
 const User = require('../models/user');
 const Service = require('../models/service');
 const Category = require('../models/category');
+const Subcategory = require('../models/subcategory');
 const City = require('../models/city');
 const State = require('../models/state');
 const Address = require('../models/address');
@@ -84,6 +85,7 @@ const ORDER_EXPORT_SEARCH_FIELDS = [
   '_created_by.user_id',
   '_category.name',
   '_category.category_id',
+  '_subcategory.name',
   '_service.name',
   '_service.service_id',
   '_city.name',
@@ -103,6 +105,7 @@ const ORDER_EXPORT_HEADERS = [
   'Partner Name',
   'Partner ID',
   'Category',
+  'Subcategory',
   'Service',
   'State',
   'City',
@@ -265,6 +268,7 @@ const mapOrderToExportRow = (order) => {
     partner_name: pickRefName(order.partner_id),
     partner_id: pickUserDisplayId(order.partner_id),
     category: pickRefName(order.category_id),
+    subcategory: pickRefName(order.subcategory_id),
     service: pickRefName(order.service_id),
     state: pickRefName(address?.state_id),
     city: order.city_name || pickRefName(address?.city_id) || pickRefName(order.city_id),
@@ -367,6 +371,7 @@ const buildOrderExportBaseFilter = async (req) => {
     'employee_id',
     'city_id',
     'category_id',
+    'subcategory_id',
     'service_id',
   ]);
   if (!objectIdValidation.ok) {
@@ -379,6 +384,7 @@ const buildOrderExportBaseFilter = async (req) => {
     'employee_id',
     'city_id',
     'category_id',
+    'subcategory_id',
     'service_id',
   ]);
 
@@ -422,6 +428,7 @@ const fetchOrdersForExport = async (req) => {
   const collections = getListCollectionNames({
     users: User,
     categories: Category,
+    subcategories: Subcategory,
     services: Service,
     cities: City,
     franchise: Franchise,

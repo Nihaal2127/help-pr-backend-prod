@@ -8,6 +8,11 @@ const QUOTE_MOBILE_DETAIL_POPULATE = [
     select:
       'name category_id desc image_url approval_status is_request is_active rejection_reason',
   },
+  {
+    path: 'subcategory_id',
+    select:
+      'name subcategory_id desc image_url category_id approval_status is_request is_active rejection_reason',
+  },
   { path: 'service_id', select: 'name service_id desc image_url tax commission payment_type' },
   { path: 'franchise_id', select: 'name city_name state_name' },
   {
@@ -26,6 +31,7 @@ const QUOTE_MOBILE_DETAIL_POPULATE = [
 const CUSTOMER_QUOTE_FIELD_UPDATE_KEYS = [
   'partner_id',
   'category_id',
+  'subcategory_id',
   'service_id',
   'address_id',
   'from_date',

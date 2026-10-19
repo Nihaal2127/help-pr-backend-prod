@@ -2932,7 +2932,7 @@
     },
     {
       "name": "10 — Category (catalog)",
-      "description": "**/api/category** — 17 request(s). Duplicates merged across source collections.",
+      "description": "**/api/category** — 17 request(s). Duplicates merged across source collections.\n\n**getAll / get/:id** return nested **`subcategories[]`** (`_id`, `subcategory_id`, `name`, `services`) under each category (approved, non-deleted).",
       "item": [
         {
           "name": "Category — create",
@@ -3513,7 +3513,7 @@
     },
     {
       "name": "10b — Subcategory (catalog)",
-      "description": "**/api/subcategory** — Category → Subcategory → Services.\n\nOrganized by role:\n- **Super Admin** — platform create, list, approve/reject, delete\n- **Franchise Admin** — create-request, list own requests, update-request",
+      "description": "**/api/subcategory** — Category → Subcategory → Services.\n\nOrganized by role:\n- **Super Admin** — platform create (services required), list, approve/reject, delete\n- **Franchise Admin / Employee** — create-request / update-request: **name, category_id, description, image** only (services optional)\n\nVars: `{{categoryId}}`, `{{serviceId}}`, `{{subcategoryId}}`, `{{subcategoryRequestId}}`.",
       "item": [
         {
           "name": "Super Admin",
@@ -3914,18 +3914,66 @@
                     {
                       "key": "service_ids",
                       "value": "[\"{{serviceId}}\"]",
-                      "type": "text"
+                      "type": "text",
+                      "disabled": true,
+                      "description": "Optional — not required on create-request"
                     },
                     {
                       "key": "image",
                       "type": "file",
                       "src": [],
-                      "description": "JPG/JPEG/PNG — select a file before send"
+                      "description": "JPG/JPEG/PNG — select a file before send (required)"
                     }
                   ]
                 },
                 "url": "{{baseUrl}}/api/subcategory/create-request",
-                "description": "Franchise create-request via multipart/form-data (same as UI)."
+                "description": "Franchise Admin / Employee request. **Required:** `name`, `category_id`, `description`/`desc`, `image` (file) or `image_url`. **Services optional** (omit `service_ids`). Server sets `is_request=true`, `approval_status=pending`, `requested_by`=JWT user."
+              }
+            },
+            {
+              "name": "Create-request (JSON, no services)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "  const j = pm.response.json();",
+                      "  if (j.record && j.record._id) {",
+                      "    pm.collectionVariables.set('subcategoryRequestId', j.record._id);",
+                      "    pm.collectionVariables.set('subcategoryId', j.record._id);",
+                      "  }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Requested Subcategory JSON\",\n  \"desc\": \"Franchise request without services\",\n  \"category_id\": \"{{categoryId}}\",\n  \"image_url\": \"https://example.com/subcategory.png\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": "{{baseUrl}}/api/subcategory/create-request",
+                "description": "JSON create-request with **no** `service_ids` — should return 200."
               }
             },
             {
@@ -4065,18 +4113,20 @@
                     {
                       "key": "service_ids",
                       "value": "[\"{{serviceId}}\"]",
-                      "type": "text"
+                      "type": "text",
+                      "disabled": true,
+                      "description": "Optional — not required on update-request"
                     },
                     {
                       "key": "image",
                       "type": "file",
                       "src": [],
-                      "description": "Optional new image"
+                      "description": "Optional new image (or send image_url)"
                     }
                   ]
                 },
                 "url": "{{baseUrl}}/api/subcategory/update-request/{{subcategoryRequestId}}",
-                "description": "Franchise update-request via multipart/form-data."
+                "description": "Franchise Admin / Employee resubmit. **Required:** `name`, `category_id`, `description`/`desc`, `image`/`image_url`. **Services optional**. Server sets `is_request=true`, `approval_status=pending`."
               }
             }
           ]
@@ -4635,26 +4685,23 @@
       ]
     },
     {
-      "name": "12a — Partner service cities (dashboard)",
-      "description": "Test `service_cities` on the dashboard partner APIs only.\n\n**Setup**\n1. Set `baseUrl` (default `http://localhost:5001`).\n2. Run **00 — Auth → Login** so `token` / `accessToken` is a back-office JWT (franchise admin, employee, super admin, or staff).\n3. Set `franchiseId`, `stateId`, `cityId` (home city), `areaId`, `subscription_plan_id`.\n4. Set `serviceCityId` and `serviceCityId2` to two city ids that belong to that franchise. They can be the same as `cityId`.\n5. If create returns 409, change `email` and `phone_number` in the create body and send again.\n\n**Order**\n1. Create partner with service cities\n2. Get partner (saved list)\n3. Update service cities (replace list)\n4. Get partner (new list)\n5. Update without service_cities (list stays)\n6. Clear service cities\n7. Get partner (empty list)\n\n`city_id` is the partner home city. `service_cities` is the extra list of cities where they offer services.",
+      "name": "12 — User",
+      "description": "**/api/user** — non-partner users (employee / customer / admin).\nOne request per action. Partner APIs are in **12 — Partner**.",
       "item": [
         {
-          "name": "1. Create partner with service cities",
+          "name": "Create user",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const j = pm.response.json();",
-                  "pm.test('status 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('service_cities has 2 ids', function () {",
-                  "  pm.expect(j.record.service_cities).to.be.an('array').with.lengthOf(2);",
-                  "});",
-                  "if (j.record && j.record._id) {",
-                  "  pm.collectionVariables.set('partnerId', String(j.record._id));",
-                  "  pm.collectionVariables.set('userId', String(j.record._id));",
-                  "}"
+                  "try {",
+                  "  const j = pm.response.json();",
+                  "  if (j && j.record && j.record._id) {",
+                  "    pm.collectionVariables.set('userId', String(j.record._id));",
+                  "  }",
+                  "} catch (e) {}"
                 ]
               }
             }
@@ -4663,17 +4710,19 @@
             "method": "POST",
             "header": [
               {
-                "key": "Content-Type",
-                "value": "application/json"
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
               },
               {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Service Cities Partner\",\n  \"email\": \"partner.cities+{{$timestamp}}@example.com\",\n  \"phone_number\": \"+91{{$timestamp}}\",\n  \"password\": \"Test@1234\",\n  \"confirm_password\": \"Test@1234\",\n  \"type\": 2,\n  \"is_from_web\": true,\n  \"is_active\": true,\n  \"is_business\": false,\n  \"date_of_birth\": \"1995-01-15\",\n  \"gender\": \"male\",\n  \"experience\": \"3 years\",\n  \"address\": \"12 Test Street\",\n  \"state_id\": \"{{stateId}}\",\n  \"city_id\": \"{{cityId}}\",\n  \"area_id\": \"{{areaId}}\",\n  \"pincode\": \"500001\",\n  \"franchise_id\": \"{{franchiseId}}\",\n  \"service_cities\": [\"{{serviceCityId}}\", \"{{serviceCityId2}}\"],\n  \"subscription_plan_id\": \"{{subscription_plan_id}}\",\n  \"subscription_start_date\": \"2026-01-01\",\n  \"subscription_end_date\": \"2026-12-31\",\n  \"bank_name\": \"Test Bank\",\n  \"branch_name\": \"Main Branch\",\n  \"ifsc_code\": \"TEST0001234\",\n  \"account_name\": \"Service Cities Partner\",\n  \"account_number\": \"9988{{$timestamp}}\",\n  \"profile_url\": \"https://example.com/profile.png\"\n}",
+              "raw": "{\n  \"name\": \"Example Employee\",\n  \"email\": \"employee.example+{{$timestamp}}@example.com\",\n  \"phone_number\": \"+919812345678\",\n  \"password\": \"Test@1234\",\n  \"type\": 3,\n  \"is_from_web\": true,\n  \"is_active\": true,\n  \"franchise_id\": \"{{franchiseId}}\",\n  \"chat\": true,\n  \"accessible_screens\": []\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -4691,284 +4740,8 @@
                 "create"
               ]
             },
-            "description": "POST /api/user/create. Partner (`type` 2). `service_cities` is an array of city ObjectIds. The test script stores `record._id` in `partnerId` and `userId`."
+            "description": "Create employee (`type` 3) or customer (`type` 4). For partners use **12 — Partner → Create partner**."
           }
-        },
-        {
-          "name": "2. Get partner",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const j = pm.response.json();",
-                  "pm.test('status 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('record includes service_cities', function () {",
-                  "  pm.expect(j.record.service_cities).to.be.an('array');",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/user/get/{{partnerId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "user",
-                "get",
-                "{{partnerId}}"
-              ]
-            },
-            "description": "GET /api/user/get/:id. Dashboard read. `record.service_cities` is the stored city id list."
-          }
-        },
-        {
-          "name": "3. Update service cities (replace list)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const j = pm.response.json();",
-                  "pm.test('status 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('service_cities replaced', function () {",
-                  "  pm.expect(j.record.service_cities).to.be.an('array').with.lengthOf(2);",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"service_cities\": [\"{{serviceCityId2}}\", \"{{serviceCityId3}}\"]\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/user/update/{{partnerId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "user",
-                "update",
-                "{{partnerId}}"
-              ]
-            },
-            "description": "PUT /api/user/update/:id. Replaces the stored list. Set `serviceCityId3` before sending, or reuse `serviceCityId`."
-          }
-        },
-        {
-          "name": "4. Update without service_cities (list stays)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('status 200', function () { pm.response.to.have.status(200); });",
-                  "const j = pm.response.json();",
-                  "pm.test('service_cities still present', function () {",
-                  "  pm.expect(j.record.service_cities).to.be.an('array');",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"experience\": \"4 years\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/user/update/{{partnerId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "user",
-                "update",
-                "{{partnerId}}"
-              ]
-            },
-            "description": "Omits `service_cities`. The previous city list must stay unchanged. Compare `record.service_cities` with the get from step 2 after the replace."
-          }
-        },
-        {
-          "name": "5. Clear service cities",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const j = pm.response.json();",
-                  "pm.test('status 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('service_cities cleared', function () {",
-                  "  pm.expect(j.record.service_cities).to.eql([]);",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"service_cities\": []\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/user/update/{{partnerId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "user",
-                "update",
-                "{{partnerId}}"
-              ]
-            },
-            "description": "Sends an empty array. The stored list is cleared."
-          }
-        }
-      ]
-    },
-    {
-      "name": "12 — User",
-      "description": "**/api/user** — 19 request(s). Duplicates merged across source collections.",
-      "item": [
-        {
-          "name": "Change password",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"user_id\": \"{{userId}}\",\n  \"type\": 4,\n  \"new_password\": \"Test@5678\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/user/changePassword",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "user",
-                "changePassword"
-              ]
-            },
-            "description": "**`type`**: **2** (partner) or **4** (end user) only."
-          },
-          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 07 — User management → User_"
-        },
-        {
-          "name": "Change password",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "POST",
-            "description": "POST /api/user/changePassword. Supported `type` values: 2 (partner) or 4 (user). Send `new_password` only; `confirm_password` is not used by the API.",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"user_id\": \"{{id}}\",\n  \"type\": 4,\n  \"new_password\": \"Test@1234\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/user/changePassword"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → User_"
         },
         {
           "name": "Create Super Admin (web)",
@@ -4977,51 +4750,18 @@
             "header": [
               {
                 "key": "Content-Type",
-                "value": "application/json"
+                "value": "application/json",
+                "type": "text"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Super Admin User\",\n  \"email\": \"superadmin@example.com\",\n  \"phone_number\": \"+919900000001\",\n  \"type\": 5,\n  \"is_from_web\": true,\n  \"created_by_id\": \"{{created_by_id}}\",\n  \"accessible_screens\": [\"dashboard\", \"users\", \"subscriptions\"]\n}"
-            },
-            "url": "{{base_url}}/api/user/create",
-            "description": "Creates Super Admin via web flow. Random password is generated and emailed."
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json → User (New Types)_"
-        },
-        {
-          "name": "Create user",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "try {",
-                  "  const j = pm.response.json();",
-                  "  if (j && j.record && j.record._id) {",
-                  "    pm.collectionVariables.set('userId', String(j.record._id));",
-                  "  }",
-                  "} catch (e) {}"
-                ],
-                "type": "text/javascript"
+              "raw": "{\n  \"name\": \"Super Admin User\",\n  \"email\": \"superadmin+{{$timestamp}}@example.com\",\n  \"phone_number\": \"+919900000001\",\n  \"type\": 5,\n  \"is_from_web\": true,\n  \"created_by_id\": \"{{created_by_id}}\",\n  \"accessible_screens\": [\"dashboard\", \"users\", \"subscriptions\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
               }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Example Employee\",\n  \"email\": \"employee.example+{{$timestamp}}@example.com\",\n  \"phone_number\": \"+919812345678\",\n  \"password\": \"Test@1234\",\n  \"type\": 3,\n  \"is_from_web\": true,\n  \"is_active\": true,\n  \"franchise_id\": \"{{franchiseId}}\",\n  \"chat\": true,\n  \"accessible_screens\": []\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/user/create",
@@ -5034,53 +4774,8 @@
                 "create"
               ]
             },
-            "description": "**`POST /api/user/create`** — Bearer required. Route uses **`uploadImages.single(\"image\")`**; JSON works when no file is sent (Express JSON body). For profile upload use **form-data** with field **`image`** (file) plus text fields. Super admin (5) / staff (6): any type. Franchise admin (1) / employee (3): only partner (2), employee (3), user (4); **`franchise_id`** forced for partner/employee when omitted."
-          },
-          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 07 — User management → User_"
-        },
-        {
-          "name": "Delete",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "DELETE",
-            "header": [],
-            "url": "{{base_url}}/api/user/delete/{{id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → User_"
-        },
-        {
-          "name": "Delete user (soft)",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/user/delete/{{userId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "user",
-                "delete",
-                "{{userId}}"
-              ]
-            }
-          },
-          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 07 — User management → User_"
+            "description": "Creates Super Admin (`type` 5). Password is generated and emailed."
+          }
         },
         {
           "name": "Get all users",
@@ -5089,11 +4784,12 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}"
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/user/getAll?page={{page}}&limit={{limit}}&type=&keyword=&is_active=&is_blocked=&franchise_id=",
+              "raw": "{{baseUrl}}/api/user/getAll?page=1&limit=10&type=4&keyword=&is_active=&is_blocked=&franchise_id=",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -5105,21 +4801,20 @@
               "query": [
                 {
                   "key": "page",
-                  "value": "{{page}}"
+                  "value": "1"
                 },
                 {
                   "key": "limit",
-                  "value": "{{limit}}"
+                  "value": "10"
                 },
                 {
                   "key": "type",
-                  "value": "",
-                  "description": "1 admin, 2 partner, 3 employee, 4 user — access depends on caller."
+                  "value": "4",
+                  "description": "3 employee, 4 customer, 5 super admin. Partners: use Partner folder (type=2)."
                 },
                 {
                   "key": "keyword",
-                  "value": "",
-                  "description": "Also `search`."
+                  "value": ""
                 },
                 {
                   "key": "is_active",
@@ -5131,110 +4826,12 @@
                 },
                 {
                   "key": "franchise_id",
-                  "value": "",
-                  "description": "Super admin / staff only; franchise admin cannot pass this."
+                  "value": ""
                 }
               ]
             },
-            "description": "See `user_controller.getAll` for role-based **`franchise_id`** filtering."
-          },
-          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 07 — User management → User_"
-        },
-        {
-          "name": "Get all users (filter Super Admin)",
-          "request": {
-            "method": "GET",
-            "url": "{{base_url}}/api/user/getAll?page=1&limit=10&type=5"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json → User (New Types)_"
-        },
-        {
-          "name": "Get by id",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/user/get/{{id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → User_"
-        },
-        {
-          "name": "Get dropdown",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/user/getDropDown"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → User_"
-        },
-        {
-          "name": "Get partner dropdown",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/user/getPartnerDropDown"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → User_"
-        },
-        {
-          "name": "Get partner dropdown (by service)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/user/getPartnerDropDown?service_id={{serviceId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "user",
-                "getPartnerDropDown"
-              ],
-              "query": [
-                {
-                  "key": "service_id",
-                  "value": "{{serviceId}}"
-                }
-              ]
-            },
-            "description": "**`service_id`** required — must exist in **Service** collection."
-          },
-          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 07 — User management → Partner_"
+            "description": "List users. Change `type` query to filter (e.g. `5` for Super Admin)."
+          }
         },
         {
           "name": "Get user by id",
@@ -5243,7 +4840,8 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}"
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
               }
             ],
             "url": {
@@ -5257,9 +4855,114 @@
                 "get",
                 "{{userId}}"
               ]
-            }
-          },
-          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 07 — User management → User_"
+            },
+            "description": "Get one user by `{{userId}}`."
+          }
+        },
+        {
+          "name": "Update user",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"is_active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/user/update/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "update",
+                "{{userId}}"
+              ]
+            },
+            "description": "Update user profile fields."
+          }
+        },
+        {
+          "name": "Delete user",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user/delete/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "delete",
+                "{{userId}}"
+              ]
+            },
+            "description": "Soft delete — sets `deleted_at`."
+          }
+        },
+        {
+          "name": "Change password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"{{userId}}\",\n  \"type\": 4,\n  \"new_password\": \"Test@5678\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/user/changePassword",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "changePassword"
+              ]
+            },
+            "description": "`type` 4 = customer. For partner use **12 — Partner → Change password**."
+          }
         },
         {
           "name": "Get user dropdown",
@@ -5268,7 +4971,8 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}"
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
               }
             ],
             "url": {
@@ -5282,86 +4986,22 @@
                 "getDropDown"
               ]
             },
-            "description": "**`requireSuperAdmin`** in routes — only super admin."
-          },
-          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 07 — User management → User_"
-        },
+            "description": "User dropdown (super admin)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 — Partner",
+      "description": "**/api/user** partner (`type` 2) — one request per action.\nSame routes as User, dedicated partner bodies (`{{partnerId}}`, nested `partner_services`).",
+      "item": [
         {
-          "name": "Get verification all (partners)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/user/getVerificationAll?page={{page}}&limit={{limit}}&verification_status=&keyword=&sort_by=created_at&sort_order=desc",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "user",
-                "getVerificationAll"
-              ],
-              "query": [
-                {
-                  "key": "page",
-                  "value": "{{page}}"
-                },
-                {
-                  "key": "limit",
-                  "value": "{{limit}}"
-                },
-                {
-                  "key": "verification_status",
-                  "value": ""
-                },
-                {
-                  "key": "keyword",
-                  "value": ""
-                },
-                {
-                  "key": "sort_by",
-                  "value": "created_at"
-                },
-                {
-                  "key": "sort_order",
-                  "value": "desc"
-                }
-              ]
-            },
-            "description": "Lists partners (**`type`**: 2) for verification workflows."
-          },
-          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 07 — User management → User_"
-        },
-        {
-          "name": "Get verification all (partners)",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/user/getVerificationAll?page=1&limit=10"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → User_"
-        },
-        {
-          "name": "Register partner (public)",
+          "name": "Create partner",
           "event": [
             {
               "listen": "test",
               "script": {
+                "type": "text/javascript",
                 "exec": [
                   "try {",
                   "  const j = pm.response.json();",
@@ -5369,8 +5009,157 @@
                   "    pm.collectionVariables.set('partnerId', String(j.record._id));",
                   "  }",
                   "} catch (e) {}"
-                ],
-                "type": "text/javascript"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "type",
+                  "value": "2",
+                  "type": "text"
+                },
+                {
+                  "key": "is_from_web",
+                  "value": "true",
+                  "type": "text"
+                },
+                {
+                  "key": "name",
+                  "value": "Partner Web {{$timestamp}}",
+                  "type": "text"
+                },
+                {
+                  "key": "email",
+                  "value": "partner.web+{{$timestamp}}@example.com",
+                  "type": "text"
+                },
+                {
+                  "key": "phone_number",
+                  "value": "+91{{$timestamp}}",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "Test@1234",
+                  "type": "text"
+                },
+                {
+                  "key": "confirm_password",
+                  "value": "Test@1234",
+                  "type": "text"
+                },
+                {
+                  "key": "address",
+                  "value": "12 Test Street",
+                  "type": "text"
+                },
+                {
+                  "key": "state_id",
+                  "value": "{{stateId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "city_id",
+                  "value": "{{cityId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "area_id",
+                  "value": "{{areaId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "pincode",
+                  "value": "500001",
+                  "type": "text"
+                },
+                {
+                  "key": "franchise_id",
+                  "value": "{{franchiseId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "date_of_birth",
+                  "value": "1995-01-15",
+                  "type": "text"
+                },
+                {
+                  "key": "experience",
+                  "value": "3 years",
+                  "type": "text"
+                },
+                {
+                  "key": "gender",
+                  "value": "male",
+                  "type": "text"
+                },
+                {
+                  "key": "partner_services",
+                  "value": "[{\"category_id\":\"{{categoryId}}\",\"is_active\":true,\"subcategories\":[{\"subcategory_id\":\"{{subcategoryId}}\",\"is_active\":true,\"services\":[{\"service_id\":\"{{serviceId}}\",\"description\":\"Offering under subcategory\",\"price\":499,\"payment_type\":\"online\",\"tax\":0,\"minimum_deposit\":0,\"is_active\":true}]}]}]",
+                  "type": "text",
+                  "description": "Category → Subcategory → Service JSON"
+                },
+                {
+                  "key": "service_cities",
+                  "value": "[\"{{serviceCityId}}\",\"{{serviceCityId2}}\"]",
+                  "type": "text",
+                  "disabled": true,
+                  "description": "Optional city ObjectId array"
+                },
+                {
+                  "key": "bank_account",
+                  "value": "{\"account_holder_name\":\"Partner\",\"account_number\":\"1111111111111\",\"ifsc_code\":\"TEST0001234\",\"bank_name\":\"Test Bank\",\"branch_name\":\"Main\",\"is_primary\":true}",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": [],
+                  "description": "Optional profile image"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/user/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "create"
+              ]
+            },
+            "description": "Admin/web partner create (`type` 2). Optional `service_cities`. Saves `partnerId`."
+          }
+        },
+        {
+          "name": "Register partner (public)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "  const j = pm.response.json();",
+                  "  if (j && j.record && j.record._id) {",
+                  "    pm.collectionVariables.set('partnerId', String(j.record._id));",
+                  "  }",
+                  "} catch (e) {}"
+                ]
               }
             }
           ],
@@ -5411,11 +5200,6 @@
                 {
                   "key": "is_from_web",
                   "value": "false",
-                  "type": "text"
-                },
-                {
-                  "key": "is_active",
-                  "value": "true",
                   "type": "text"
                 },
                 {
@@ -5462,68 +5246,160 @@
                 "register-partner"
               ]
             },
-            "description": "**No JWT.** Only **`type`: 2** and **`is_from_web`: false** (`publicPartnerRegisterMiddleware`). Web/admin-created partners must use **User → Create user** with auth. Optional **`image`** file field; enable and attach a file to satisfy profile rules without `profile_url`."
-          },
-          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 07 — User management → Partner_"
+            "description": "Public mobile signup — **no JWT**. Different from Create partner."
+          }
         },
         {
-          "name": "Update",
+          "name": "Get all partners",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user/getAll?page=1&limit=10&type=2&keyword=&is_active=&is_blocked=&is_verified=&franchise_id=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "getAll"
+              ],
+              "query": [
                 {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "type",
+                  "value": "2"
+                },
+                {
+                  "key": "keyword",
+                  "value": ""
+                },
+                {
+                  "key": "is_active",
+                  "value": ""
+                },
+                {
+                  "key": "is_blocked",
+                  "value": ""
+                },
+                {
+                  "key": "is_verified",
+                  "value": "",
+                  "description": "pending | approved | rejected (omit → approved only)"
+                },
+                {
+                  "key": "franchise_id",
+                  "value": ""
                 }
               ]
             },
-            "method": "PUT",
-            "description": "PUT /api/user/update/:id. If you send `password`, use a single field only; `confirm_password` is not used by the API.",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/user/update/{{id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → User_"
+            "description": "Partner list (`type=2`)."
+          }
         },
         {
-          "name": "Update user",
+          "name": "Get partner by id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user/get/{{partnerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "get",
+                "{{partnerId}}"
+              ]
+            },
+            "description": "Includes nested `partner_services` (category → subcategory → service), bank, documents."
+          }
+        },
+        {
+          "name": "Update partner",
           "request": {
             "method": "PUT",
             "header": [
               {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
                 "key": "Authorization",
-                "value": "Bearer {{token}}"
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
               }
             ],
             "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Updated Name\"\n}"
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Updated Partner Name",
+                  "type": "text"
+                },
+                {
+                  "key": "experience",
+                  "value": "5 years",
+                  "type": "text"
+                },
+                {
+                  "key": "is_active",
+                  "value": "true",
+                  "type": "text"
+                },
+                {
+                  "key": "partner_services",
+                  "value": "[{\"category_id\":\"{{categoryId}}\",\"is_active\":true,\"subcategories\":[{\"subcategory_id\":\"{{subcategoryId}}\",\"is_active\":true,\"services\":[{\"service_id\":\"{{serviceId}}\",\"description\":\"Offering under subcategory\",\"price\":499,\"payment_type\":\"online\",\"tax\":0,\"minimum_deposit\":0,\"is_active\":true}]}]}]",
+                  "type": "text",
+                  "description": "Full catalog replace when sent. Disable to leave catalog unchanged."
+                },
+                {
+                  "key": "service_cities",
+                  "value": "[\"{{serviceCityId}}\",\"{{serviceCityId2}}\"]",
+                  "type": "text",
+                  "disabled": true,
+                  "description": "Optional — replace service cities list; `[]` to clear"
+                },
+                {
+                  "key": "bank_account",
+                  "value": "{\"account_holder_name\":\"Partner\",\"account_number\":\"1111111111111\",\"ifsc_code\":\"TEST0001234\",\"bank_name\":\"Test Bank\",\"is_primary\":true}",
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "is_verified",
+                  "value": "approved",
+                  "type": "text",
+                  "disabled": true,
+                  "description": "approved | rejected | pending"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": [],
+                  "disabled": true
+                }
+              ]
             },
             "url": {
-              "raw": "{{baseUrl}}/api/user/update/{{userId}}",
+              "raw": "{{baseUrl}}/api/user/update/{{partnerId}}",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -5531,12 +5407,159 @@
                 "api",
                 "user",
                 "update",
-                "{{userId}}"
+                "{{partnerId}}"
               ]
             },
-            "description": "Uses **`uploadImages.single(\"image\")`** — same note as Create for multipart."
-          },
-          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 07 — User management → User_"
+            "description": "One update request: profile + optional catalog (`partner_services`) + optional `service_cities` / bank / verification."
+          }
+        },
+        {
+          "name": "Delete partner",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user/delete/{{partnerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "delete",
+                "{{partnerId}}"
+              ]
+            },
+            "description": "Soft delete partner."
+          }
+        },
+        {
+          "name": "Change password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"{{partnerId}}\",\n  \"type\": 2,\n  \"new_password\": \"Test@5678\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/user/changePassword",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "changePassword"
+              ]
+            },
+            "description": "Partner password (`type` 2)."
+          }
+        },
+        {
+          "name": "Get partner dropdown",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user/getPartnerDropDown?service_id=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "getPartnerDropDown"
+              ],
+              "query": [
+                {
+                  "key": "service_id",
+                  "value": "",
+                  "description": "Optional — set `{{serviceId}}` to filter by service"
+                }
+              ]
+            },
+            "description": "Partner dropdown. Optionally pass `service_id`."
+          }
+        },
+        {
+          "name": "Get verification all",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user/getVerificationAll?page=1&limit=10&verification_status=&keyword=&sort_by=created_at&sort_order=desc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "getVerificationAll"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "verification_status",
+                  "value": ""
+                },
+                {
+                  "key": "keyword",
+                  "value": ""
+                },
+                {
+                  "key": "sort_by",
+                  "value": "created_at"
+                },
+                {
+                  "key": "sort_order",
+                  "value": "desc"
+                }
+              ]
+            },
+            "description": "Partner verification queue (`type` 2)."
+          }
         }
       ]
     },
@@ -5809,12 +5832,12 @@
     },
     {
       "name": "14 — Partner subscription",
-      "description": "**/api/partner-subscription** (admin) and **/api/mobile/partner/subscription** (partner app upgrade/downgrade).",
+      "description": "**/api/partner-subscription** (admin) and **/api/mobile/partner/subscription** (partner app upgrade/downgrade).\n\nDeduped: one request per endpoint (19 → 12).",
       "item": [
         {
-          "name": "Mobile — get current subscription",
+          "name": "Mobile — apply plan change",
           "request": {
-            "method": "GET",
+            "method": "POST",
             "header": [
               {
                 "key": "Authorization",
@@ -5822,12 +5845,16 @@
                 "type": "text"
               },
               {
-                "key": "Accept",
+                "key": "Content-Type",
                 "value": "application/json"
               }
             ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"target_plan_id\": \"{{targetSubscriptionPlanId}}\",\n  \"wallet_amount\": {{upgradeWalletAmount}},\n  \"cash_amount\": {{upgradeCashAmount}}\n}"
+            },
             "url": {
-              "raw": "{{baseUrl}}/api/mobile/partner/subscription",
+              "raw": "{{baseUrl}}/api/mobile/partner/subscription/change",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -5835,10 +5862,11 @@
                 "api",
                 "mobile",
                 "partner",
-                "subscription"
+                "subscription",
+                "change"
               ]
             },
-            "description": "**GET /api/mobile/partner/subscription** — current plan, wallet balance, days used."
+            "description": "**POST /api/mobile/partner/subscription/change** — upgrade (wallet + cash) or downgrade (`target_plan_id` only)."
           }
         },
         {
@@ -5878,9 +5906,9 @@
           }
         },
         {
-          "name": "Mobile — apply plan change",
+          "name": "Mobile — get current subscription",
           "request": {
-            "method": "POST",
+            "method": "GET",
             "header": [
               {
                 "key": "Authorization",
@@ -5888,16 +5916,12 @@
                 "type": "text"
               },
               {
-                "key": "Content-Type",
+                "key": "Accept",
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"target_plan_id\": \"{{targetSubscriptionPlanId}}\",\n  \"wallet_amount\": {{upgradeWalletAmount}},\n  \"cash_amount\": {{upgradeCashAmount}}\n}"
-            },
             "url": {
-              "raw": "{{baseUrl}}/api/mobile/partner/subscription/change",
+              "raw": "{{baseUrl}}/api/mobile/partner/subscription",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -5905,11 +5929,10 @@
                 "api",
                 "mobile",
                 "partner",
-                "subscription",
-                "change"
+                "subscription"
               ]
             },
-            "description": "**POST /api/mobile/partner/subscription/change** — upgrade (wallet + cash) or downgrade (`target_plan_id` only)."
+            "description": "**GET /api/mobile/partner/subscription** — current plan, wallet balance, days used."
           }
         },
         {
@@ -5950,75 +5973,7 @@
           }
         },
         {
-          "name": "Create partner subscription",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"partner_id\": \"{{partner_id}}\",\n  \"subscription_plan_id\": \"{{subscription_plan_id}}\",\n  \"notes\": \"Manual assignment from Postman\"\n}"
-            },
-            "url": "{{base_url}}/api/partner-subscription/create"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json → Partner Subscription_"
-        },
-        {
-          "name": "Delete partner subscription",
-          "request": {
-            "method": "DELETE",
-            "url": "{{base_url}}/api/partner-subscription/delete/{{partner_subscription_id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json → Partner Subscription_"
-        },
-        {
-          "name": "Get all partner subscriptions",
-          "request": {
-            "method": "GET",
-            "url": "{{base_url}}/api/partner-subscription/getAll?page=1&limit=10&sort=-1"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json → Partner Subscription_"
-        },
-        {
-          "name": "Get my subscription",
-          "request": {
-            "method": "GET",
-            "url": "{{base_url}}/api/partner-subscription/me"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json → Partner Subscription_"
-        },
-        {
-          "name": "Get partner subscription by id",
-          "request": {
-            "method": "GET",
-            "url": "{{base_url}}/api/partner-subscription/get/{{partner_subscription_id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json → Partner Subscription_"
-        },
-        {
-          "name": "Import partner subscriptions",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"records\": [\n    {\n      \"partner_id\": \"{{partner_id}}\",\n      \"subscription_plan_id\": \"{{subscription_plan_id}}\",\n      \"notes\": \"Batch import row\"\n    }\n  ]\n}"
-            },
-            "url": "{{base_url}}/api/partner-subscription/imports"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json → Partner Subscription_"
-        },
-        {
-          "name": "Partner subscription — create",
+          "name": "Create",
           "request": {
             "method": "POST",
             "header": [
@@ -6043,9 +5998,9 @@
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 03 — Franchise Management_"
         },
         {
-          "name": "Partner subscription — delete",
+          "name": "Import",
           "request": {
-            "method": "DELETE",
+            "method": "POST",
             "header": [
               {
                 "key": "Authorization",
@@ -6054,22 +6009,21 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/partner-subscription/delete/{{id}}",
+              "raw": "{{baseUrl}}/api/partner-subscription/imports",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "partner-subscription",
-                "delete",
-                "{{id}}"
+                "imports"
               ]
             }
           },
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 03 — Franchise Management_"
         },
         {
-          "name": "Partner subscription — getAll",
+          "name": "Get all",
           "request": {
             "method": "GET",
             "header": [
@@ -6094,7 +6048,7 @@
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 03 — Franchise Management_"
         },
         {
-          "name": "Partner subscription — getById",
+          "name": "Get by id",
           "request": {
             "method": "GET",
             "header": [
@@ -6120,57 +6074,7 @@
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 03 — Franchise Management_"
         },
         {
-          "name": "Partner subscription — getSubscriptionPlans",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/partner-subscription/getSubscriptionPlans",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "partner-subscription",
-                "getSubscriptionPlans"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 03 — Franchise Management_"
-        },
-        {
-          "name": "Partner subscription — imports",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/partner-subscription/imports",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "partner-subscription",
-                "imports"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 03 — Franchise Management_"
-        },
-        {
-          "name": "Partner subscription — me (partner)",
+          "name": "Get my subscription",
           "request": {
             "method": "GET",
             "header": [
@@ -6195,7 +6099,32 @@
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 03 — Franchise Management_"
         },
         {
-          "name": "Partner subscription — update",
+          "name": "Get subscription plans",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/partner-subscription/getSubscriptionPlans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "partner-subscription",
+                "getSubscriptionPlans"
+              ]
+            }
+          },
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 03 — Franchise Management_"
+        },
+        {
+          "name": "Update",
           "request": {
             "method": "PUT",
             "header": [
@@ -6221,240 +6150,39 @@
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 03 — Franchise Management_"
         },
         {
-          "name": "Update partner subscription",
+          "name": "Delete",
           "request": {
-            "method": "PUT",
+            "method": "DELETE",
             "header": [
               {
-                "key": "Content-Type",
-                "value": "application/json"
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"status\": \"active\",\n  \"notes\": \"Updated via Postman\"\n}"
-            },
-            "url": "{{base_url}}/api/partner-subscription/update/{{partner_subscription_id}}"
+            "url": {
+              "raw": "{{baseUrl}}/api/partner-subscription/delete/{{id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "partner-subscription",
+                "delete",
+                "{{id}}"
+              ]
+            }
           },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json → Partner Subscription_"
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 03 — Franchise Management_"
         }
       ]
     },
     {
       "name": "15 — Partner service",
-      "description": "**/api/partner_service** — 25 request(s). Duplicates merged across source collections.",
+      "description": "**/api/partner_service** — 25 request(s). Duplicates merged across source collections.\n\nDeduped: one request per endpoint (25 → 13).",
       "item": [
         {
-          "name": "Add my services (partner)",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"services\": [\n    {\n      \"service_id\": \"{{service_id}}\",\n      \"category_id\": \"{{category_id}}\",\n      \"is_accept_request\": true\n    }\n  ]\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/partner_service/addMyServices"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Partner service_"
-        },
-        {
-          "name": "Available franchise categories (partner)",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/partner_service/availableFranchiseCategories?page=1&limit=10&name=",
-            "description": "GET `/api/partner_service/availableFranchiseCategories`. **Partner** token; franchise from JWT `franchise_id`. Returns categories that are on the franchise **and** in mapping **`active_categories`**, still active + approved in the global catalogue. Toggle categories via **Franchise category — update** (partition arrays)."
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Partner service_"
-        },
-        {
-          "name": "Available franchise services (partner)",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/partner_service/availableFranchiseServices?page=1&limit=10&category_id={{category_id}}&name=",
-            "description": "GET `/api/partner_service/availableFranchiseServices`. **Partner** token; required **`category_id`** query. Lists services on the franchise in mapping **`active_services`**, category allowed and active in mapping, global catalogue active + approved, not already on the partner profile. Inactive parent category ⇒ services hidden (cascade + partner filter)."
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Partner service_"
-        },
-        {
-          "name": "Available services (partner)",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/partner_service/availableServices?page=1&limit=10&category_id=&name="
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Partner service_"
-        },
-        {
-          "name": "Create",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"services\": [\n    {\n      \"partner_id\": \"{{partner_id}}\",\n      \"category_id\": \"{{category_id}}\",\n      \"service_id\": \"{{service_id}}\",\n      \"is_accept_request\": true\n    }\n  ]\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/partner_service/create"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Partner service_"
-        },
-        {
-          "name": "Delete",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "DELETE",
-            "header": [],
-            "url": "{{base_url}}/api/partner_service/delete/{{id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Partner service_"
-        },
-        {
-          "name": "Get all",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/partner_service/getAll?page=1&limit=10&partner_id={{partner_id}}&type=&is_active=&name="
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Partner service_"
-        },
-        {
-          "name": "Get dropdown",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/partner_service/getDropDown?partner_id={{partner_id}}&service_id={{service_id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Partner service_"
-        },
-        {
-          "name": "My services (partner)",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/partner_service/myServices?page=1&limit=10&category_id=&is_accept_request=&name="
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Partner service_"
-        },
-        {
-          "name": "Partner service — addMyServices",
+          "name": "Add my services",
           "request": {
             "method": "POST",
             "header": [
@@ -6479,82 +6207,7 @@
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
         },
         {
-          "name": "Partner service — availableFranchiseCategories",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/partner_service/availableFranchiseCategories",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "partner_service",
-                "availableFranchiseCategories"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
-        },
-        {
-          "name": "Partner service — availableFranchiseServices",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/partner_service/availableFranchiseServices",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "partner_service",
-                "availableFranchiseServices"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
-        },
-        {
-          "name": "Partner service — availableServices (partner)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/partner_service/availableServices",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "partner_service",
-                "availableServices"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
-        },
-        {
-          "name": "Partner service — create (backoffice)",
+          "name": "Create",
           "request": {
             "method": "POST",
             "header": [
@@ -6579,186 +6232,7 @@
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
         },
         {
-          "name": "Partner service — delete (backoffice)",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/partner_service/delete/{{id}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "partner_service",
-                "delete",
-                "{{id}}"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
-        },
-        {
-          "name": "Partner service — getAll (backoffice)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/partner_service/getAll",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "partner_service",
-                "getAll"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
-        },
-        {
-          "name": "Partner service — getDropDown (backoffice)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/partner_service/getDropDown",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "partner_service",
-                "getDropDown"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
-        },
-        {
-          "name": "Partner service — myServices (partner)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/partner_service/myServices",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "partner_service",
-                "myServices"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
-        },
-        {
-          "name": "Partner service — toggleMyServiceStatus",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/partner_service/toggleMyServiceStatus/{{id}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "partner_service",
-                "toggleMyServiceStatus",
-                "{{id}}"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
-        },
-        {
-          "name": "Partner service — updateMyService",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/partner_service/updateMyService/{{id}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "partner_service",
-                "updateMyService",
-                "{{id}}"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
-        },
-        {
-          "name": "Partner service — updateStatus",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/partner_service/updateStatus/{{id}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "partner_service",
-                "updateStatus",
-                "{{id}}"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
-        },
-        {
-          "name": "POST franchiseCategoryServices",
+          "name": "Franchise category services",
           "request": {
             "method": "POST",
             "header": [
@@ -6799,97 +6273,258 @@
           "description": "\n\n_Source: Help-PR-Partner-Franchise-Dropdowns.postman_collection.json → Partner franchise dropdown APIs_"
         },
         {
-          "name": "Toggle my service status (partner)",
+          "name": "Toggle my service status",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
             "method": "POST",
-            "header": [],
-            "url": "{{base_url}}/api/partner_service/toggleMyServiceStatus/{{id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Partner service_"
-        },
-        {
-          "name": "Update my service (partner)",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "PUT",
             "header": [
               {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"category_id\": \"{{category_id}}\",\n  \"is_accept_request\": true\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/partner_service/updateMyService/{{id}}"
+            "url": {
+              "raw": "{{baseUrl}}/api/partner_service/toggleMyServiceStatus/{{id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "partner_service",
+                "toggleMyServiceStatus",
+                "{{id}}"
+              ]
+            }
           },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Partner service_"
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
         },
         {
           "name": "Update status",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
             "method": "POST",
             "header": [
               {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/partner_service/updateStatus/{{id}}"
+            "url": {
+              "raw": "{{baseUrl}}/api/partner_service/updateStatus/{{id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "partner_service",
+                "updateStatus",
+                "{{id}}"
+              ]
+            }
           },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Partner service_"
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
+        },
+        {
+          "name": "Available franchise categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/partner_service/availableFranchiseCategories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "partner_service",
+                "availableFranchiseCategories"
+              ]
+            }
+          },
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
+        },
+        {
+          "name": "Available franchise services",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/partner_service/availableFranchiseServices",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "partner_service",
+                "availableFranchiseServices"
+              ]
+            }
+          },
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
+        },
+        {
+          "name": "Available services",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/partner_service/availableServices",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "partner_service",
+                "availableServices"
+              ]
+            }
+          },
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
+        },
+        {
+          "name": "Get all",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/partner_service/getAll",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "partner_service",
+                "getAll"
+              ]
+            }
+          },
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
+        },
+        {
+          "name": "Get dropdown",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/partner_service/getDropDown",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "partner_service",
+                "getDropDown"
+              ]
+            }
+          },
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
+        },
+        {
+          "name": "My services",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/partner_service/myServices",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "partner_service",
+                "myServices"
+              ]
+            }
+          },
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
+        },
+        {
+          "name": "Update my service",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/partner_service/updateMyService/{{id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "partner_service",
+                "updateMyService",
+                "{{id}}"
+              ]
+            }
+          },
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
+        },
+        {
+          "name": "Delete",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/partner_service/delete/{{id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "partner_service",
+                "delete",
+                "{{id}}"
+              ]
+            }
+          },
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
         }
       ]
     },
@@ -6942,97 +6577,10 @@
     },
     {
       "name": "17 — Partner document",
-      "description": "**/api/partner_document** — 12 request(s). Duplicates merged across source collections.",
+      "description": "**/api/partner_document** — 12 request(s). Duplicates merged across source collections.\n\nDeduped: one request per endpoint (12 → 6).",
       "item": [
         {
           "name": "Create",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/partner_document/create"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Partner document_"
-        },
-        {
-          "name": "Delete",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "DELETE",
-            "header": [],
-            "url": "{{base_url}}/api/partner_document/delete/{{id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Partner document_"
-        },
-        {
-          "name": "Get all",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/partner_document/getAll"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Partner document_"
-        },
-        {
-          "name": "Get by id",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/partner_document/get/{{id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Partner document_"
-        },
-        {
-          "name": "Partner document — create",
           "request": {
             "method": "POST",
             "header": [],
@@ -7052,33 +6600,7 @@
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
         },
         {
-          "name": "Partner document — delete",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/partner_document/delete/{{id}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "partner_document",
-                "delete",
-                "{{id}}"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
-        },
-        {
-          "name": "Partner document — getAll",
+          "name": "Get all",
           "request": {
             "method": "GET",
             "header": [
@@ -7103,7 +6625,7 @@
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
         },
         {
-          "name": "Partner document — getById",
+          "name": "Get by id",
           "request": {
             "method": "GET",
             "header": [
@@ -7129,7 +6651,7 @@
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
         },
         {
-          "name": "Partner document — updateDocument",
+          "name": "Update document",
           "request": {
             "method": "PUT",
             "header": [
@@ -7155,7 +6677,7 @@
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
         },
         {
-          "name": "Partner document — updateStatus",
+          "name": "Update status",
           "request": {
             "method": "PUT",
             "header": [
@@ -7181,78 +6703,30 @@
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
         },
         {
-          "name": "Update document",
+          "name": "Delete",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "PUT",
+            "method": "DELETE",
             "header": [
               {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/partner_document/updateDocument/{{id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Partner document_"
-        },
-        {
-          "name": "Update status",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
+            "url": {
+              "raw": "{{baseUrl}}/api/partner_document/delete/{{id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "partner_document",
+                "delete",
+                "{{id}}"
               ]
-            },
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/partner_document/updateStatus/{{id}}"
+            }
           },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Partner document_"
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 11 — Partner Management_"
         }
       ]
     },
@@ -9308,276 +8782,30 @@
     },
     {
       "name": "24 — Quote",
-      "description": "**/api/quote** — 20 request(s). Duplicates merged across source collections.",
+      "description": "**/api/quote** — one request per action.\n\nCatalog: **category → subcategory → service** (`subcategory_id` on create/update; populated on get/getAll).\n\nVars: `{{quoteId}}`, `{{categoryId}}`, `{{subcategoryId}}`, `{{serviceId}}`, `{{partnerId}}`, `{{customerUserId}}` / `{{userId}}`, `{{franchiseId}}`, `{{addressId}}`.",
       "item": [
         {
-          "name": "Approve",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "PUT",
-            "header": [],
-            "url": "{{base_url}}/api/quote/approve/{{quote_id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Quote_"
-        },
-        {
-          "name": "Cancel",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"cancellation_reason\": \"Customer requested cancellation\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/quote/cancel/{{quote_id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Quote_"
-        },
-        {
-          "name": "Convert to order",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "POST",
-            "header": [],
-            "url": "{{base_url}}/api/quote/convert/{{quote_id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Quote_"
-        },
-        {
           "name": "Create",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  try {",
+                  "    const j = pm.response.json();",
+                  "    const id = j.record && (j.record.quote_id || j.record._id);",
+                  "    if (id) {",
+                  "      pm.collectionVariables.set('quoteId', String(id));",
+                  "      pm.collectionVariables.set('id', String(id));",
+                  "    }",
+                  "  } catch (e) {}",
+                  "}"
+                ]
               }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"user_id\": \"{{user_id}}\",\n  \"category_id\": \"{{category_id}}\",\n  \"service_id\": \"{{service_id}}\",\n  \"partner_id\": \"{{partner_id}}\",\n  \"employee_id\": \"{{employee_id}}\",\n  \"service_price\": 1000,\n  \"franchise_id\": \"{{franchise_id}}\",\n  \"address_id\": \"{{address_id}}\",\n  \"created_by_id\": \"{{id}}\",\n  \"from_date\": \"2026-05-08\",\n  \"to_date\": \"2026-05-10\",\n  \"work_hours_per_day\": 8,\n  \"total_work_hours\": 24,\n  \"work_start_time\": \"09:00\",\n  \"work_end_time\": \"17:00\",\n  \"quote_description\": \"Customer-visible job summary\",\n  \"admin_description\": \"Optional internal admin note (omit or null if unset)\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/quote/create"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Quote_"
-        },
-        {
-          "name": "Delete",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "DELETE",
-            "header": [],
-            "url": "{{base_url}}/api/quote/delete/{{quote_id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Quote_"
-        },
-        {
-          "name": "Get all",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/quote/getAll"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Quote_"
-        },
-        {
-          "name": "Get by id",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/quote/get/{{quote_id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Quote_"
-        },
-        {
-          "name": "Get customer quotes",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/quote/getCustomerQuotes?user_id={{user_id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Quote_"
-        },
-        {
-          "name": "Quote — approve",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/quote/approve/{{id}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "quote",
-                "approve",
-                "{{id}}"
-              ]
             }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 06 — Quote Management_"
-        },
-        {
-          "name": "Quote — cancel",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/quote/cancel/{{id}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "quote",
-                "cancel",
-                "{{id}}"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 06 — Quote Management_"
-        },
-        {
-          "name": "Quote — convert to order",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/quote/convert/{{id}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "quote",
-                "convert",
-                "{{id}}"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 06 — Quote Management_"
-        },
-        {
-          "name": "Quote — create",
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -9594,7 +8822,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"user_id\": \"{{customerUserId}}\",\n  \"partner_id\": \"{{partnerId}}\",\n  \"employee_id\": null,\n  \"category_id\": \"{{categoryId}}\",\n  \"service_id\": \"{{serviceId}}\",\n  \"franchise_id\": \"{{franchiseId}}\",\n  \"address_id\": \"{{addressId}}\",\n  \"created_by_id\": \"{{userId}}\",\n  \"total_service_charge\": 3000,\n  \"from_date\": \"2026-06-01\",\n  \"to_date\": \"2026-06-02\",\n  \"work_hours_per_day\": 8,\n  \"total_work_hours\": 16,\n  \"work_start_time\": \"09:00\",\n  \"work_end_time\": \"17:00\",\n  \"quote_description\": \"Customer-visible job summary\",\n  \"admin_description\": \"{{adminDescription}}\"\n}",
+              "raw": "{\n  \"user_id\": \"{{customerUserId}}\",\n  \"partner_id\": \"{{partnerId}}\",\n  \"employee_id\": null,\n  \"category_id\": \"{{categoryId}}\",\n  \"subcategory_id\": \"{{subcategoryId}}\",\n  \"service_id\": \"{{serviceId}}\",\n  \"franchise_id\": \"{{franchiseId}}\",\n  \"address_id\": \"{{addressId}}\",\n  \"created_by_id\": \"{{userId}}\",\n  \"total_service_charge\": 3000,\n  \"from_date\": \"2026-06-01\",\n  \"to_date\": \"2026-06-02\",\n  \"work_hours_per_day\": 8,\n  \"total_work_hours\": 16,\n  \"work_start_time\": \"09:00\",\n  \"work_end_time\": \"17:00\",\n  \"quote_description\": \"Customer-visible job summary\",\n  \"admin_description\": \"Optional internal admin note\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -9611,38 +8839,12 @@
                 "quote",
                 "create"
               ]
-            }
-          },
-          "description": "**POST /api/quote/create** — back-office quote.\n\n**Optional text:** `quote_description` (customer-visible), `admin_description` (internal — super admin, staff, franchise admin/employee only; omit or `null`).\n\n**Pricing:** send `total_service_charge` (or `service_price`); server computes tax/totals.\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 06 — Quote Management_"
+            },
+            "description": "**POST /api/quote/create**\n\nInclude **`subcategory_id`** (Category → Subcategory → Service). Optional if omitted.\n\nPricing: `total_service_charge` (or `service_price`). Saves `quoteId`."
+          }
         },
         {
-          "name": "Quote — delete",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/quote/delete/{{id}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "quote",
-                "delete",
-                "{{id}}"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 06 — Quote Management_"
-        },
-        {
-          "name": "Quote — getAll",
+          "name": "Get all",
           "request": {
             "method": "GET",
             "header": [
@@ -9653,7 +8855,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/quote/getAll",
+              "raw": "{{baseUrl}}/api/quote/getAll?page=1&limit=10&category_id=&subcategory_id=&service_id=",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -9661,13 +8863,49 @@
                 "api",
                 "quote",
                 "getAll"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "category_id",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "subcategory_id",
+                  "value": "{{subcategoryId}}",
+                  "disabled": true,
+                  "description": "Optional filter"
+                },
+                {
+                  "key": "service_id",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "franchise_id",
+                  "value": "",
+                  "disabled": true
+                }
               ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 06 — Quote Management_"
+            },
+            "description": "List quotes. Records include hydrated `category_id`, `subcategory_id`, `service_id` and `subcategory_name`."
+          }
         },
         {
-          "name": "Quote — getById",
+          "name": "Get by id",
           "request": {
             "method": "GET",
             "header": [
@@ -9678,7 +8916,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/quote/get/{{id}}",
+              "raw": "{{baseUrl}}/api/quote/get/{{quoteId}}",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -9686,65 +8924,14 @@
                 "api",
                 "quote",
                 "get",
-                "{{id}}"
+                "{{quoteId}}"
               ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 06 — Quote Management_"
+            },
+            "description": "View quote. Response includes populated **`subcategory_id`** (`_id`, `name`, `subcategory_id` code)."
+          }
         },
         {
-          "name": "Quote — getCustomerQuotes",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/quote/getCustomerQuotes",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "quote",
-                "getCustomerQuotes"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 06 — Quote Management_"
-        },
-        {
-          "name": "Quote — reject",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/quote/reject/{{id}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "quote",
-                "reject",
-                "{{id}}"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 06 — Quote Management_"
-        },
-        {
-          "name": "Quote — update",
+          "name": "Update",
           "request": {
             "method": "PUT",
             "header": [
@@ -9761,7 +8948,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"quote_description\": \"Updated customer-visible summary\",\n  \"admin_description\": \"Updated internal admin note (null to clear)\",\n  \"from_date\": \"2026-06-01\",\n  \"to_date\": \"2026-06-03\",\n  \"work_hours_per_day\": 8,\n  \"total_work_hours\": 24,\n  \"work_start_time\": \"09:00\",\n  \"work_end_time\": \"17:00\"\n}",
+              "raw": "{\n  \"category_id\": \"{{categoryId}}\",\n  \"subcategory_id\": \"{{subcategoryId}}\",\n  \"service_id\": \"{{serviceId}}\",\n  \"quote_description\": \"Updated customer-visible summary\",\n  \"admin_description\": \"Updated internal admin note\",\n  \"from_date\": \"2026-06-01\",\n  \"to_date\": \"2026-06-03\",\n  \"work_hours_per_day\": 8,\n  \"total_work_hours\": 24,\n  \"work_start_time\": \"09:00\",\n  \"work_end_time\": \"17:00\",\n  \"total_service_charge\": 3200\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -9769,7 +8956,7 @@
               }
             },
             "url": {
-              "raw": "{{baseUrl}}/api/quote/update/{{id}}",
+              "raw": "{{baseUrl}}/api/quote/update/{{quoteId}}",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -9777,34 +8964,157 @@
                 "api",
                 "quote",
                 "update",
-                "{{id}}"
+                "{{quoteId}}"
               ]
-            }
-          },
-          "description": "**PUT /api/quote/update/:id** — field updates while status is **new** or **pending** (unless combined with status transition rules).\n\n**Optional text:** `quote_description`, **`admin_description`** (admin roles only; `null` to clear).\n\nSend only fields to change. Pricing via `total_service_charge` / `service_price`.\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 06 — Quote Management_"
+            },
+            "description": "**PUT /api/quote/update/:id** — while status is **new** or **pending**.\n\nCan change **`category_id` / `subcategory_id` / `service_id`**. Subcategory must belong to category; service must belong to subcategory."
+          }
+        },
+        {
+          "name": "Delete",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/quote/delete/{{quoteId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "quote",
+                "delete",
+                "{{quoteId}}"
+              ]
+            },
+            "description": "Soft delete quote."
+          }
+        },
+        {
+          "name": "Get customer quotes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/quote/getCustomerQuotes?user_id={{customerUserId}}&page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "quote",
+                "getCustomerQuotes"
+              ],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{customerUserId}}"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Quotes for a customer. Includes populated subcategory."
+          }
+        },
+        {
+          "name": "Approve",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/quote/approve/{{quoteId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "quote",
+                "approve",
+                "{{quoteId}}"
+              ]
+            },
+            "description": "Approve / release quote to partner."
+          }
+        },
+        {
+          "name": "Cancel",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cancellation_reason\": \"Customer requested cancellation\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/quote/cancel/{{quoteId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "quote",
+                "cancel",
+                "{{quoteId}}"
+              ]
+            },
+            "description": "Cancel quote."
+          }
         },
         {
           "name": "Reject",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
             "method": "PUT",
             "header": [
               {
-                "key": "Content-Type",
-                "value": "application/json"
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
               },
               {
-                "key": "Accept",
-                "value": "application/json"
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
               }
             ],
             "body": {
@@ -9816,46 +9126,46 @@
                 }
               }
             },
-            "url": "{{base_url}}/api/quote/reject/{{quote_id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Quote_"
-        },
-        {
-          "name": "Update",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
+            "url": {
+              "raw": "{{baseUrl}}/api/quote/reject/{{quoteId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "quote",
+                "reject",
+                "{{quoteId}}"
               ]
             },
-            "method": "PUT",
+            "description": "Reject quote."
+          }
+        },
+        {
+          "name": "Convert to order",
+          "request": {
+            "method": "POST",
             "header": [
               {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"partner_id\": \"{{partner_id}}\",\n  \"employee_id\": \"{{employee_id}}\",\n  \"service_price\": 1200,\n  \"from_date\": \"2026-05-09\",\n  \"to_date\": \"2026-05-11\",\n  \"work_hours_per_day\": 6,\n  \"total_work_hours\": 18,\n  \"work_start_time\": \"10:00\",\n  \"work_end_time\": \"16:00\",\n  \"quote_description\": \"Updated customer-visible summary\",\n  \"admin_description\": \"Updated internal admin note (null to clear)\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+            "url": {
+              "raw": "{{baseUrl}}/api/quote/convert/{{quoteId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "quote",
+                "convert",
+                "{{quoteId}}"
+              ]
             },
-            "url": "{{base_url}}/api/quote/update/{{quote_id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Quote_"
+            "description": "Convert accepted quote to order."
+          }
         }
       ]
     },
@@ -14147,10 +13457,10 @@
     },
     {
       "name": "41 — getpartnerservicecount",
-      "description": "**/api/getpartnerservicecount** — 2 request(s). Duplicates merged across source collections.",
+      "description": "**/api/getpartnerservicecount** — 2 request(s). Duplicates merged across source collections.\n\nDeduped: one request per endpoint (2 → 1).",
       "item": [
         {
-          "name": "Counts — getPartnerServiceCount",
+          "name": "Get partner service count",
           "request": {
             "method": "GET",
             "header": [
@@ -14172,25 +13482,6 @@
             }
           },
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 01 — Dashboard & Home_"
-        },
-        {
-          "name": "Get partner service count",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/getPartnerServiceCount"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Count_"
         }
       ]
     },
@@ -26831,6 +26122,14 @@
     },
     {
       "key": "categoryId",
+      "value": ""
+    },
+    {
+      "key": "quoteId",
+      "value": ""
+    },
+    {
+      "key": "addressId",
       "value": ""
     }
   ]

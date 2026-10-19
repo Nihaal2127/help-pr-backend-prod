@@ -133,6 +133,7 @@ const createOrderFromBody = async (body, options = {}) => {
     user_unique_id,
     city_id,
     category_id,
+    subcategory_id,
     is_paid,
     payment_mode_id,
     transaction_id,
@@ -208,6 +209,16 @@ const createOrderFromBody = async (body, options = {}) => {
 
   const resolvedPartnerId = partner_id ?? single.partner_id ?? null;
   const resolvedServiceId = service_id ?? single.service_id ?? null;
+  const resolvedSubcategoryId =
+    subcategory_id !== undefined &&
+    subcategory_id !== null &&
+    String(subcategory_id).trim() !== ""
+      ? subcategory_id
+      : single.subcategory_id !== undefined &&
+          single.subcategory_id !== null &&
+          String(single.subcategory_id).trim() !== ""
+        ? single.subcategory_id
+        : null;
 
   let quoteFranchiseId = null;
   if (resolvedQuoteId) {
@@ -250,6 +261,7 @@ const createOrderFromBody = async (body, options = {}) => {
         _id: new mongoose.Types.ObjectId(),
         ...option,
         ...linePricing,
+        subcategory_id: option.subcategory_id ?? resolvedSubcategoryId,
         service_status: option.service_status ?? DEFAULT_ORDER_STATUS,
         order_id,
         order_unique_id: unique_id,
@@ -271,6 +283,7 @@ const createOrderFromBody = async (body, options = {}) => {
     user_unique_id,
     city_id,
     category_id,
+    subcategory_id: resolvedSubcategoryId,
     is_paid,
     payment_mode_id,
     transaction_id,
@@ -429,6 +442,7 @@ const buildCreateInputFromQuote = async (quote) => {
     user_unique_id: customer.user_id || "",
     city_id: addressDoc.city_id,
     category_id: quote.category_id,
+    subcategory_id: quote.subcategory_id ?? null,
     is_paid: false,
     payment_mode_id: "",
     transaction_id: "",
@@ -463,6 +477,7 @@ const buildCreateInputFromQuote = async (quote) => {
         user_id: quote.user_id,
         partner_id: quote.partner_id,
         category_id: quote.category_id,
+        subcategory_id: quote.subcategory_id ?? null,
         service_id: quote.service_id,
         service_date: quote.from_date,
         service_from_time,

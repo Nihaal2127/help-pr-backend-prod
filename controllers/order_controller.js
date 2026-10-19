@@ -4,6 +4,7 @@ const Order = require('../models/order');
 const User = require('../models/user');
 const Service = require('../models/service');
 const Category = require('../models/category');
+const Subcategory = require('../models/subcategory');
 const City = require('../models/city');
 const State = require('../models/state');
 const Address = require('../models/address');
@@ -82,6 +83,7 @@ const ORDER_LIST_SEARCH_FIELDS = [
   '_created_by.user_id',
   '_category.name',
   '_category.category_id',
+  '_subcategory.name',
   '_service.name',
   '_service.service_id',
   '_city.name',
@@ -287,6 +289,7 @@ const getAll = async (req, res) => {
         'employee_id',
         'city_id',
         'category_id',
+        'subcategory_id',
         'service_id',
       ]),
     };
@@ -298,6 +301,7 @@ const getAll = async (req, res) => {
     const collections = getListCollectionNames({
       users: User,
       categories: Category,
+      subcategories: Subcategory,
       services: Service,
       cities: City,
       franchise: Franchise,

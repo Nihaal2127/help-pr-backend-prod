@@ -95,6 +95,7 @@ const getAll = async (req, res) => {
       return [
         { path: "service_id" },
         { path: "category_id" },
+        { path: "subcategory_id" },
       ];
     });
 

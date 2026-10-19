@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Quote = require('../../../models/quote');
 const Category = require('../../../models/category');
+const Subcategory = require('../../../models/subcategory');
 const Service = require('../../../models/service');
 const { getQuoteSequenceId } = require('../../../helper/id_generator');
 const { checkObjectIdExists } = require('../../../validator/id_validator');
@@ -103,6 +104,8 @@ const applyCustomerQuoteFieldUpdates = (quote, body) => {
         typeof body[key] === 'string' ? body[key].trim() : '';
     } else if (key === 'partner_id' && (body[key] === null || body[key] === '')) {
       quote.partner_id = null;
+    } else if (key === 'subcategory_id' && (body[key] === null || body[key] === '')) {
+      quote.subcategory_id = null;
     } else {
       quote[key] = body[key];
     }
@@ -120,6 +123,38 @@ const validateRefsForCreate = async (customerId, body) => {
 
   const cat = await checkObjectIdExists(Category, body.category_id, 'category');
   if (!cat.exists) return fail(400, cat.message);
+
+  if (
+    body.subcategory_id !== undefined &&
+    body.subcategory_id !== null &&
+    String(body.subcategory_id).trim() !== ''
+  ) {
+    const sub = await checkObjectIdExists(
+      Subcategory,
+      body.subcategory_id,
+      'subcategory'
+    );
+    if (!sub.exists) return fail(400, sub.message);
+    const subDoc = await Subcategory.findOne({
+      _id: body.subcategory_id,
+      deleted_at: null,
+    })
+      .select('category_id services')
+      .lean();
+    if (!subDoc) return fail(400, 'Subcategory not found.');
+    if (
+      subDoc.category_id &&
+      String(subDoc.category_id) !== String(body.category_id)
+    ) {
+      return fail(400, 'Subcategory does not belong to the selected category.');
+    }
+    if (
+      body.service_id &&
+      !(subDoc.services || []).map((id) => String(id)).includes(String(body.service_id))
+    ) {
+      return fail(400, 'Service does not belong to the selected subcategory.');
+    }
+  }
 
   const svc = await checkObjectIdExists(Service, body.service_id, 'service');
   if (!svc.exists) return fail(400, svc.message);
@@ -212,6 +247,12 @@ const createCustomerQuote = async (customerId, body) => {
       employee_id: null,
       created_by_id: customerId,
       category_id: body.category_id,
+      subcategory_id:
+        body.subcategory_id !== undefined &&
+        body.subcategory_id !== null &&
+        String(body.subcategory_id).trim() !== ''
+          ? body.subcategory_id
+          : null,
       service_id: body.service_id,
       franchise_id: body.franchise_id,
       address_id: body.address_id,
@@ -378,6 +419,43 @@ const updateCustomerQuote = async (customerId, quoteId, body) => {
     if (body.category_id !== undefined) {
       const cat = await checkObjectIdExists(Category, body.category_id, 'category');
       if (!cat.exists) return fail(400, cat.message);
+    }
+
+    if (
+      body.subcategory_id !== undefined &&
+      body.subcategory_id !== null &&
+      String(body.subcategory_id).trim() !== ''
+    ) {
+      const sub = await checkObjectIdExists(
+        Subcategory,
+        body.subcategory_id,
+        'subcategory'
+      );
+      if (!sub.exists) return fail(400, sub.message);
+      const subDoc = await Subcategory.findOne({
+        _id: body.subcategory_id,
+        deleted_at: null,
+      })
+        .select('category_id services')
+        .lean();
+      if (!subDoc) return fail(400, 'Subcategory not found.');
+      const nextCategoryId =
+        body.category_id !== undefined ? body.category_id : quote.category_id;
+      if (
+        nextCategoryId &&
+        subDoc.category_id &&
+        String(subDoc.category_id) !== String(nextCategoryId)
+      ) {
+        return fail(400, 'Subcategory does not belong to the selected category.');
+      }
+      const nextServiceId =
+        body.service_id !== undefined ? body.service_id : quote.service_id;
+      if (
+        nextServiceId &&
+        !(subDoc.services || []).map((id) => String(id)).includes(String(nextServiceId))
+      ) {
+        return fail(400, 'Service does not belong to the selected subcategory.');
+      }
     }
 
     if (body.service_id !== undefined) {

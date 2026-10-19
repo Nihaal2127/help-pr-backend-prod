@@ -14,6 +14,11 @@ const ORDER_DETAIL_POPULATE = [
   },
   { path: 'city_id', select: 'name city_service_price' },
   { path: 'category_id', select: 'name category_id desc image_url' },
+  {
+    path: 'subcategory_id',
+    select:
+      'name subcategory_id desc image_url category_id approval_status is_request is_active rejection_reason',
+  },
   { path: 'created_by_id', select: 'name user_id email phone_number profile_url' },
   {
     path: 'partner_id',
@@ -73,6 +78,12 @@ function shapeOrderDetailResponse(populatedOrderData, additional_charges, order_
 
     category_id: populatedOrderData.category_id?._id ?? populatedOrderData.category_id,
     category_info: populatedOrderData.category_id,
+
+    subcategory_id:
+      populatedOrderData.subcategory_id?._id ?? populatedOrderData.subcategory_id,
+    subcategory_info: populatedOrderData.subcategory_id?._id
+      ? populatedOrderData.subcategory_id
+      : null,
 
     partner_id: populatedOrderData.partner_id?._id ?? populatedOrderData.partner_id,
     partner_info:

@@ -17,6 +17,11 @@ var orderSchema = new schema(
     type: { type: Number, default: 2, required: true },
     city_id: { type: mongoose.Schema.Types.ObjectId, default: null, ref: "city" },
     category_id: { type: mongoose.Schema.Types.ObjectId, default: null, ref: "category" },
+    subcategory_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+      ref: "subcategory",
+    },
     service_id: { type: mongoose.Schema.Types.ObjectId, default: null, ref: "service" },
 
     order_status: {
@@ -219,6 +224,7 @@ orderSchema.index({ partner_id: 1 });
 orderSchema.index({ franchise_id: 1 });
 orderSchema.index({ city_id: 1 });
 orderSchema.index({ category_id: 1 });
+orderSchema.index({ subcategory_id: 1 });
 orderSchema.index({ order_status: 1 });
 orderSchema.index({ partner_work_status: 1 });
 orderSchema.index({ partner_id: 1, partner_work_status: 1, deleted_at: 1 });

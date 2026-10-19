@@ -3,6 +3,7 @@ const Quote = require('../models/quote');
 const User = require('../models/user');
 const Service = require('../models/service');
 const Category = require('../models/category');
+const Subcategory = require('../models/subcategory');
 const City = require('../models/city');
 const Address = require('../models/address');
 const Area = require('../models/area');
@@ -62,6 +63,7 @@ const QUOTE_EXPORT_SEARCH_FIELDS = [
   '_created_by.name',
   '_created_by.user_id',
   '_category.name',
+  '_subcategory.name',
   '_service.name',
   '_service.rejection_reason',
   '_category.rejection_reason',
@@ -78,6 +80,7 @@ const QUOTE_EXPORT_HEADERS = [
   'Partner Name',
   'Partner ID',
   'Category',
+  'Subcategory',
   'Service',
   'State',
   'City',
@@ -228,6 +231,7 @@ const mapQuoteToExportRow = (quote) => {
     partner_name: pickRefName(quote.partner_id),
     partner_id: pickUserDisplayId(quote.partner_id),
     category: pickRefName(quote.category_id),
+    subcategory: pickRefName(quote.subcategory_id),
     service: pickRefName(quote.service_id),
     state: pickRefName(address?.state_id),
     city: pickRefName(address?.city_id) || address?.city || '',
@@ -280,6 +284,7 @@ const buildQuoteExportBaseFilter = async (req) => {
     'partner_id',
     'employee_id',
     'category_id',
+    'subcategory_id',
     'service_id',
   ]);
   if (!objectIdValidation.ok) {
@@ -291,6 +296,7 @@ const buildQuoteExportBaseFilter = async (req) => {
     'partner_id',
     'employee_id',
     'category_id',
+    'subcategory_id',
     'service_id',
   ]);
 
@@ -324,6 +330,7 @@ const fetchQuotesForExport = async (req) => {
   const collections = getListCollectionNames({
     users: User,
     categories: Category,
+    subcategories: Subcategory,
     services: Service,
     franchise: Franchise,
     address: Address,

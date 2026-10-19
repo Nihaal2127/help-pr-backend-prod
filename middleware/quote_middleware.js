@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Quote = require("../models/quote");
 const User = require("../models/user");
 const Category = require("../models/category");
+const Subcategory = require("../models/subcategory");
 const Service = require("../models/service");
 const Franchise = require("../models/franchise");
 const Address = require("../models/address");
@@ -119,6 +120,7 @@ const validateCommonFields = async (body, { partial } = { partial: false }) => {
     employee_id,
     created_by_id,
     category_id,
+    subcategory_id,
     service_id,
     franchise_id,
     address_id,
@@ -158,6 +160,57 @@ const validateCommonFields = async (body, { partial } = { partial: false }) => {
   if (!partial || category_id !== undefined) {
     const cat = await checkObjectIdExists(Category, category_id, "category");
     if (!cat.exists) return { ok: false, message: cat.message };
+  }
+
+  const hasSubcategory =
+    subcategory_id !== undefined &&
+    subcategory_id !== null &&
+    String(subcategory_id).trim() !== "";
+
+  if (hasSubcategory) {
+    const sub = await checkObjectIdExists(
+      Subcategory,
+      subcategory_id,
+      "subcategory"
+    );
+    if (!sub.exists) return { ok: false, message: sub.message };
+
+    const subDoc = await Subcategory.findOne({
+      _id: subcategory_id,
+      deleted_at: null,
+    })
+      .select("category_id services")
+      .lean();
+    if (!subDoc) {
+      return { ok: false, message: "Subcategory not found." };
+    }
+
+    if (
+      category_id !== undefined &&
+      category_id !== null &&
+      String(category_id).trim() !== "" &&
+      subDoc.category_id &&
+      String(subDoc.category_id) !== String(category_id)
+    ) {
+      return {
+        ok: false,
+        message: "Subcategory does not belong to the selected category.",
+      };
+    }
+
+    if (
+      service_id !== undefined &&
+      service_id !== null &&
+      String(service_id).trim() !== ""
+    ) {
+      const serviceIds = (subDoc.services || []).map((id) => String(id));
+      if (!serviceIds.includes(String(service_id))) {
+        return {
+          ok: false,
+          message: "Service does not belong to the selected subcategory.",
+        };
+      }
+    }
   }
 
   if (!partial || service_id !== undefined) {
@@ -299,6 +352,7 @@ const updateQuoteMiddleware = async (req, res, next) => {
     "partner_id",
     "employee_id",
     "category_id",
+    "subcategory_id",
     "service_id",
     "franchise_id",
     "address_id",

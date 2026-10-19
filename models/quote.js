@@ -33,6 +33,11 @@ var quoteSchema = new schema(
     employee_id: { type: mongoose.Schema.Types.ObjectId, default: null, ref: "user" },
     created_by_id: { type: mongoose.Schema.Types.ObjectId, default: null, ref: "user" },
     category_id: { type: mongoose.Schema.Types.ObjectId, default: null, ref: "category" },
+    subcategory_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+      ref: "subcategory",
+    },
     service_id: { type: mongoose.Schema.Types.ObjectId, default: null, ref: "service" },
     franchise_id: { type: mongoose.Schema.Types.ObjectId, default: null, ref: "franchise" },
     address_id: { type: mongoose.Schema.Types.ObjectId, default: null, ref: "address" },
@@ -84,6 +89,7 @@ quoteSchema.index({ partner_id: 1 });
 quoteSchema.index({ employee_id: 1 });
 quoteSchema.index({ franchise_id: 1 });
 quoteSchema.index({ category_id: 1 });
+quoteSchema.index({ subcategory_id: 1 });
 quoteSchema.index({ service_id: 1 });
 quoteSchema.index({ status: 1 });
 quoteSchema.index({ deleted_at: 1 });

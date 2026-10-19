@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Quote = require("../models/quote");
 const User = require("../models/user");
 const Category = require("../models/category");
+const Subcategory = require("../models/subcategory");
 const Service = require("../models/service");
 const Address = require("../models/address");
 const Franchise = require("../models/franchise");
@@ -53,6 +54,7 @@ const QUOTE_LIST_SEARCH_FIELDS = [
   "_created_by.name",
   "_created_by.user_id",
   "_category.name",
+  "_subcategory.name",
   "_service.name",
   "_service.rejection_reason",
   "_category.rejection_reason",
@@ -269,6 +271,12 @@ const create = async (req, res) => {
           ? body.created_by_id
           : null,
       category_id: body.category_id,
+      subcategory_id:
+        body.subcategory_id !== undefined &&
+        body.subcategory_id !== null &&
+        String(body.subcategory_id).trim() !== ""
+          ? body.subcategory_id
+          : null,
       service_id: body.service_id,
       franchise_id: body.franchise_id,
       address_id: body.address_id,
@@ -384,6 +392,7 @@ const getAll = async (req, res) => {
         "partner_id",
         "employee_id",
         "category_id",
+        "subcategory_id",
         "service_id",
       ]),
     };
@@ -395,6 +404,7 @@ const getAll = async (req, res) => {
     const collections = getListCollectionNames({
       users: User,
       categories: Category,
+      subcategories: Subcategory,
       services: Service,
       franchise: Franchise,
       address: Address,
@@ -509,6 +519,12 @@ const getById = async (req, res) => {
           select:
             "name category_id desc image_url approval_status is_request is_active rejection_reason",
         },
+        {
+          path: "subcategory_id",
+          select:
+            "name subcategory_id desc image_url category_id approval_status is_request is_active rejection_reason",
+        },
+        { path: "service_id", select: "name service_id desc image_url tax commission payment_type" },
         { path: "franchise_id", select: "name city_name state_name" },
         QUOTE_ADDRESS_POPULATE,
         { path: "order_id", select: "unique_id order_status total_price user_id" },
@@ -614,6 +630,12 @@ const getCustomerQuotes = async (req, res) => {
         select:
           "name category_id desc image_url approval_status is_request is_active rejection_reason",
       },
+      {
+        path: "subcategory_id",
+        select:
+          "name subcategory_id desc image_url category_id approval_status is_request is_active rejection_reason",
+      },
+      { path: "service_id", select: "name service_id desc image_url tax commission payment_type" },
       { path: "franchise_id", select: "name city_name state_name" },
       QUOTE_ADDRESS_POPULATE,
       { path: "order_id", select: "unique_id order_status total_price user_id" },
@@ -648,6 +670,7 @@ const QUOTE_FIELD_UPDATE_KEYS = [
   "partner_id",
   "employee_id",
   "category_id",
+  "subcategory_id",
   "service_id",
   "franchise_id",
   "address_id",
@@ -678,6 +701,8 @@ const applyQuoteFieldUpdates = (quote, body) => {
       quote.employee_id = null;
     } else if (key === "created_by_id" && (body[key] === null || body[key] === "")) {
       quote.created_by_id = null;
+    } else if (key === "subcategory_id" && (body[key] === null || body[key] === "")) {
+      quote.subcategory_id = null;
     } else if (["work_hours_per_day", "total_work_hours"].includes(key)) {
       quote[key] = parseFloat(body[key]);
     } else if (key === "quote_description") {

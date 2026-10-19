@@ -73,6 +73,27 @@ const buildHydratedServiceField = () => ({
   },
 });
 
+const buildHydratedSubcategoryField = () => ({
+  subcategory_id: {
+    $cond: [
+      { $ifNull: ["$_subcategory._id", false] },
+      {
+        _id: "$_subcategory._id",
+        name: "$_subcategory.name",
+        subcategory_id: "$_subcategory.subcategory_id",
+        desc: "$_subcategory.desc",
+        image_url: "$_subcategory.image_url",
+        category_id: "$_subcategory.category_id",
+        approval_status: "$_subcategory.approval_status",
+        is_request: "$_subcategory.is_request",
+        is_active: "$_subcategory.is_active",
+        rejection_reason: "$_subcategory.rejection_reason",
+      },
+      null,
+    ],
+  },
+});
+
 const buildHydratedFranchiseField = () => ({
   franchise_id: {
     $cond: [
@@ -162,15 +183,25 @@ const buildParticipantLookupsAndUnwinds = (usersColl) => {
 const buildCatalogLookupsAndUnwinds = (
   categoriesColl,
   servicesColl,
-  franchiseColl
-) => [
-  lookupById(categoriesColl, "category_id", "_category"),
-  lookupById(servicesColl, "service_id", "_service"),
-  lookupById(franchiseColl, "franchise_id", "_franchise"),
-  unwind("$_category"),
-  unwind("$_service"),
-  unwind("$_franchise"),
-];
+  franchiseColl,
+  subcategoriesColl = null
+) => {
+  const stages = [
+    lookupById(categoriesColl, "category_id", "_category"),
+    lookupById(servicesColl, "service_id", "_service"),
+    lookupById(franchiseColl, "franchise_id", "_franchise"),
+  ];
+  if (subcategoriesColl) {
+    stages.push(
+      lookupById(subcategoriesColl, "subcategory_id", "_subcategory")
+    );
+  }
+  stages.push(unwind("$_category"), unwind("$_service"), unwind("$_franchise"));
+  if (subcategoriesColl) {
+    stages.push(unwind("$_subcategory"));
+  }
+  return stages;
+};
 
 const buildAddressLookupsAndUnwinds = (addressColl) => [
   lookupById(addressColl, "address_id", "_address"),
@@ -306,6 +337,7 @@ const buildEntityListPipeline = (config) => {
     quotes = null,
     orders = null,
     orderServices = null,
+    subcategories = null,
   } = collections;
 
   const stripFields = [...(stripInternalFields || DEFAULT_STRIP_INTERNAL)];
@@ -313,6 +345,7 @@ const buildEntityListPipeline = (config) => {
   if (includeQuoteLookup) stripFields.push("_quote");
   if (includeOrderLookup) stripFields.push("_order");
   if (includeAreaOnAddress) stripFields.push("_addr_area");
+  if (subcategories) stripFields.push("_subcategory");
 
   const displayAddFields = {
     user_name: "$_user.name",
@@ -321,6 +354,7 @@ const buildEntityListPipeline = (config) => {
     partner_unique_id: "$_partner.user_id",
     employee_name: "$_employee.name",
     category_name: "$_category.name",
+    ...(subcategories ? { subcategory_name: "$_subcategory.name" } : {}),
     service_name: "$_service.name",
     ...(includeRootCityLookup && {
       city_name: { $ifNull: ["$_city.name", ""] },
@@ -330,6 +364,7 @@ const buildEntityListPipeline = (config) => {
     ...buildHydratedUserField("_employee", "employee_id"),
     ...buildHydratedUserField("_created_by", "created_by_id"),
     ...buildHydratedCategoryField(),
+    ...(subcategories ? buildHydratedSubcategoryField() : {}),
     ...buildHydratedServiceField(),
     ...buildHydratedFranchiseField(),
     ...buildHydratedAddressField({ includeArea: includeAreaOnAddress }),
@@ -345,7 +380,12 @@ const buildEntityListPipeline = (config) => {
   const pipeline = [
     { $match: baseFilter },
     ...buildParticipantLookupsAndUnwinds(users),
-    ...buildCatalogLookupsAndUnwinds(categories, services, franchise),
+    ...buildCatalogLookupsAndUnwinds(
+      categories,
+      services,
+      franchise,
+      subcategories
+    ),
     ...(includeRootCityLookup
       ? [lookupById(cities, "city_id", "_city"), unwind("$_city")]
       : []),

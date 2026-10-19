@@ -6,6 +6,7 @@ const OrderService = require("../models/order_services");
 const User = require("../models/user");
 const City = require("../models/city");
 const Category = require("../models/category");
+const Subcategory = require("../models/subcategory");
 const Service = require("../models/service");
 const Franchise = require("../models/franchise");
 const Address = require("../models/address");
@@ -51,6 +52,55 @@ const assertObjectId = async (model, id, label, { allowNull = false } = {}) => {
   const result = await checkObjectIdExists(model, id, label);
   if (!result.exists) {
     throw new OrderCreationError(result.message, 409);
+  }
+};
+
+const assertSubcategoryRelation = async ({
+  subcategory_id,
+  category_id,
+  service_id,
+}) => {
+  if (
+    subcategory_id === undefined ||
+    subcategory_id === null ||
+    subcategory_id === ""
+  ) {
+    return;
+  }
+  await assertObjectId(Subcategory, subcategory_id, "subcategory");
+  const subDoc = await Subcategory.findOne({
+    _id: subcategory_id,
+    deleted_at: null,
+  })
+    .select("category_id services")
+    .lean();
+  if (!subDoc) {
+    throw new OrderCreationError("Subcategory not found.", 409);
+  }
+  if (
+    category_id !== undefined &&
+    category_id !== null &&
+    String(category_id).trim() !== "" &&
+    subDoc.category_id &&
+    String(subDoc.category_id) !== String(category_id)
+  ) {
+    throw new OrderCreationError(
+      "Subcategory does not belong to the selected category.",
+      409
+    );
+  }
+  if (
+    service_id !== undefined &&
+    service_id !== null &&
+    String(service_id).trim() !== ""
+  ) {
+    const serviceIds = (subDoc.services || []).map((id) => String(id));
+    if (!serviceIds.includes(String(service_id))) {
+      throw new OrderCreationError(
+        "Service does not belong to the selected subcategory.",
+        409
+      );
+    }
   }
 };
 
@@ -117,6 +167,23 @@ const applyOrderLevelFields = async (order, body) => {
   if (body.category_id !== undefined) {
     await assertObjectId(Category, body.category_id, "category");
     order.category_id = new mongoose.Types.ObjectId(body.category_id);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "subcategory_id")) {
+    if (body.subcategory_id === null || body.subcategory_id === "") {
+      order.subcategory_id = null;
+    } else {
+      const nextCategoryId =
+        body.category_id !== undefined ? body.category_id : order.category_id;
+      const nextServiceId =
+        body.service_id !== undefined ? body.service_id : order.service_id;
+      await assertSubcategoryRelation({
+        subcategory_id: body.subcategory_id,
+        category_id: nextCategoryId,
+        service_id: nextServiceId,
+      });
+      order.subcategory_id = new mongoose.Types.ObjectId(body.subcategory_id);
+    }
   }
 
   if (body.service_id !== undefined) {
@@ -291,6 +358,25 @@ const applyServiceItemsUpdate = async (order, body) => {
       order.category_id = line.category_id;
     }
 
+    if (Object.prototype.hasOwnProperty.call(item, "subcategory_id")) {
+      if (item.subcategory_id === null || item.subcategory_id === "") {
+        line.subcategory_id = null;
+        order.subcategory_id = null;
+      } else {
+        const nextCategoryId =
+          item.category_id !== undefined ? item.category_id : line.category_id;
+        const nextServiceId =
+          item.service_id !== undefined ? item.service_id : line.service_id;
+        await assertSubcategoryRelation({
+          subcategory_id: item.subcategory_id,
+          category_id: nextCategoryId,
+          service_id: nextServiceId,
+        });
+        line.subcategory_id = new mongoose.Types.ObjectId(item.subcategory_id);
+        order.subcategory_id = line.subcategory_id;
+      }
+    }
+
     if (item.service_id !== undefined) {
       await assertObjectId(Service, item.service_id, "service");
       line.service_id = new mongoose.Types.ObjectId(item.service_id);
@@ -395,6 +481,9 @@ const syncHeaderFieldsToServiceLines = async (order, { partnerChanged, userChang
   if (order.category_id) {
     $set.category_id = order.category_id;
   }
+  if (order.subcategory_id) {
+    $set.subcategory_id = order.subcategory_id;
+  }
   if (order.service_id) {
     $set.service_id = order.service_id;
   }
@@ -444,6 +533,7 @@ const hasOrderFieldUpdates = (body) => {
     "franchise_id",
     "city_id",
     "category_id",
+    "subcategory_id",
     "service_id",
     "address",
     "address_id",

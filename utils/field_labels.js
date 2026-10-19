@@ -10,6 +10,7 @@ const FIELD_LABELS = {
     admin_id: 'Admin',
     created_by_id: 'Created by',
     category_id: 'Category',
+    subcategory_id: 'Sub category',
     service_id: 'Service',
     franchise_id: 'Franchise',
     order_id: 'Order ID',

@@ -16,6 +16,11 @@ var orderServiceSchema = new schema(
     transaction_id: { type: String, default: '', trim: true },
     
     category_id: { type: mongoose.Schema.Types.ObjectId, default: null, ref: 'category' },
+    subcategory_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+      ref: 'subcategory',
+    },
     service_status: {
       type: String,
       default: "in-progress",
@@ -62,6 +67,7 @@ orderServiceSchema.index({ is_paid: 1 });
 orderServiceSchema.index({ user_id: 1 });
 orderServiceSchema.index({ partner_id: 1 });
 orderServiceSchema.index({ category_id: 1 });
+orderServiceSchema.index({ subcategory_id: 1 });
 orderServiceSchema.index({ service_id: 1 });
 orderServiceSchema.index({ deleted_at: 1 });
 orderServiceSchema.index({ service_date: 1 });
