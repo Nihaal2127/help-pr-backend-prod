@@ -24,6 +24,40 @@ const normalizePincodes = (pincodes) => {
     return [...new Set(pincodes.map((p) => String(p).trim()).filter(Boolean))];
 };
 
+/** One pincode may belong to only one non-deleted area. */
+const findConflictingPincodes = async (pinList, excludeAreaId = null) => {
+    if (!pinList || pinList.length === 0) return [];
+    const query = {
+        deleted_at: null,
+        pincodes: { $in: pinList },
+    };
+    if (excludeAreaId) {
+        query._id = { $ne: excludeAreaId };
+    }
+    const rows = await Area.find(query).select('name pincodes').lean();
+    if (rows.length === 0) return [];
+
+    const pinSet = new Set(pinList);
+    const conflicts = [];
+    for (const row of rows) {
+        const overlap = (Array.isArray(row.pincodes) ? row.pincodes : []).filter((p) =>
+            pinSet.has(String(p).trim())
+        );
+        for (const p of overlap) {
+            conflicts.push({ pincode: p, area_name: row.name || null });
+        }
+    }
+    return conflicts;
+};
+
+const pincodeConflictMessage = (conflicts) => {
+    if (!conflicts || conflicts.length === 0) return 'Pincode already assigned to another area.';
+    const lines = conflicts.map(
+        (c) => `${c.pincode}${c.area_name ? ` (area: ${c.area_name})` : ''}`
+    );
+    return `Pincode already assigned to another area.\n${[...new Set(lines)].join('\n')}`;
+};
+
 /** Rejects values like "10" — MongoDB _id must be 24 hex chars. */
 const parseObjectId = (raw, fieldName = 'id') => {
     if (raw instanceof mongoose.Types.ObjectId) {
@@ -321,6 +355,11 @@ const createArea = async (body) => {
         const existing = await Area.findOne(areaNameExistsInCity(trimmedName, ctx.city._id));
         if (existing) return fail(409, 'Area name already exists for this city.');
 
+        const pinConflicts = await findConflictingPincodes(pinList);
+        if (pinConflicts.length > 0) {
+            return fail(409, pincodeConflictMessage(pinConflicts));
+        }
+
         const newArea = new Area({
             name: trimmedName,
             is_active,
@@ -374,7 +413,12 @@ const updateArea = async (id, body) => {
         }
 
         if (body.pincodes !== undefined) {
-            area.pincodes = normalizePincodes(body.pincodes);
+            const pinList = normalizePincodes(body.pincodes);
+            const pinConflicts = await findConflictingPincodes(pinList, id);
+            if (pinConflicts.length > 0) {
+                return fail(409, pincodeConflictMessage(pinConflicts));
+            }
+            area.pincodes = pinList;
             delete updateData.pincodes;
         }
 
@@ -470,6 +514,19 @@ const importAreas = async (records) => {
             seenKeys.add(k);
         }
 
+        const seenPincodes = new Map();
+        for (const r of toInsert) {
+            for (const p of r.pincodes || []) {
+                if (seenPincodes.has(p)) {
+                    return fail(
+                        409,
+                        `Duplicate pincode in import file: ${p} (areas: ${seenPincodes.get(p)}, ${r.name}).`
+                    );
+                }
+                seenPincodes.set(p, r.name);
+            }
+        }
+
         const existing = await Area.find({
             deleted_at: null,
             $or: toInsert.map((r) => ({
@@ -481,6 +538,12 @@ const importAreas = async (records) => {
         if (existing.length > 0) {
             const lines = existing.map((e) => `${e.name} (city ${e.city_id})`).join('\n');
             return fail(409, `Duplicate records found.\n${lines}`);
+        }
+
+        const allImportPins = [...seenPincodes.keys()];
+        const pinConflicts = await findConflictingPincodes(allImportPins);
+        if (pinConflicts.length > 0) {
+            return fail(409, pincodeConflictMessage(pinConflicts));
         }
 
         const result = await Area.insertMany(toInsert, { ordered: false });
