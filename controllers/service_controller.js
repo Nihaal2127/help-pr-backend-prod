@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Service = require('../models/service');
 const User = require('../models/user');
 const Category = require('../models/category');
+const Subcategory = require('../models/subcategory');
 const City = require('../models/city');
 const State = require('../models/state');
 const franchiseServiceManagementService = require('../services/franchise_service_management_service');
@@ -216,6 +217,71 @@ const attachRequestedByUser = async (records) => {
             name: requestedByUser.name || null,
           }
           : plainRecord.requested_by,
+    };
+  });
+};
+
+/** Resolve subcategory from subcategory.services[] for each service (like category_name). */
+const attachSubcategoryInfo = async (records) => {
+  if (!Array.isArray(records) || records.length === 0) return records;
+
+  const serviceIds = [
+    ...new Set(
+      records
+        .map((record) => record?._id)
+        .filter((id) => mongoose.Types.ObjectId.isValid(String(id)))
+        .map((id) => String(id))
+    ),
+  ];
+
+  if (serviceIds.length === 0) {
+    return records.map((record) => {
+      const plainRecord =
+        record && typeof record.toObject === "function"
+          ? record.toObject()
+          : record;
+      return {
+        ...plainRecord,
+        subcategory_id: null,
+        subcategory_name: null,
+      };
+    });
+  }
+
+  const objectIds = serviceIds.map((id) => new mongoose.Types.ObjectId(id));
+  const subcategories = await Subcategory.find({
+    deleted_at: null,
+    services: { $in: objectIds },
+  })
+    .select("_id name services")
+    .lean();
+
+  const serviceToSubcategory = new Map();
+  for (const sub of subcategories) {
+    for (const sid of Array.isArray(sub.services) ? sub.services : []) {
+      const key = String(sid);
+      if (!serviceToSubcategory.has(key)) {
+        serviceToSubcategory.set(key, {
+          subcategory_id: sub._id,
+          subcategory_name: sub.name || null,
+        });
+      }
+    }
+  }
+
+  return records.map((record) => {
+    const plainRecord =
+      record && typeof record.toObject === "function"
+        ? record.toObject()
+        : record;
+    const info = serviceToSubcategory.get(String(plainRecord._id)) || {
+      subcategory_id: null,
+      subcategory_name: null,
+    };
+    return {
+      ...plainRecord,
+      subcategory_id: info.subcategory_id,
+      subcategory_name: info.subcategory_name,
     };
   });
 };
@@ -554,7 +620,8 @@ const getAll = async (req, res) => {
     };
     const processedService = populatedService.map(calculateServicePrice);
     const enrichedServices = await attachRequestedByUser(processedService);
-    const responseServices = enrichedServices.map((service) =>
+    const withSubcategory = await attachSubcategoryInfo(enrichedServices);
+    const responseServices = withSubcategory.map((service) =>
       stripServiceLocationFields(service)
     );
 
@@ -1070,6 +1137,10 @@ const getById = async (req, res) => {
       }
     }
     response.category_name = category_name;
+
+    const [withSubcategory] = await attachSubcategoryInfo([response]);
+    response.subcategory_id = withSubcategory.subcategory_id ?? null;
+    response.subcategory_name = withSubcategory.subcategory_name ?? null;
 
     const franchiseScope = await resolveServiceGetFranchiseOid(req.query, req.user);
     if (!franchiseScope.ok) {

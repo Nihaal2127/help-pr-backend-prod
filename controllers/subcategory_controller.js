@@ -63,6 +63,55 @@ const getSubcategoryStatusConfig = (statusFilter = "") => {
   return {};
 };
 
+/** Query: sort_by = name | subcategory | subcategory_name | created_at; sort_order | order = asc | desc. */
+const parseSubcategoryGetAllSort = (query) => {
+  const orderRaw = String(
+    query.sort_order ?? query.sortOrder ?? query.order ?? ""
+  )
+    .trim()
+    .toLowerCase();
+
+  const resolveDirection = (defaultWhenMissing = 1) => {
+    if (orderRaw === "asc" || orderRaw === "1") return 1;
+    if (orderRaw === "desc" || orderRaw === "-1") return -1;
+    const legacy = query.sort !== undefined ? parseInt(query.sort, 10) : NaN;
+    if (legacy === 1 || legacy === -1) return legacy;
+    return defaultWhenMissing;
+  };
+
+  const sortByRaw = query.sort_by;
+  if (
+    sortByRaw === undefined ||
+    sortByRaw === null ||
+    String(sortByRaw).trim() === ""
+  ) {
+    const sortOrder = resolveDirection(1);
+    return {
+      sortBy: "name",
+      sortOrder,
+      mongoSort: { name: sortOrder },
+    };
+  }
+
+  const sortBy = String(sortByRaw).trim().toLowerCase().replace(/-/g, "_");
+  const sortOrder = resolveDirection(1);
+
+  const mongoField =
+    sortBy === "name" ||
+    sortBy === "subcategory" ||
+    sortBy === "subcategory_name"
+      ? "name"
+      : sortBy === "created_at"
+        ? "created_at"
+        : "name";
+
+  return {
+    sortBy: mongoField,
+    sortOrder,
+    mongoSort: { [mongoField]: sortOrder },
+  };
+};
+
 const attachRequestedByUser = async (records) => {
   if (!Array.isArray(records) || records.length === 0) return records;
 
@@ -237,17 +286,6 @@ const getAll = async (req, res) => {
 
     const keyword =
       req.query.search !== undefined ? req.query.search : req.query.keyword;
-    let regex;
-    let serviceIdsFromKeyword = [];
-    if (keyword) {
-      const sanitizedKeyword = sanitizeInput(keyword);
-      regex = new RegExp(sanitizedKeyword, "i");
-      const matchedServices = await Service.find({
-        deleted_at: null,
-        name: regex,
-      }).select("_id");
-      serviceIdsFromKeyword = matchedServices.map((service) => service._id);
-    }
 
     let subcategoryNameRegex;
     if (req.query.subcategory_name || req.query.name) {
@@ -262,15 +300,6 @@ const getAll = async (req, res) => {
       ...(is_active !== null && { is_active }),
       ...(is_request !== null && { is_request }),
       ...(approval_status && { approval_status }),
-      ...(keyword && {
-        $or: [
-          { name: regex },
-          { desc: regex },
-          ...(serviceIdsFromKeyword.length > 0
-            ? [{ services: { $in: serviceIdsFromKeyword } }]
-            : []),
-        ],
-      }),
       ...((req.query.subcategory_name || req.query.name) && {
         name: subcategoryNameRegex,
       }),
@@ -294,6 +323,28 @@ const getAll = async (req, res) => {
         });
       }
       filter.category_id = new mongoose.Types.ObjectId(req.query.category_id);
+    }
+
+    // Search by subcategory name and/or category name
+    if (keyword) {
+      const sanitizedKeyword = sanitizeInput(keyword);
+      const searchRegex = new RegExp(sanitizedKeyword, "i");
+      const matchingCategories = await Category.find({
+        deleted_at: null,
+        name: searchRegex,
+      }).select("_id");
+      const categoryIdsFromSearch = matchingCategories.map((c) => c._id);
+      const searchOr = [{ name: searchRegex }];
+      if (categoryIdsFromSearch.length > 0) {
+        searchOr.push({ category_id: { $in: categoryIdsFromSearch } });
+      }
+      if (filter.category_id) {
+        const selectedId = filter.category_id;
+        filter.$and = [{ category_id: selectedId }, { $or: searchOr }];
+        delete filter.category_id;
+      } else {
+        filter.$or = searchOr;
+      }
     }
 
     const caller = await User.findOne({
@@ -333,13 +384,13 @@ const getAll = async (req, res) => {
       filter.is_request = false;
     }
 
-    const sort = { created_at: -1 };
+    const { mongoSort } = parseSubcategoryGetAllSort(req.query);
     const pageResult = await applyPagination(
       Subcategory,
       filter,
       page,
       limit,
-      sort
+      mongoSort
     );
 
     const withRequestedBy = await attachRequestedByUser(pageResult.data);
