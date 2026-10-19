@@ -134,7 +134,7 @@ const createFranchiseMiddleware = (req, res, next) => {
             message: 'Area must be an array.',
         });
     }
-    const { services, categories } = body;
+    const { services, categories, subcategories } = body;
     if (services !== undefined && services !== null && !Array.isArray(services)) {
         return res.status(400).json({
             success: false,
@@ -147,6 +147,17 @@ const createFranchiseMiddleware = (req, res, next) => {
             success: false,
             status: 400,
             message: 'Categories must be an array.',
+        });
+    }
+    if (
+        subcategories !== undefined &&
+        subcategories !== null &&
+        !Array.isArray(subcategories)
+    ) {
+        return res.status(400).json({
+            success: false,
+            status: 400,
+            message: 'Subcategories must be an array.',
         });
     }
     next();
@@ -196,7 +207,7 @@ const updateFranchiseMiddleware = (req, res, next) => {
             message: 'Area must be an array.',
         });
     }
-    const { services, categories } = body;
+    const { services, categories, subcategories } = body;
     if (services !== undefined && services !== null && !Array.isArray(services)) {
         return res.status(400).json({
             success: false,
@@ -209,6 +220,17 @@ const updateFranchiseMiddleware = (req, res, next) => {
             success: false,
             status: 400,
             message: 'Categories must be an array.',
+        });
+    }
+    if (
+        subcategories !== undefined &&
+        subcategories !== null &&
+        !Array.isArray(subcategories)
+    ) {
+        return res.status(400).json({
+            success: false,
+            status: 400,
+            message: 'Subcategories must be an array.',
         });
     }
     next();

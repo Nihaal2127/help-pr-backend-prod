@@ -23,6 +23,10 @@ const franchiseSchema = new mongoose.Schema(
             type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'category' }],
             default: [],
         },
+        subcategories: {
+            type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'subcategory' }],
+            default: [],
+        },
         is_active: { type: Boolean, required: true },
         created_at: { type: Date, default: Date.now },
         updated_at: { type: Date, default: Date.now },

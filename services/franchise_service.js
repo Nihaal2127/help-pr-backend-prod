@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const { fieldLabel } = require('../utils/field_labels');
 const Franchise = require('../models/franchise');
 const Category = require('../models/category');
+const Subcategory = require('../models/subcategory');
 const Service = require('../models/service');
 const State = require('../models/state');
 const City = require('../models/city');
@@ -119,6 +120,39 @@ const validateServiceIds = async (oids) => {
         };
     }
     return { ok: true };
+};
+
+const validateSubcategoryIds = async (oids) => {
+    if (!oids || oids.length === 0) return { ok: true };
+    const count = await Subcategory.countDocuments({
+        _id: { $in: oids },
+        deleted_at: null,
+    });
+    if (count !== oids.length) {
+        return {
+            ok: false,
+            message: 'One or more subcategory IDs are invalid or deleted.',
+        };
+    }
+    return { ok: true };
+};
+
+/** Accept `subcategories` array, or singular `subcategory` / `subcategory_id`. */
+const resolveSubcategoriesInput = (body) => {
+    if (body.subcategories !== undefined) {
+        return parseObjectIdArray(body.subcategories, 'subcategories');
+    }
+    if (body.subcategory !== undefined && body.subcategory !== null && body.subcategory !== '') {
+        return parseObjectIdArray([body.subcategory], 'subcategories');
+    }
+    if (
+        body.subcategory_id !== undefined &&
+        body.subcategory_id !== null &&
+        body.subcategory_id !== ''
+    ) {
+        return parseObjectIdArray([body.subcategory_id], 'subcategories');
+    }
+    return { ok: true, oids: undefined };
 };
 
 const dedupeIdsPreserveOrder = (oids) => {
@@ -361,13 +395,19 @@ const createFranchise = async (body) => {
         if (!parsedCategories.ok) return fail(400, parsedCategories.message);
         const parsedServices = parseObjectIdArray(body.services, 'services');
         if (!parsedServices.ok) return fail(400, parsedServices.message);
+        const parsedSubcategories = resolveSubcategoriesInput(body);
+        if (!parsedSubcategories.ok) return fail(400, parsedSubcategories.message);
 
         const categoryOids =
             parsedCategories.oids !== undefined ? parsedCategories.oids : [];
         const serviceOids = parsedServices.oids !== undefined ? parsedServices.oids : [];
+        const subcategoryOids =
+            parsedSubcategories.oids !== undefined ? parsedSubcategories.oids : [];
 
         const catCheck = await validateCategoryIds(categoryOids);
         if (!catCheck.ok) return fail(400, catCheck.message);
+        const subCheck = await validateSubcategoryIds(subcategoryOids);
+        if (!subCheck.ok) return fail(400, subCheck.message);
         const svcCheck = await validateServiceIds(serviceOids);
         if (!svcCheck.ok) return fail(400, svcCheck.message);
 
@@ -401,6 +441,7 @@ const createFranchise = async (body) => {
                     ? String(contact).trim()
                     : '',
             categories: categoryOids,
+            subcategories: subcategoryOids,
             services: serviceOids,
             is_active,
         });
@@ -494,6 +535,20 @@ const updateFranchise = async (id, body) => {
             if (!catCheck.ok) return fail(400, catCheck.message);
             franchise.categories = parsedCategories.oids;
             delete updateData.categories;
+        }
+        if (
+            body.subcategories !== undefined ||
+            body.subcategory !== undefined ||
+            body.subcategory_id !== undefined
+        ) {
+            const parsedSubcategories = resolveSubcategoriesInput(body);
+            if (!parsedSubcategories.ok) return fail(400, parsedSubcategories.message);
+            const subCheck = await validateSubcategoryIds(parsedSubcategories.oids || []);
+            if (!subCheck.ok) return fail(400, subCheck.message);
+            franchise.subcategories = parsedSubcategories.oids || [];
+            delete updateData.subcategories;
+            delete updateData.subcategory;
+            delete updateData.subcategory_id;
         }
         if (body.services !== undefined) {
             const parsedServices = parseObjectIdArray(body.services, 'services');
