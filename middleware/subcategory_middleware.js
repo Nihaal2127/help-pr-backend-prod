@@ -259,23 +259,27 @@ const createSubcategoryRequestMiddleware = (req, res, next) => {
       message: "Sub Category Image is required.",
     });
   }
-  if (!Array.isArray(service_ids) || service_ids.length === 0) {
-    return res.status(400).json({
-      success: false,
-      status: 400,
-      message: "At least one service is required.",
-    });
-  }
-  if (
-    !service_ids.every(
-      (id) => id !== undefined && id !== null && String(id).trim() !== ""
-    )
-  ) {
-    return res.status(400).json({
-      success: false,
-      status: 400,
-      message: "Each service id must be a non-empty value.",
-    });
+  // Services are optional on franchise create-request / update-request
+  if (service_ids !== undefined && service_ids !== null) {
+    if (!Array.isArray(service_ids)) {
+      return res.status(400).json({
+        success: false,
+        status: 400,
+        message: "Service ids must be an array.",
+      });
+    }
+    if (
+      service_ids.length > 0 &&
+      !service_ids.every(
+        (id) => id !== undefined && id !== null && String(id).trim() !== ""
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        status: 400,
+        message: "Each service id must be a non-empty value.",
+      });
+    }
   }
   req.body.is_request = true;
   next();
