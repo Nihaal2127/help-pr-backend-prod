@@ -2,343 +2,271 @@
   "info": {
     "_postman_id": "help-pr-all-apis-merged",
     "name": "Help PR — All APIs (single collection)",
-    "description": "**Single Postman collection** for `help-pr-backend-staging`. Import only this file.\n\n**Generated:** 2026-05-20 via `node postman/merge-all-collections.mjs`\n\n**Sources merged (8) from `postman/archive/`:**\n- `archive/Help-PR-Orders-Module.postman_collection.json`\n- `archive/Help-PR-Order-Charges-Payments.postman_collection.json`\n- `archive/Help-PR-Partner-Franchise-Dropdowns.postman_collection.json`\n- `archive/content-expense-expense-category-management.postman_collection (1).json`\n- `archive/Area-Management.postman_collection.json`\n- `archive/Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json`\n- `archive/Help-PR-Area-Franchise-Subscription.postman_collection.json`\n- `archive/Help-PR-Admin-Dashboard.postman_collection.json`\n- Built-in: Partner payout (4 requests)\n- Built-in: Order refunds (4 requests)\n- Built-in: Partners browse — admin `GET /api/partners` (2 requests)\n- Built-in: Partner post management — admin `/api/partner-post` (4 requests)\n- Built-in: Appointment calendar — admin `/api/appointment` (6 requests)\n\n**Dedup:** Same HTTP method + path template (+ getCount `type` in body) → one request; higher-priority source wins.\n\n**Setup:** Set `baseUrl`. Run **00 — Auth → Login** to set `accessToken` / `token`.\n\n**Docs:** `docs/ORDER_MODULE_FRONTEND.md`, `docs/RAZORPAY_ONLINE_PAYMENTS_AUDIT.md`, `docs/SUBSCRIPTION_CHANGE_FRONTEND.md`, `docs/ORDER_GETALL_API_CHANGES.md`, `docs/APPOINTMENT_MODULE_FRONTEND.md`, `docs/PARTNER_PAYOUT_FRONTEND.md`, `docs/PARTNER_POST_FRONTEND.md`, `docs/REFUND_API.md`, `docs/REFUND_FRONTEND.md`, `postman/Help-PR-Refunds.postman_collection.json`\n\n**Mobile:** folder **Mobile → Partner** / **Mobile → User** — run `node postman/build-mobile-folder.mjs` to refresh.\n\n*** Subcategory patch 2026-10-17: added folder **10b — Subcategory (catalog)** (`/api/subcategory`). ***\n\n*** Franchise subcategories patch 2026-10-19: create/update/get bodies include `subcategories` on franchise document. ***",
+    "description": "**Single Postman collection** for `help-pr-backend-staging`. Import only this file.\n\n**Generated:** 2026-05-20 via `node postman/merge-all-collections.mjs`\n\n**Sources merged (8) from `postman/archive/`:**\n- `archive/Help-PR-Orders-Module.postman_collection.json`\n- `archive/Help-PR-Order-Charges-Payments.postman_collection.json`\n- `archive/Help-PR-Partner-Franchise-Dropdowns.postman_collection.json`\n- `archive/content-expense-expense-category-management.postman_collection (1).json`\n- `archive/Area-Management.postman_collection.json`\n- `archive/Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json`\n- `archive/Help-PR-Area-Franchise-Subscription.postman_collection.json`\n- `archive/Help-PR-Admin-Dashboard.postman_collection.json`\n- Built-in: Partner payout (4 requests)\n- Built-in: Order refunds (4 requests)\n- Built-in: Partners browse — admin `GET /api/partners` (2 requests)\n- Built-in: Partner post management — admin `/api/partner-post` (4 requests)\n- Built-in: Appointment calendar — admin `/api/appointment` (6 requests)\n\n**Dedup:** Same HTTP method + path template (+ getCount `type` in body) → one request; higher-priority source wins.\n\n**Setup:** Set `baseUrl`. Run **00 — Auth → Admin / Staff → Login** to set `accessToken` / `token`.\n\n**Docs:** `docs/ORDER_MODULE_FRONTEND.md`, `docs/RAZORPAY_ONLINE_PAYMENTS_AUDIT.md`, `docs/SUBSCRIPTION_CHANGE_FRONTEND.md`, `docs/ORDER_GETALL_API_CHANGES.md`, `docs/APPOINTMENT_MODULE_FRONTEND.md`, `docs/PARTNER_PAYOUT_FRONTEND.md`, `docs/PARTNER_POST_FRONTEND.md`, `docs/REFUND_API.md`, `docs/REFUND_FRONTEND.md`, `postman/Help-PR-Refunds.postman_collection.json`\n\n**Mobile:** folder **Mobile → Partner** / **Mobile → User** — run `node postman/build-mobile-folder.mjs` to refresh.\n\n*** Subcategory patch 2026-10-17: added folder **10b — Subcategory (catalog)** (`/api/subcategory`). ***\n\n*** Franchise subcategories patch 2026-10-19: create/update/get bodies include `subcategories` on franchise document. ***",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
     {
       "name": "00 — Auth",
-      "description": "**/api/auth** — 8 request(s). Duplicates merged across source collections.",
+      "description": "Web auth — one request per endpoint. Subfolders by user flow.\n\n**Admin / Staff:** `POST /api/auth/login` (email/password), logout, forgotPassword.\n**Customer / User:** `POST /api/auth/userLogin` (phone), plus `/api/otp/send_otp` and `/api/otp/verify_otp`.\n\nPartner mobile auth stays under **Mobile → Partner**.",
       "item": [
         {
-          "name": "Auth — forgotPassword",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/auth/forgotPassword",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "auth",
-                "forgotPassword"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 00 — Auth & OTP_"
-        },
-        {
-          "name": "Auth — logout",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/auth/logout",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "auth",
-                "logout"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 00 — Auth & OTP_"
-        },
-        {
-          "name": "Auth — userLogin",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/auth/userLogin",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "auth",
-                "userLogin"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 00 — Auth & OTP_"
-        },
-        {
-          "name": "Forgot password",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/auth/forgotPassword"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Auth_"
-        },
-        {
-          "name": "Login",
-          "event": [
+          "name": "Admin / Staff",
+          "description": "Email/password auth via `/api/auth/*`. Same Login endpoint for super admin, staff, franchise admin/employee.",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "try {",
-                  "  const j = pm.response.json();",
-                  "  if (j && j.record && j.record.auth_token) {",
-                  "    pm.collectionVariables.set('token', j.record.auth_token);",
-                  "  }",
-                  "} catch (e) {}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"device_token\": \"{{deviceToken}}\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/auth/login",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "auth",
-                "login"
-              ]
-            },
-            "description": "Saves JWT to collection variable **`token`**."
-          },
-          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 00 — Auth & health_"
-        },
-        {
-          "name": "Login",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"\",\n  \"password\": \"\",\n  \"device_token\": \"\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/auth/login"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Auth_"
-        },
-        {
-          "name": "Logout",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
+              "name": "Login",
+              "event": [
                 {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "try {",
+                      "  const j = pm.response.json();",
+                      "  const token = j?.record?.auth_token;",
+                      "  if (token) {",
+                      "    pm.collectionVariables.set('token', token);",
+                      "    pm.collectionVariables.set('accessToken', token);",
+                      "  }",
+                      "} catch (e) {}"
+                    ],
+                    "type": "text/javascript"
+                  }
                 }
-              ]
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{base_url}}/api/auth/logout"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Auth_"
-        },
-        {
-          "name": "User login",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"phone_number\": \"\",\n  \"device_token\": \"\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/auth/userLogin"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Auth_"
-        }
-      ]
-    },
-    {
-      "name": "01 — OTP",
-      "description": "**/api/otp** — 4 request(s). Duplicates merged across source collections.",
-      "item": [
-        {
-          "name": "OTP — send_otp",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/otp/send_otp",
-              "host": [
-                "{{baseUrl}}"
               ],
-              "path": [
-                "api",
-                "otp",
-                "send_otp"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 00 — Auth & OTP_"
-        },
-        {
-          "name": "OTP — verify_otp",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/otp/verify_otp",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "otp",
-                "verify_otp"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 00 — Auth & OTP_"
-        },
-        {
-          "name": "Send OTP",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"device_token\": \"{{deviceToken}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/login",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "login"
+                  ]
+                },
+                "description": "**POST /api/auth/login** — email + password.\n\nSaves JWT to **`token`** and **`accessToken`**."
               },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"phone_number\": \"\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "response": []
             },
-            "url": "{{base_url}}/api/otp/send_otp"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → OTP_"
+            {
+              "name": "Logout",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/logout",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "logout"
+                  ]
+                },
+                "description": "**POST /api/auth/logout** — requires Bearer JWT."
+              },
+              "response": []
+            },
+            {
+              "name": "Forgot password",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{email}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/forgotPassword",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "forgotPassword"
+                  ]
+                },
+                "description": "**POST /api/auth/forgotPassword** — send registered email."
+              },
+              "response": []
+            }
+          ]
         },
         {
-          "name": "Verify OTP",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
+          "name": "Customer / User",
+          "description": "Phone login + OTP via `/api/auth/userLogin` and `/api/otp/*`.",
+          "item": [
+            {
+              "name": "User login",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"phone_number\": \"{{phoneNumber}}\",\n  \"device_token\": \"{{deviceToken}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/userLogin",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "userLogin"
+                  ]
+                },
+                "description": "**POST /api/auth/userLogin** — phone-based user login."
               },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"phone_number\": \"\",\n  \"otp\": \"\",\n  \"device_token\": \"\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "response": []
             },
-            "url": "{{base_url}}/api/otp/verify_otp"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → OTP_"
+            {
+              "name": "Send OTP",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"phone_number\": \"{{phoneNumber}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/otp/send_otp",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "otp",
+                    "send_otp"
+                  ]
+                },
+                "description": "**POST /api/otp/send_otp**"
+              },
+              "response": []
+            },
+            {
+              "name": "Verify OTP",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"phone_number\": \"{{phoneNumber}}\",\n  \"otp\": \"{{otp}}\",\n  \"device_token\": \"{{deviceToken}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/otp/verify_otp",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "otp",
+                    "verify_otp"
+                  ]
+                },
+                "description": "**POST /api/otp/verify_otp**"
+              },
+              "response": []
+            }
+          ]
         }
       ]
     },
@@ -839,7 +767,7 @@
     },
     {
       "name": "03 — Dashboard",
-      "description": "**/api/dashboard** — 3 request(s). Duplicates merged across source collections.",
+      "description": "**/api/dashboard** — one request per endpoint.\n\n- **getData** — legacy dashboard payload\n- **stats** — admin KPI cards (`franchise_id`, optional date filters)",
       "item": [
         {
           "name": "Dashboard — getData",
@@ -915,69 +843,13 @@
             "description": "**GET /api/dashboard/stats** — Admin home dashboard KPIs in one response.\n\n**Access:** Super admin (5), admin (1), staff (6), employee (3). Partner / customer → **403**.\n\n**Auth:** `Bearer {{accessToken}}` (run **00 — Auth → Login**).\n\n**Query:** `franchise_id` (optional), `from_date`, `to_date` (optional — omit both for **all-time** stats; pass one or both to filter).\n\n**Date filters (only when from_date and/or to_date sent):**\n- `quotes` — `created_at` in range\n- `orders` — schedule / `order_date` overlap (same as order list)\n- `payments` — completed `order_payment` rows by `paid_at` (fallback `created_at`), plus legacy `is_paid` orders without payment rows (order schedule date)\n- `services` / `partners` — current snapshot (not date-filtered)\n\n**Response `record`:**\n| Key | Fields |\n|-----|--------|\n| `quotes` | `requests_received`, `in_progress`, `completed`, `cancelled` |\n| `orders` | `in_progress`, `completed`, `cancelled` |\n| `payments` | `total_payments`, `customer`, `partner`, `commission` (₹ amounts) |\n| `services` | `total`, `active`, `inactive` |\n| `partners` | `total`, `active`, `inactive` (approved partners, `verification_status: 2`) |\n| meta | `franchise_id`, `from_date`, `to_date` |"
           },
           "description": "Admin dashboard aggregate counts — quotes, orders, payments, services, partners with franchise scope."
-        },
-        {
-          "name": "Get data",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/dashboard/getData"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Dashboard_"
         }
       ]
     },
     {
       "name": "04 — State",
-      "description": "**/api/state** — 14 request(s). Duplicates merged across source collections.",
+      "description": "**/api/state** — one request per endpoint. Vars: `{{stateId}}`, `{{baseUrl}}`, `{{accessToken}}`.",
       "item": [
-        {
-          "name": "Create",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/state/create"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → State_"
-        },
         {
           "name": "Create state",
           "event": [
@@ -1031,69 +903,6 @@
             "description": "Response includes **`savedState`**. Resend the same **`name`** to verify **409** `State name already exists.`"
           },
           "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → State_"
-        },
-        {
-          "name": "Delete",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "DELETE",
-            "header": [],
-            "url": "{{base_url}}/api/state/delete/{{id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → State_"
-        },
-        {
-          "name": "Delete state (soft)",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/state/delete/{{stateId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "state",
-                "delete",
-                "{{stateId}}"
-              ]
-            }
-          },
-          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → State_"
-        },
-        {
-          "name": "Get all",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/state/getAll"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → State_"
         },
         {
           "name": "Get all states",
@@ -1156,37 +965,6 @@
           "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → State_"
         },
         {
-          "name": "Get by id",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/state/get/{{id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → State_"
-        },
-        {
-          "name": "Get dropdown",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/state/getDropDown"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → State_"
-        },
-        {
           "name": "Get state by id",
           "request": {
             "method": "GET",
@@ -1232,112 +1010,6 @@
           "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → State_"
         },
         {
-          "name": "Import states",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"records\": [\n    { \"name\": \"Import-State-A-{{$timestamp}}\", \"is_active\": true },\n    { \"name\": \"Import-State-B-{{$timestamp}}\", \"is_active\": false }\n  ]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/state/imports",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "state",
-                "imports"
-              ]
-            }
-          },
-          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → State_"
-        },
-        {
-          "name": "Imports",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/state/imports"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → State_"
-        },
-        {
-          "name": "Update",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/state/update/{{id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → State_"
-        },
-        {
           "name": "Update state",
           "request": {
             "method": "PUT",
@@ -1369,26 +1041,35 @@
             }
           },
           "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → State_"
-        }
-      ]
-    },
-    {
-      "name": "05 — City",
-      "description": "**/api/city** — 14 request(s). Duplicates merged across source collections.",
-      "item": [
+        },
         {
-          "name": "Create",
+          "name": "Delete state (soft)",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/state/delete/{{stateId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "state",
+                "delete",
+                "{{stateId}}"
               ]
-            },
+            }
+          },
+          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → State_"
+        },
+        {
+          "name": "Import states",
+          "request": {
             "method": "POST",
             "header": [
               {
@@ -1396,23 +1077,34 @@
                 "value": "application/json"
               },
               {
-                "key": "Accept",
-                "value": "application/json"
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "raw": "{\n  \"records\": [\n    { \"name\": \"Import-State-A-{{$timestamp}}\", \"is_active\": true },\n    { \"name\": \"Import-State-B-{{$timestamp}}\", \"is_active\": false }\n  ]\n}"
             },
-            "url": "{{base_url}}/api/city/create"
+            "url": {
+              "raw": "{{baseUrl}}/api/state/imports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "state",
+                "imports"
+              ]
+            }
           },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → City_"
-        },
+          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → State_"
+        }
+      ]
+    },
+    {
+      "name": "05 — City",
+      "description": "**/api/city** — one request per endpoint. Vars: `{{cityId}}`, `{{stateId}}`, `{{baseUrl}}`, `{{accessToken}}`.",
+      "item": [
         {
           "name": "Create city",
           "event": [
@@ -1463,69 +1155,6 @@
             "description": "Requires valid **`state_id`**. Sets **`cityId`** on success."
           },
           "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → City_"
-        },
-        {
-          "name": "Delete",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "DELETE",
-            "header": [],
-            "url": "{{base_url}}/api/city/delete/{{id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → City_"
-        },
-        {
-          "name": "Delete city (soft)",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/city/delete/{{cityId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "city",
-                "delete",
-                "{{cityId}}"
-              ]
-            }
-          },
-          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → City_"
-        },
-        {
-          "name": "Get all",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/city/getAll"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → City_"
         },
         {
           "name": "Get all cities",
@@ -1581,25 +1210,6 @@
           "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → City_"
         },
         {
-          "name": "Get by id",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/city/get/{{id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → City_"
-        },
-        {
           "name": "Get city by id",
           "request": {
             "method": "GET",
@@ -1651,16 +1261,62 @@
           "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → City_"
         },
         {
-          "name": "Get dropdown",
+          "name": "Update city",
           "request": {
-            "auth": {
-              "type": "noauth"
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"City-Updated-{{$timestamp}}\",\n  \"is_active\": true,\n  \"city_service_price\": 10\n}"
             },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/city/getDropDown"
+            "url": {
+              "raw": "{{baseUrl}}/api/city/update/{{cityId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "city",
+                "update",
+                "{{cityId}}"
+              ]
+            }
           },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → City_"
+          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → City_"
+        },
+        {
+          "name": "Delete city (soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/city/delete/{{cityId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "city",
+                "delete",
+                "{{cityId}}"
+              ]
+            }
+          },
+          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → City_"
         },
         {
           "name": "Import cities",
@@ -1694,131 +1350,13 @@
             "description": "**`state_name`** must match an existing state in DB. Run **State → Create** first so **`stateNameForImport`** is set, or edit manually."
           },
           "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → City_"
-        },
-        {
-          "name": "Imports",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/city/imports"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → City_"
-        },
-        {
-          "name": "Update",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/city/update/{{id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → City_"
-        },
-        {
-          "name": "Update city",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"City-Updated-{{$timestamp}}\",\n  \"is_active\": true,\n  \"city_service_price\": 10\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/city/update/{{cityId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "city",
-                "update",
-                "{{cityId}}"
-              ]
-            }
-          },
-          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → City_"
         }
       ]
     },
     {
       "name": "06 — Area",
-      "description": "**/api/area** — 14 request(s). Duplicates merged across source collections.",
+      "description": "**/api/area** — one request per endpoint. Vars: `{{areaId}}`, `{{cityId}}`, `{{baseUrl}}`, `{{accessToken}}`.",
       "item": [
-        {
-          "name": "Area dropdown",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "GET",
-            "url": "{{base_url}}/api/area/getDropDown"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json → Area_"
-        },
         {
           "name": "Create area",
           "event": [
@@ -1867,57 +1405,6 @@
               ]
             },
             "description": "**`city_id`** = Mongo ObjectId (24 hex). Sets **`areaId`** on success."
-          },
-          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → Area_"
-        },
-        {
-          "name": "Create area",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Indiranagar\",\n  \"city_id\": \"{{city_id}}\",\n  \"is_active\": true,\n  \"pincodes\": [\"560038\", \"560008\"]\n}"
-            },
-            "url": "{{base_url}}/api/area/create"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json → Area_"
-        },
-        {
-          "name": "Delete area",
-          "request": {
-            "method": "DELETE",
-            "url": "{{base_url}}/api/area/delete/{{area_id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json → Area_"
-        },
-        {
-          "name": "Delete area (soft)",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/area/delete/{{areaId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "area",
-                "delete",
-                "{{areaId}}"
-              ]
-            }
           },
           "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → Area_"
         },
@@ -1992,14 +1479,6 @@
           "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → Area_"
         },
         {
-          "name": "Get all areas",
-          "request": {
-            "method": "GET",
-            "url": "{{base_url}}/api/area/getAll?page=1&limit=10&sort=-1"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json → Area_"
-        },
-        {
           "name": "Get area by id",
           "request": {
             "method": "GET",
@@ -2023,14 +1502,6 @@
             }
           },
           "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → Area_"
-        },
-        {
-          "name": "Get area by id",
-          "request": {
-            "method": "GET",
-            "url": "{{base_url}}/api/area/get/{{area_id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json → Area_"
         },
         {
           "name": "Get area dropdown",
@@ -2057,6 +1528,64 @@
                   "value": "",
                   "disabled": true
                 }
+              ]
+            }
+          },
+          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → Area_"
+        },
+        {
+          "name": "Update area",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Area-Updated-{{$timestamp}}\",\n  \"is_active\": true,\n  \"pincodes\": [\"560001\", \"560002\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/area/update/{{areaId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "area",
+                "update",
+                "{{areaId}}"
+              ]
+            }
+          },
+          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → Area_"
+        },
+        {
+          "name": "Delete area (soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/area/delete/{{areaId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "area",
+                "delete",
+                "{{areaId}}"
               ]
             }
           },
@@ -2093,75 +1622,6 @@
             }
           },
           "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → Area_"
-        },
-        {
-          "name": "Import areas",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"records\": [\n    {\n      \"name\": \"Koramangala\",\n      \"city_id\": \"{{city_id}}\",\n      \"is_active\": true,\n      \"pincodes\": [\"560034\"]\n    }\n  ]\n}"
-            },
-            "url": "{{base_url}}/api/area/imports"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json → Area_"
-        },
-        {
-          "name": "Update area",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Area-Updated-{{$timestamp}}\",\n  \"is_active\": true,\n  \"pincodes\": [\"560001\", \"560002\"]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/area/update/{{areaId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "area",
-                "update",
-                "{{areaId}}"
-              ]
-            }
-          },
-          "description": "\n\n_Source: content-expense-expense-category-management.postman_collection (1).json → 05 — State, City & Area → Area_"
-        },
-        {
-          "name": "Update area",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Indiranagar East\",\n  \"is_active\": true,\n  \"pincodes\": [\"560038\"]\n}"
-            },
-            "url": "{{base_url}}/api/area/update/{{area_id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json → Area_"
         }
       ]
     },
@@ -2472,45 +1932,8 @@
     },
     {
       "name": "08 — Franchise category",
-      "description": "**/api/franchise-category** — 8 request(s). Duplicates merged across source collections.",
+      "description": "**/api/franchise-category** — one request per endpoint (create, getAll, getById, update).",
       "item": [
-        {
-          "name": "Franchise category — create",
-          "description": "POST /api/franchise-category/create — super admin / staff only. Body: `franchise_id`, `categories_list` (`category_id`, `is_active`). Server sets `active_categories` / `inactive_categories` and **`categories_order`** (same order as entries in `categories_list`).\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Franchise_",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"franchise_id\": \"{{franchise_id}}\",\n  \"categories_list\": [\n    { \"category_id\": \"{{category_id}}\", \"is_active\": true }\n  ],\n  \"order_number\": 0\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/franchise-category/create"
-          }
-        },
         {
           "name": "Franchise category — create",
           "request": {
@@ -2535,54 +1958,6 @@
             }
           },
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → Franchises → Franchise category_"
-        },
-        {
-          "name": "Franchise category — get by id",
-          "description": "GET /api/franchise-category/get/:id — super / staff / franchise admin / employee (scoped). Response record includes `active_categories`, `inactive_categories`, `categories_order`, and **hydrated** `categories_list[].is_active` from `active_categories`.\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Franchise_",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{base_url}}/api/franchise-category/get/{{franchise_category_mapping_id}}"
-          }
-        },
-        {
-          "name": "Franchise category — getAll",
-          "description": "GET /api/franchise-category/getAll — super / staff / franchise admin / employee. Query: `franchise_id`, `page`, `limit`, optional `is_active` / `is_request` (catalog doc filters). Each record: `active_categories`, `inactive_categories`, `categories_order`, plus **hydrated** `categories_list` for API display.\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Franchise_",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{base_url}}/api/franchise-category/getAll?page=1&limit=10&franchise_id={{franchise_id}}"
-          }
         },
         {
           "name": "Franchise category — getAll",
@@ -2637,43 +2012,6 @@
         },
         {
           "name": "Franchise category — update",
-          "description": "PUT /api/franchise-category/update/:id.\n\n**A — Partition toggle (default):** Body with **`active_categories`** and/or **`inactive_categories`** (ObjectId string arrays). They must **partition** every `category_id` in `categories_list`. **`categories_list` is not persisted** from this toggle. **Cascade:** any category moved to **inactive** forces services under that category (same franchise) from **`active_services`** → **`inactive_services`** on the mapping doc.\n\n**B — Replace full list:** Super admin (or franchise admin under rules) may send **`categories_list`** — then `active_*` / `inactive_*` / **`categories_order`** are rebuilt from the payload.\n\n**C — Reorder only:** **`categories_order`** alone (permutation of mapped ids). Responses hydrate `categories_list[].is_active` from `active_categories`.\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Franchise_",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"active_categories\": [],\n  \"inactive_categories\": [\"{{category_id}}\"]\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/franchise-category/update/{{franchise_category_mapping_id}}"
-          }
-        },
-        {
-          "name": "Franchise category — update",
           "request": {
             "method": "PUT",
             "header": [
@@ -2702,45 +2040,8 @@
     },
     {
       "name": "09 — Franchise service",
-      "description": "**/api/franchise-service** — 8 request(s). Duplicates merged across source collections.",
+      "description": "**/api/franchise-service** — one request per endpoint (create, getAll, getById, update).",
       "item": [
-        {
-          "name": "Franchise service — create",
-          "description": "POST /api/franchise-service/create — super admin / staff only. Body: `franchise_id`, `services_list` (`service_id`, `is_active`). Server sets `active_services` / `inactive_services` and **`services_order`** (same order as `services_list` entries).\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Franchise_",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"franchise_id\": \"{{franchise_id}}\",\n  \"services_list\": [\n    { \"service_id\": \"{{service_id}}\", \"is_active\": true }\n  ],\n  \"order_number\": 0\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/franchise-service/create"
-          }
-        },
         {
           "name": "Franchise service — create",
           "request": {
@@ -2765,54 +2066,6 @@
             }
           },
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → Franchises → Franchise service_"
-        },
-        {
-          "name": "Franchise service — get by id",
-          "description": "GET /api/franchise-service/get/:id — same auth as getAll. Response hydrates `services_list[].is_active` from `active_services`.\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Franchise_",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{base_url}}/api/franchise-service/get/{{franchise_service_mapping_id}}"
-          }
-        },
-        {
-          "name": "Franchise service — getAll",
-          "description": "GET /api/franchise-service/getAll — same roles as franchise category. Records include `active_services`, `inactive_services`, `services_order`, **hydrated** `services_list`.\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Franchise_",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{base_url}}/api/franchise-service/getAll?page=1&limit=10&franchise_id={{franchise_id}}"
-          }
         },
         {
           "name": "Franchise service — getAll",
@@ -2867,43 +2120,6 @@
         },
         {
           "name": "Franchise service — update",
-          "description": "PUT /api/franchise-service/update/:id.\n\n**Partition toggle:** `active_services` / `inactive_services` only — **`services_list` not persisted** from toggle (only when the full list is replaced). Send one or both arrays; complement derived. **No** parent-category cascade on service toggle.\n\n**Reorder:** optional **`services_order`**. Responses hydrate `services_list[].is_active` from `active_services`.\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Franchise_",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"active_services\": [],\n  \"inactive_services\": [\"{{service_id}}\"]\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/franchise-service/update/{{id}}"
-          }
-        },
-        {
-          "name": "Franchise service — update",
           "request": {
             "method": "PUT",
             "header": [
@@ -2932,10 +2148,10 @@
     },
     {
       "name": "10 — Category (catalog)",
-      "description": "**/api/category** — 17 request(s). Duplicates merged across source collections.\n\n**getAll / get/:id** return nested **`subcategories[]`** (`_id`, `subcategory_id`, `name`, `services`) under each category (approved, non-deleted).",
+      "description": "**/api/category** — one request per endpoint.\n\nIncludes both **direct** (`create` / `update`) and **franchise request** (`create-request` / `update-request`) flows.",
       "item": [
         {
-          "name": "Category — create",
+          "name": "Create",
           "request": {
             "method": "POST",
             "header": [
@@ -2960,306 +2176,7 @@
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 04 — Service Management (catalog)_"
         },
         {
-          "name": "Category — delete",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/category/delete/{{id}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "category",
-                "delete",
-                "{{id}}"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 04 — Service Management (catalog)_"
-        },
-        {
-          "name": "Category — imports",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/category/imports",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "category",
-                "imports"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 04 — Service Management (catalog)_"
-        },
-        {
-          "name": "Create (direct — Super Admin / Staff)",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Home services\",\n  \"desc\": \"Home repair category\",\n  \"city_ids\": [\"{{city_id}}\"],\n  \"state_ids\": [\"{{state_id}}\"],\n  \"image_url\": \"https://example.com/cat.jpg\",\n  \"is_active\": true\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/category/create",
-            "description": "Token type 5 or 6."
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Category_"
-        },
-        {
-          "name": "Delete",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "DELETE",
-            "header": [],
-            "url": "{{base_url}}/api/category/delete/{{category_id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Category_"
-        },
-        {
-          "name": "Get by id",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/category/get/{{category_id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Category_"
-        },
-        {
-          "name": "GET categories — all rows (no status filter)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "description": "Combine with client-side tabs or add `status` / `is_request` for server-side slices.",
-            "url": {
-              "raw": "{{baseUrl}}/api/category/getAll?page=1&limit=10&keyword=",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "category",
-                "getAll"
-              ],
-              "query": [
-                {
-                  "key": "page",
-                  "value": "1"
-                },
-                {
-                  "key": "limit",
-                  "value": "10"
-                },
-                {
-                  "key": "keyword",
-                  "value": ""
-                }
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → My Franchise → Categories_"
-        },
-        {
-          "name": "GET category — getDropDown (pick services / filters)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "description": "Uses same auth; optional query params per controller.",
-            "url": {
-              "raw": "{{baseUrl}}/api/category/getDropDown",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "category",
-                "getDropDown"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → My Franchise → Categories_"
-        },
-        {
-          "name": "GET category — view one (getById)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "description": "Detail drawer / view action.",
-            "url": {
-              "raw": "{{baseUrl}}/api/category/get/{{categoryRequestId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "category",
-                "get",
-                "{{categoryRequestId}}"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → My Franchise → Categories_"
-        },
-        {
-          "name": "Get dropdown (catalog)",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/category/getDropDown",
-            "description": "Accepted / legacy only."
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Category_"
-        },
-        {
-          "name": "Import single",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Imported cat\",\n  \"desc\": \"Desc\",\n  \"city_ids\": [\"{{city_id}}\"],\n  \"state_ids\": [\"{{state_id}}\"],\n  \"image_url\": \"https://example.com/img.jpg\",\n  \"is_active\": true\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/category/imports",
-            "description": "Same rules as create; bulk Excel requires types 5 or 6."
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Category_"
-        },
-        {
-          "name": "List requested categories (franchise-scoped)",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{base_url}}/api/category/getAll?page=1&limit=10&is_request=true&approval_status=pending&sort=1",
-            "description": "Use **Franchise Admin** token tied to **`{{franchise_id}}`**. Returns pending global category requests submitted by users under that franchise. Remove `approval_status=pending` to include other approval states while keeping `is_request=true`."
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Franchise → Global catalog — requested (franchise queue)_"
-        },
-        {
-          "name": "POST category — Add request (create-request)",
+          "name": "Create request",
           "request": {
             "method": "POST",
             "header": [
@@ -3329,9 +2246,9 @@
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → My Franchise → Categories_"
         },
         {
-          "name": "PUT category — Edit pending request (update-request)",
+          "name": "Get all",
           "request": {
-            "method": "PUT",
+            "method": "GET",
             "header": [
               {
                 "key": "Authorization",
@@ -3339,41 +2256,29 @@
                 "type": "text"
               }
             ],
-            "description": "Save changes to a request still in pending state. Use category `_id`.",
+            "description": "Combine with client-side tabs or add `status` / `is_request` for server-side slices.",
             "url": {
-              "raw": "{{baseUrl}}/api/category/update-request/{{categoryRequestId}}",
+              "raw": "{{baseUrl}}/api/category/getAll?page=1&limit=10&keyword=",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "category",
-                "update-request",
-                "{{categoryRequestId}}"
-              ]
-            },
-            "body": {
-              "mode": "formdata",
-              "formdata": [
+                "getAll"
+              ],
+              "query": [
                 {
-                  "key": "name",
-                  "value": "Updated request name",
-                  "type": "text"
+                  "key": "page",
+                  "value": "1"
                 },
                 {
-                  "key": "desc",
-                  "value": "Updated description",
-                  "type": "text"
+                  "key": "limit",
+                  "value": "10"
                 },
                 {
-                  "key": "image_url",
-                  "value": "https://example.com/cat.png",
-                  "type": "text"
-                },
-                {
-                  "key": "service_ids",
-                  "value": "[\"REPLACE_SERVICE_OBJECT_ID\"]",
-                  "type": "text"
+                  "key": "keyword",
+                  "value": ""
                 }
               ]
             }
@@ -3381,7 +2286,60 @@
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → My Franchise → Categories_"
         },
         {
-          "name": "PUT category — update (approved / non-request row)",
+          "name": "Get by id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "description": "Detail drawer / view action.",
+            "url": {
+              "raw": "{{baseUrl}}/api/category/get/{{categoryRequestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "category",
+                "get",
+                "{{categoryRequestId}}"
+              ]
+            }
+          },
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → My Franchise → Categories_"
+        },
+        {
+          "name": "Get dropdown",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "description": "Uses same auth; optional query params per controller.",
+            "url": {
+              "raw": "{{baseUrl}}/api/category/getDropDown",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "category",
+                "getDropDown"
+              ]
+            }
+          },
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → My Franchise → Categories_"
+        },
+        {
+          "name": "Update",
           "request": {
             "method": "PUT",
             "header": [
@@ -3438,76 +2396,107 @@
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → My Franchise → Categories_"
         },
         {
-          "name": "Update (admin — content only)",
+          "name": "Update request",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
             "method": "PUT",
             "header": [
               {
-                "key": "Content-Type",
-                "value": "application/json"
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Updated name\",\n  \"desc\": \"Updated desc\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+            "description": "Save changes to a request still in pending state. Use category `_id`.",
+            "url": {
+              "raw": "{{baseUrl}}/api/category/update-request/{{categoryRequestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "category",
+                "update-request",
+                "{{categoryRequestId}}"
+              ]
             },
-            "url": "{{base_url}}/api/category/update/{{category_id}}",
-            "description": "Partial update example. See folder description for full list (`service_ids`, `city_ids`, `state_ids`, `is_active`, `approval_status`, etc.). For resubmitting a **pending request** with all required fields use **`PUT /api/category/update-request/:id`**."
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Updated request name",
+                  "type": "text"
+                },
+                {
+                  "key": "desc",
+                  "value": "Updated description",
+                  "type": "text"
+                },
+                {
+                  "key": "image_url",
+                  "value": "https://example.com/cat.png",
+                  "type": "text"
+                },
+                {
+                  "key": "service_ids",
+                  "value": "[\"REPLACE_SERVICE_OBJECT_ID\"]",
+                  "type": "text"
+                }
+              ]
+            }
           },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Category_"
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → My Franchise → Categories_"
         },
         {
-          "name": "Update request (resubmit pending — full body)",
+          "name": "Delete",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "PUT",
+            "method": "DELETE",
             "header": [
               {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Requested category\",\n  \"desc\": \"Updated copy after review feedback\",\n  \"image_url\": \"https://example.com/cat.jpg\",\n  \"service_ids\": [\"{{service_id}}\"],\n  \"city_ids\": [\"{{city_id}}\"],\n  \"state_ids\": [\"{{state_id}}\"],\n  \"is_active\": false\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/category/update-request/{{category_id}}",
-            "description": "PUT **`/api/category/update-request/:id`**. Same controller as **`/update`**; middleware requires **every** call to include **`name`**, **`desc`**, **`image_url`**, and a non-empty **`service_ids`** array (like **`POST /create-request`**). Optional: **`city_ids`**, **`state_ids`**, **`is_active`**, **`approval_status`**, etc. Multipart with field **`image`** also supported (same as category update)."
+            "url": {
+              "raw": "{{baseUrl}}/api/category/delete/{{id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "category",
+                "delete",
+                "{{id}}"
+              ]
+            }
           },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Category_"
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 04 — Service Management (catalog)_"
+        },
+        {
+          "name": "Import",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/category/imports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "category",
+                "imports"
+              ]
+            }
+          },
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 04 — Service Management (catalog)_"
         }
       ]
     },
@@ -4135,259 +3124,35 @@
     },
     {
       "name": "11 — Service (catalog)",
-      "description": "**/api/service** — 16 request(s). Duplicates merged across source collections.",
+      "description": "**/api/service** — one request per endpoint.\n\nIncludes both **direct** (`create` / `update`) and **franchise request** (`create-request` / `update-request`) flows.",
       "item": [
         {
-          "name": "Create (direct — Super Admin / Staff)",
+          "name": "Create",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
             "method": "POST",
             "header": [
               {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Plumbing repair\",\n  \"desc\": \"Standard plumbing service\",\n  \"category_id\": \"{{category_id}}\",\n  \"city_ids\": [\"{{city_id}}\"],\n  \"state_ids\": [\"{{state_id}}\"],\n  \"image_url\": \"https://example.com/service.jpg\",\n  \"is_active\": true\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/service/create",
-            "description": "Use token for type 5 or 6. Creates accepted service immediately. Alternatively use multipart/form-data with file field `image` instead of image_url."
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Service_"
-        },
-        {
-          "name": "Delete",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "DELETE",
-            "header": [],
-            "url": "{{base_url}}/api/service/delete/{{service_id}}",
-            "description": "Super Admin/Staff: any service. Admin/Employee: only their own request-mode rows."
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Service_"
-        },
-        {
-          "name": "Get by id",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/service/get/{{service_id}}"
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Service_"
-        },
-        {
-          "name": "Get dropdown (catalog)",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/service/getDropDown",
-            "description": "Returns only accepted / legacy services (excludes pending requests)."
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Service_"
-        },
-        {
-          "name": "GET service — getDropDown",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
                 "key": "Authorization",
                 "value": "Bearer {{accessToken}}",
                 "type": "text"
               }
             ],
-            "description": "Dropdown data for forms.",
             "url": {
-              "raw": "{{baseUrl}}/api/service/getDropDown",
+              "raw": "{{baseUrl}}/api/service/create",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "service",
-                "getDropDown"
+                "create"
               ]
             }
           },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → My Franchise → Services_"
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 04 — Service Management (catalog)_"
         },
         {
-          "name": "GET service — view one (getById)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "description": "Detail / view action.",
-            "url": {
-              "raw": "{{baseUrl}}/api/service/get/{{id}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "service",
-                "get",
-                "{{id}}"
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → My Franchise → Services_"
-        },
-        {
-          "name": "GET services — all rows",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "description": "Franchise-scoped via `requested_by`.",
-            "url": {
-              "raw": "{{baseUrl}}/api/service/getAll?page=1&limit=10&keyword=",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "service",
-                "getAll"
-              ],
-              "query": [
-                {
-                  "key": "page",
-                  "value": "1"
-                },
-                {
-                  "key": "limit",
-                  "value": "10"
-                },
-                {
-                  "key": "keyword",
-                  "value": ""
-                }
-              ]
-            }
-          },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → My Franchise → Services_"
-        },
-        {
-          "name": "Import single (same rules as create)",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Imported single\",\n  \"desc\": \"Desc\",\n  \"category_id\": \"{{category_id}}\",\n  \"city_ids\": [\"{{city_id}}\"],\n  \"state_ids\": [\"{{state_id}}\"],\n  \"image_url\": \"https://example.com/img.jpg\",\n  \"is_active\": true\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/service/imports",
-            "description": "Without `records` array: same workflow as POST /create by role. Bulk Excel array import requires Super Admin or Staff."
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Service_"
-        },
-        {
-          "name": "List requested services (franchise-scoped)",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{base_url}}/api/service/getAll?page=1&limit=10&is_request=true&approval_status=pending&sort=1",
-            "description": "Same scoping as requested categories: **Franchise Admin** token; **`requested_by`** must be a user of your franchise."
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Franchise → Global catalog — requested (franchise queue)_"
-        },
-        {
-          "name": "POST service — Add request (create-request)",
+          "name": "Create request",
           "request": {
             "method": "POST",
             "header": [
@@ -4457,9 +3222,9 @@
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → My Franchise → Services_"
         },
         {
-          "name": "PUT service — Edit pending request (update-request)",
+          "name": "Get all",
           "request": {
-            "method": "PUT",
+            "method": "GET",
             "header": [
               {
                 "key": "Authorization",
@@ -4467,31 +3232,29 @@
                 "type": "text"
               }
             ],
-            "description": "Use service document `_id` for pending requests.",
+            "description": "Franchise-scoped via `requested_by`.",
             "url": {
-              "raw": "{{baseUrl}}/api/service/update-request/{{id}}",
+              "raw": "{{baseUrl}}/api/service/getAll?page=1&limit=10&keyword=",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "service",
-                "update-request",
-                "{{id}}"
-              ]
-            },
-            "body": {
-              "mode": "formdata",
-              "formdata": [
+                "getAll"
+              ],
+              "query": [
                 {
-                  "key": "name",
-                  "value": "Updated service name",
-                  "type": "text"
+                  "key": "page",
+                  "value": "1"
                 },
                 {
-                  "key": "desc",
-                  "value": "Updated description",
-                  "type": "text"
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "keyword",
+                  "value": ""
                 }
               ]
             }
@@ -4499,7 +3262,60 @@
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → My Franchise → Services_"
         },
         {
-          "name": "PUT service — update (approved / non-request row)",
+          "name": "Get by id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "description": "Detail / view action.",
+            "url": {
+              "raw": "{{baseUrl}}/api/service/get/{{id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "service",
+                "get",
+                "{{id}}"
+              ]
+            }
+          },
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → My Franchise → Services_"
+        },
+        {
+          "name": "Get dropdown",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "description": "Dropdown data for forms.",
+            "url": {
+              "raw": "{{baseUrl}}/api/service/getDropDown",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "service",
+                "getDropDown"
+              ]
+            }
+          },
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → My Franchise → Services_"
+        },
+        {
+          "name": "Update",
           "request": {
             "method": "PUT",
             "header": [
@@ -4556,9 +3372,9 @@
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → My Franchise → Services_"
         },
         {
-          "name": "Service — create",
+          "name": "Update request",
           "request": {
-            "method": "POST",
+            "method": "PUT",
             "header": [
               {
                 "key": "Authorization",
@@ -4566,22 +3382,39 @@
                 "type": "text"
               }
             ],
+            "description": "Use service document `_id` for pending requests.",
             "url": {
-              "raw": "{{baseUrl}}/api/service/create",
+              "raw": "{{baseUrl}}/api/service/update-request/{{id}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "service",
-                "create"
+                "update-request",
+                "{{id}}"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Updated service name",
+                  "type": "text"
+                },
+                {
+                  "key": "desc",
+                  "value": "Updated description",
+                  "type": "text"
+                }
               ]
             }
           },
-          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 04 — Service Management (catalog)_"
+          "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → My Franchise → Services_"
         },
         {
-          "name": "Service — delete",
+          "name": "Delete",
           "request": {
             "method": "DELETE",
             "header": [
@@ -4607,7 +3440,7 @@
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 04 — Service Management (catalog)_"
         },
         {
-          "name": "Update (admin — content only)",
+          "name": "Import",
           "request": {
             "auth": {
               "type": "bearer",
@@ -4619,66 +3452,24 @@
                 }
               ]
             },
-            "method": "PUT",
+            "method": "POST",
             "header": [
               {
                 "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
                 "value": "application/json"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Updated request title\",\n  \"desc\": \"Updated description\"\n}",
+              "raw": "{\n  \"name\": \"Imported single\",\n  \"desc\": \"Desc\",\n  \"category_id\": \"{{category_id}}\",\n  \"city_ids\": [\"{{city_id}}\"],\n  \"state_ids\": [\"{{state_id}}\"],\n  \"image_url\": \"https://example.com/img.jpg\",\n  \"is_active\": true\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
             },
-            "url": "{{base_url}}/api/service/update/{{service_id}}",
-            "description": "Partial content update example. See folder description for full field list. Franchise users: align with app auth rules. Approvals use **`approval_status`**, not `request_status`. To resubmit pending edits under stricter validation use **`PUT /api/service/update-request/:id`**."
-          },
-          "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Service_"
-        },
-        {
-          "name": "Update request (resubmit pending — full body)",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{auth_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Requested service\",\n  \"desc\": \"Updated description after feedback\",\n  \"image_url\": \"https://example.com/service.jpg\",\n  \"category_id\": \"{{category_id}}\",\n  \"tax\": 5,\n  \"commission\": 10,\n  \"payment_type\": \"per_hour\",\n  \"minimum_deposit\": 0,\n  \"city_ids\": [\"{{city_id}}\"],\n  \"state_ids\": [\"{{state_id}}\"],\n  \"is_active\": false\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{base_url}}/api/service/update-request/{{service_id}}",
-            "description": "PUT **`/api/service/update-request/:id`**. Uses **`updateServiceRequestMiddleware`** (same required fields as **`POST /api/service/create-request`**): **`name`**, **`desc`**, **`image_url`**, **`category_id`**, **`tax`**, **`commission`**, **`payment_type`**, **`minimum_deposit`**. Server sets **`is_request`: true** before save (unless superseded by **`approval_status`** merge). Include location arrays as needed. Multipart: fields **`image`** or **`service_image`**."
+            "url": "{{baseUrl}}/api/service/imports",
+            "description": "Without `records` array: same workflow as POST /create by role. Bulk Excel array import requires Super Admin or Staff."
           },
           "description": "\n\n_Source: Help-PR-Area-Franchise-Subscription.postman_collection.json → Service_"
         }
@@ -7482,7 +6273,7 @@
     },
     {
       "name": "21 — Order",
-      "description": "**/api/order** — Orders, nested charges/payments on create/update.\n\n**Razorpay online at checkout:** **3a. Create order (Razorpay online)** — `payment_mode_id: \"2\"` + `name`, `email`, `contact` → `record.payment_url`. Mid-order customer Razorpay: use **mobile** `POST /api/mobile/user/orders/:id/payments` (admin **23 — Order payments** `online` is label-only). See `docs/RAZORPAY_ONLINE_PAYMENTS_AUDIT.md`.",
+      "description": "**/api/order** — Orders, nested charges/payments on create/update.\n\nCatalog: **category → subcategory → service** (`subcategory_id` on create/update; populated on get/getAll; Excel column on order-report). Vars: `{{categoryId}}`, `{{subcategoryId}}`, `{{serviceId}}`.\n\n**Razorpay online at checkout:** **3a. Create order (Razorpay online)** — `payment_mode_id: \"2\"` + `name`, `email`, `contact` → `record.payment_url`. Mid-order customer Razorpay: use **mobile** `POST /api/mobile/user/orders/:id/payments` (admin **23 — Order payments** `online` is label-only). See `docs/RAZORPAY_ONLINE_PAYMENTS_AUDIT.md`.",
       "item": [
         {
           "name": "1. Get all orders",
@@ -7496,7 +6287,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/order/getAll?page=1&limit=10&order_status={{orderStatus}}&payment_status={{paymentStatus}}&search={{search}}&from_date={{from_date}}&to_date={{to_date}}&franchise_id={{franchiseId}}&user_id={{customerUserId}}&partner_id={{partnerId}}&employee_id={{employeeId}}&category_id=&service_id=&city_id=&sort_by=created_at&sort_order=desc",
+              "raw": "{{baseUrl}}/api/order/getAll?page=1&limit=10&order_status={{orderStatus}}&payment_status={{paymentStatus}}&search={{search}}&from_date={{from_date}}&to_date={{to_date}}&franchise_id={{franchiseId}}&user_id={{customerUserId}}&partner_id={{partnerId}}&employee_id={{employeeId}}&category_id=&subcategory_id=&service_id=&city_id=&sort_by=created_at&sort_order=desc",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -7580,6 +6371,12 @@
                   "description": "Category ObjectId filter"
                 },
                 {
+                  "key": "subcategory_id",
+                  "value": "{{subcategoryId}}",
+                  "disabled": true,
+                  "description": "Subcategory ObjectId filter"
+                },
+                {
                   "key": "service_id",
                   "value": "",
                   "disabled": true,
@@ -7609,7 +6406,7 @@
                 }
               ]
             },
-            "description": "**GET /api/order/getAll** — paginated order list (staff/backoffice).\n\n**Access:** Super admin, staff, franchise admin, franchise employee. Partner / customer → **403** (customers: **GET /api/order/getCustomerOrder?user_id=**).\n\n**Date filters:** Enable only `from_date` for single-day; only `to_date` for single-day; both for range.\n\n**Response:** Hydrated rows with display names; `payment_status` on each record.\n\nSee `docs/ORDER_GETALL_API_CHANGES.md` for franchise scope and search behavior."
+            "description": "**GET /api/order/getAll** — paginated order list (staff/backoffice).\n\n**Access:** Super admin, staff, franchise admin, franchise employee. Partner / customer → **403** (customers: **GET /api/order/getCustomerOrder?user_id=**).\n\n**Date filters:** Enable only `from_date` for single-day; only `to_date` for single-day; both for range.\n\n**Response:** Hydrated rows with display names (`category_id`, `subcategory_id`, `service_id`); `payment_status` on each record. Optional filter `subcategory_id`.\n\nSee `docs/ORDER_GETALL_API_CHANGES.md` for franchise scope and search behavior."
           },
           "response": [],
           "description": "\n\n_Source: Help-PR-Orders-Module.postman_collection.json_"
@@ -7637,7 +6434,7 @@
                 "{{orderId}}"
               ]
             },
-            "description": "**GET /api/order/get/:id** — full order detail in one call.\n\n**Includes:** populated customer/city/category/partner/employee/franchise/service/quote; **`service_items`** with line detail; **`additional_charges`**; **`order_payments`**; **`order_offer`** (if offer applied); **`payment_status`**; customer payment breakdown fields.\n\n**Access:** Super admin / staff — any order. Franchise admin / employee — own franchise only. Partner / customer → **403**.\n\nUse this instead of separate list-charges / list-payments calls for read-only UI."
+            "description": "**GET /api/order/get/:id** — full order detail in one call.\n\n**Includes:** populated customer/city/category/subcategory/partner/employee/franchise/service/quote; **`service_items`** with line detail; **`additional_charges`**; **`order_payments`**; **`order_offer`** (if offer applied); **`payment_status`**; customer payment breakdown fields.\n\n**Access:** Super admin / staff — any order. Franchise admin / employee — own franchise only. Partner / customer → **403**.\n\nUse this instead of separate list-charges / list-payments calls for read-only UI."
           },
           "response": [],
           "description": "\n\n_Source: Help-PR-Orders-Module.postman_collection.json_"
@@ -7725,7 +6522,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"user_id\": \"REPLACE_CUSTOMER_OBJECT_ID\",\n  \"user_unique_id\": \"CUST001\",\n  \"city_id\": \"REPLACE_CITY_OBJECT_ID\",\n  \"category_id\": \"REPLACE_CATEGORY_OBJECT_ID\",\n  \"created_by_id\": \"REPLACE_STAFF_OR_CUSTOMER_OBJECT_ID\",\n  \"is_paid\": false,\n  \"payment_mode_id\": \"\",\n  \"transaction_id\": \"\",\n  \"order_date\": \"2026-06-01\",\n  \"address\": \"123 Sample Street, City\",\n  \"total_service_charge\": 3000,\n  \"service_id\": \"REPLACE_SERVICE_OBJECT_ID\",\n  \"type\": 2,\n  \"partner_id\": \"REPLACE_PARTNER_OBJECT_ID\",\n  \"order_description\": \"Optional customer-facing notes\",\n  \"admin_description\": \"Optional internal admin note (omit or null if unset)\",\n  \"service_items\": [\n    {\n      \"user_id\": \"REPLACE_CUSTOMER_OBJECT_ID\",\n      \"partner_id\": \"REPLACE_PARTNER_OBJECT_ID\",\n      \"category_id\": \"REPLACE_CATEGORY_OBJECT_ID\",\n      \"service_id\": \"REPLACE_SERVICE_OBJECT_ID\",\n      \"service_date\": \"2026-06-01T00:00:00.000Z\",\n      \"service_from_time\": \"2026-06-01T09:00:00.000Z\",\n      \"service_to_time\": \"2026-06-01T17:00:00.000Z\",\n      \"total_service_charge\": 3000\n    }\n  ],\n  \"additional_charges\": [\n    {\n      \"amount\": 150,\n      \"label\": \"Transport\",\n      \"payment_method\": \"upi\",\n      \"charge_type\": \"transport\"\n    }\n  ],\n  \"order_payments\": [\n    {\n      \"payer_type\": \"customer\",\n      \"amount\": 500,\n      \"status\": \"completed\",\n      \"payment_method\": \"upi\",\n      \"transaction_reference\": \"UPIREF123\"\n    }\n  ]\n}",
+              "raw": "{\n  \"user_id\": \"REPLACE_CUSTOMER_OBJECT_ID\",\n  \"user_unique_id\": \"CUST001\",\n  \"city_id\": \"REPLACE_CITY_OBJECT_ID\",\n  \"category_id\": \"REPLACE_CATEGORY_OBJECT_ID\",\n  \"subcategory_id\": \"REPLACE_SUBCATEGORY_OBJECT_ID\",\n  \"created_by_id\": \"REPLACE_STAFF_OR_CUSTOMER_OBJECT_ID\",\n  \"is_paid\": false,\n  \"payment_mode_id\": \"\",\n  \"transaction_id\": \"\",\n  \"order_date\": \"2026-06-01\",\n  \"address\": \"123 Sample Street, City\",\n  \"total_service_charge\": 3000,\n  \"service_id\": \"REPLACE_SERVICE_OBJECT_ID\",\n  \"type\": 2,\n  \"partner_id\": \"REPLACE_PARTNER_OBJECT_ID\",\n  \"order_description\": \"Optional customer-facing notes\",\n  \"admin_description\": \"Optional internal admin note (omit or null if unset)\",\n  \"service_items\": [\n    {\n      \"user_id\": \"REPLACE_CUSTOMER_OBJECT_ID\",\n      \"partner_id\": \"REPLACE_PARTNER_OBJECT_ID\",\n      \"category_id\": \"REPLACE_CATEGORY_OBJECT_ID\",\n      \"subcategory_id\": \"REPLACE_SUBCATEGORY_OBJECT_ID\",\n      \"service_id\": \"REPLACE_SERVICE_OBJECT_ID\",\n      \"service_date\": \"2026-06-01T00:00:00.000Z\",\n      \"service_from_time\": \"2026-06-01T09:00:00.000Z\",\n      \"service_to_time\": \"2026-06-01T17:00:00.000Z\",\n      \"total_service_charge\": 3000\n    }\n  ],\n  \"additional_charges\": [\n    {\n      \"amount\": 150,\n      \"label\": \"Transport\",\n      \"payment_method\": \"upi\",\n      \"charge_type\": \"transport\"\n    }\n  ],\n  \"order_payments\": [\n    {\n      \"payer_type\": \"customer\",\n      \"amount\": 500,\n      \"status\": \"completed\",\n      \"payment_method\": \"upi\",\n      \"transaction_reference\": \"UPIREF123\"\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -7743,7 +6540,7 @@
                 "create"
               ]
             },
-            "description": "**POST /api/order/create** — creates order + **exactly one** `order_service`.\n\n**Optional text:** `order_description` (customer-facing), `admin_description` (internal — super admin, staff, franchise admin/employee only; omit or `null`). Not copied from linked quote.\n\n**Razorpay:** use **3a. Create order (Razorpay online)** for `payment_mode_id: \"2\"` (not this request's empty `payment_mode_id`).\n\n**Nested (optional):**\n- **`additional_charges`**: array or `{ create: [...] }` — each item: `amount` (required), `label`, `description`, `payment_method`, `charge_type`.\n- **`order_payments`**: array or `{ create: [...] }` — each item: `payer_type` (`customer`|`partner`), `amount`, optional `status`, `payment_method`, `transaction_reference`, `paid_at`, `notes`.\n\nServer recalculates **`total_price`** and **`payment_status`** after nested rows. Response may include **`record.nested`** with created ids.\n\nOmit both arrays for order-only create. See `docs/ORDER_MODULE_FRONTEND.md` §7."
+            "description": "**POST /api/order/create** — creates order + **exactly one** `order_service`.\n\nInclude optional **`subcategory_id`** (Category → Subcategory → Service) on the order and/or `service_items[0]`.\n\n**Optional text:** `order_description` (customer-facing), `admin_description` (internal — super admin, staff, franchise admin/employee only; omit or `null`). Not copied from linked quote.\n\n**Razorpay:** use **3a. Create order (Razorpay online)** for `payment_mode_id: \"2\"` (not this request's empty `payment_mode_id`).\n\n**Nested (optional):**\n- **`additional_charges`**: array or `{ create: [...] }` — each item: `amount` (required), `label`, `description`, `payment_method`, `charge_type`.\n- **`order_payments`**: array or `{ create: [...] }` — each item: `payer_type` (`customer`|`partner`), `amount`, optional `status`, `payment_method`, `transaction_reference`, `paid_at`, `notes`.\n\nServer recalculates **`total_price`** and **`payment_status`** after nested rows. Response may include **`record.nested`** with created ids.\n\nOmit both arrays for order-only create. See `docs/ORDER_MODULE_FRONTEND.md` §7."
           },
           "response": [],
           "description": "\n\n_Source: Help-PR-Orders-Module.postman_collection.json_"
@@ -7787,7 +6584,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"user_id\": \"{{customerUserId}}\",\n  \"user_unique_id\": \"CUST001\",\n  \"city_id\": \"{{cityId}}\",\n  \"category_id\": \"{{categoryId}}\",\n  \"created_by_id\": \"{{userId}}\",\n  \"is_paid\": false,\n  \"payment_mode_id\": \"2\",\n  \"name\": \"Test Customer\",\n  \"email\": \"customer.razorpay.test@example.com\",\n  \"contact\": \"9876543210\",\n  \"order_date\": \"2026-06-01\",\n  \"address\": \"123 Sample Street, City\",\n  \"total_service_charge\": 3000,\n  \"service_id\": \"{{serviceId}}\",\n  \"type\": 2,\n  \"partner_id\": \"{{partnerId}}\",\n  \"order_description\": \"Admin order — Razorpay test\",\n  \"admin_description\": \"Optional internal admin note\",\n  \"service_items\": [\n    {\n      \"user_id\": \"{{customerUserId}}\",\n      \"partner_id\": \"{{partnerId}}\",\n      \"category_id\": \"{{categoryId}}\",\n      \"service_id\": \"{{serviceId}}\",\n      \"service_date\": \"2026-06-01T00:00:00.000Z\",\n      \"service_from_time\": \"2026-06-01T09:00:00.000Z\",\n      \"service_to_time\": \"2026-06-01T17:00:00.000Z\",\n      \"total_service_charge\": 3000\n    }\n  ]\n}",
+              "raw": "{\n  \"user_id\": \"{{customerUserId}}\",\n  \"user_unique_id\": \"CUST001\",\n  \"city_id\": \"{{cityId}}\",\n  \"category_id\": \"{{categoryId}}\",\n  \"subcategory_id\": \"{{subcategoryId}}\",\n  \"created_by_id\": \"{{userId}}\",\n  \"is_paid\": false,\n  \"payment_mode_id\": \"2\",\n  \"name\": \"Test Customer\",\n  \"email\": \"customer.razorpay.test@example.com\",\n  \"contact\": \"9876543210\",\n  \"order_date\": \"2026-06-01\",\n  \"address\": \"123 Sample Street, City\",\n  \"total_service_charge\": 3000,\n  \"service_id\": \"{{serviceId}}\",\n  \"type\": 2,\n  \"partner_id\": \"{{partnerId}}\",\n  \"order_description\": \"Admin order — Razorpay test\",\n  \"admin_description\": \"Optional internal admin note\",\n  \"service_items\": [\n    {\n      \"user_id\": \"{{customerUserId}}\",\n      \"partner_id\": \"{{partnerId}}\",\n      \"category_id\": \"{{categoryId}}\",\n      \"subcategory_id\": \"{{subcategoryId}}\",\n      \"service_id\": \"{{serviceId}}\",\n      \"service_date\": \"2026-06-01T00:00:00.000Z\",\n      \"service_from_time\": \"2026-06-01T09:00:00.000Z\",\n      \"service_to_time\": \"2026-06-01T17:00:00.000Z\",\n      \"total_service_charge\": 3000\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -7827,7 +6624,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"user_id\": \"REPLACE_CUSTOMER_OBJECT_ID\",\n  \"partner_id\": \"REPLACE_PARTNER_OBJECT_ID\",\n  \"employee_id\": null,\n  \"franchise_id\": null,\n  \"city_id\": \"REPLACE_CITY_OBJECT_ID\",\n  \"category_id\": \"REPLACE_CATEGORY_OBJECT_ID\",\n  \"service_id\": \"REPLACE_SERVICE_OBJECT_ID\",\n  \"address\": \"456 Updated Street\",\n  \"address_id\": null,\n  \"order_date\": \"2026-06-15\",\n  \"order_description\": \"Updated job notes\",\n  \"customer_description\": \"Customer note\",\n  \"admin_description\": \"Updated internal admin note (null to clear)\",\n  \"from_date\": \"2026-06-15\",\n  \"to_date\": \"2026-06-16\",\n  \"work_start_time\": \"09:00\",\n  \"work_end_time\": \"18:00\",\n  \"payment_schedule_type\": \"single\",\n  \"customer_payment_method\": \"upi\",\n  \"order_status\": \"completed\",\n  \"total_service_charge\": 4000,\n  \"offer_id\": null,\n  \"service_items\": {\n    \"update\": [\n      {\n        \"_id\": \"{{orderServiceId}}\",\n        \"partner_id\": \"REPLACE_PARTNER_OBJECT_ID\",\n        \"service_date\": \"2026-06-15T00:00:00.000Z\",\n        \"service_from_time\": \"2026-06-15T09:00:00.000Z\",\n        \"service_to_time\": \"2026-06-15T18:00:00.000Z\",\n        \"total_service_charge\": 4000,\n        \"service_status\": \"completed\"\n      }\n    ]\n  },\n  \"additional_charges\": {\n    \"create\": [{ \"amount\": 100, \"label\": \"Materials\", \"charge_type\": \"misc\" }],\n    \"update\": [{ \"_id\": \"REPLACE_CHARGE_OBJECT_ID\", \"amount\": 200 }],\n    \"delete\": []\n  },\n  \"order_payments\": {\n    \"create\": [\n      {\n        \"payer_type\": \"customer\",\n        \"amount\": 1000,\n        \"status\": \"completed\",\n        \"payment_method\": \"upi\"\n      }\n    ],\n    \"update\": [],\n    \"delete\": []\n  }\n}",
+              "raw": "{\n  \"user_id\": \"REPLACE_CUSTOMER_OBJECT_ID\",\n  \"partner_id\": \"REPLACE_PARTNER_OBJECT_ID\",\n  \"employee_id\": null,\n  \"franchise_id\": null,\n  \"city_id\": \"REPLACE_CITY_OBJECT_ID\",\n  \"category_id\": \"REPLACE_CATEGORY_OBJECT_ID\",\n  \"subcategory_id\": \"REPLACE_SUBCATEGORY_OBJECT_ID\",\n  \"service_id\": \"REPLACE_SERVICE_OBJECT_ID\",\n  \"address\": \"456 Updated Street\",\n  \"address_id\": null,\n  \"order_date\": \"2026-06-15\",\n  \"order_description\": \"Updated job notes\",\n  \"customer_description\": \"Customer note\",\n  \"admin_description\": \"Updated internal admin note (null to clear)\",\n  \"from_date\": \"2026-06-15\",\n  \"to_date\": \"2026-06-16\",\n  \"work_start_time\": \"09:00\",\n  \"work_end_time\": \"18:00\",\n  \"payment_schedule_type\": \"single\",\n  \"customer_payment_method\": \"upi\",\n  \"order_status\": \"completed\",\n  \"total_service_charge\": 4000,\n  \"offer_id\": null,\n  \"service_items\": {\n    \"update\": [\n      {\n        \"_id\": \"{{orderServiceId}}\",\n        \"partner_id\": \"REPLACE_PARTNER_OBJECT_ID\",\n        \"category_id\": \"REPLACE_CATEGORY_OBJECT_ID\",\n        \"subcategory_id\": \"REPLACE_SUBCATEGORY_OBJECT_ID\",\n        \"service_id\": \"REPLACE_SERVICE_OBJECT_ID\",\n        \"service_date\": \"2026-06-15T00:00:00.000Z\",\n        \"service_from_time\": \"2026-06-15T09:00:00.000Z\",\n        \"service_to_time\": \"2026-06-15T18:00:00.000Z\",\n        \"total_service_charge\": 4000,\n        \"service_status\": \"completed\"\n      }\n    ]\n  },\n  \"additional_charges\": {\n    \"create\": [{ \"amount\": 100, \"label\": \"Materials\", \"charge_type\": \"misc\" }],\n    \"update\": [{ \"_id\": \"REPLACE_CHARGE_OBJECT_ID\", \"amount\": 200 }],\n    \"delete\": []\n  },\n  \"order_payments\": {\n    \"create\": [\n      {\n        \"payer_type\": \"customer\",\n        \"amount\": 1000,\n        \"status\": \"completed\",\n        \"payment_method\": \"upi\"\n      }\n    ],\n    \"update\": [],\n    \"delete\": []\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -7846,7 +6643,7 @@
                 "{{orderId}}"
               ]
             },
-            "description": "**PUT /api/order/update/:id** — single payload for header, line, pricing, charges, and payments. **Remove keys you are not changing.**\n\n**Header:** `user_id`, `partner_id`, `employee_id`, `franchise_id`, `city_id`, `category_id`, `service_id`, `address`, `address_id`, `order_date`, `order_description`, `customer_description`, **`admin_description`** (admin roles only; `null` to clear), schedule, `payment_schedule_type`, `customer_payment_method`.\n\n**Pricing:** `total_service_charge`, `offer_id` (`null` = remove).\n\n**Status:** `order_status`.\n\n**Line:** `service_items.update[]` with `_id` = `{{orderServiceId}}` (optional when order has one line).\n\n**Nested:** `additional_charges`, `order_payments` — `{ create, update, delete }`.\n\n**Do not send** order `is_paid`. Response: `record`, optional `nested`, optional `pricing`.\n\nSee `docs/ORDER_MODULE_FRONTEND.md` §8."
+            "description": "**PUT /api/order/update/:id** — single payload for header, line, pricing, charges, and payments. **Remove keys you are not changing.**\n\n**Header:** `user_id`, `partner_id`, `employee_id`, `franchise_id`, `city_id`, `category_id`, `subcategory_id`, `service_id`, `address`, `address_id`, `order_date`, `order_description`, `customer_description`, **`admin_description`** (admin roles only; `null` to clear), schedule, `payment_schedule_type`, `customer_payment_method`.\n\n**Pricing:** `total_service_charge`, `offer_id` (`null` = remove).\n\n**Status:** `order_status`.\n\n**Line:** `service_items.update[]` with `_id` = `{{orderServiceId}}` (optional when order has one line).\n\n**Nested:** `additional_charges`, `order_payments` — `{ create, update, delete }`.\n\n**Do not send** order `is_paid`. Response: `record`, optional `nested`, optional `pricing`.\n\nSee `docs/ORDER_MODULE_FRONTEND.md` §8."
           },
           "response": [],
           "description": "\n\n_Source: Help-PR-Orders-Module.postman_collection.json_"
@@ -10485,7 +9282,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"from_date\": \"2026-01-01\",\n  \"to_date\": \"2026-06-18\",\n  \"order_status\": \"completed\",\n  \"quote_status\": \"success\",\n  \"category_id\": \"\",\n  \"service_id\": \"\",\n  \"partner_id\": \"\",\n  \"user_id\": \"\",\n  \"customer_payment_status\": \"paid\",\n  \"partner_payment_status\": \"paid\",\n  \"state_id\": \"\",\n  \"city_id\": \"\",\n  \"area_id\": \"\",\n  \"franchise_id\": \"\"\n}",
+                  "raw": "{\n  \"from_date\": \"2026-01-01\",\n  \"to_date\": \"2026-06-18\",\n  \"order_status\": \"completed\",\n  \"quote_status\": \"success\",\n  \"category_id\": \"\",\n  \"subcategory_id\": \"\",\n  \"service_id\": \"\",\n  \"partner_id\": \"\",\n  \"user_id\": \"\",\n  \"customer_payment_status\": \"paid\",\n  \"partner_payment_status\": \"paid\",\n  \"state_id\": \"\",\n  \"city_id\": \"\",\n  \"area_id\": \"\",\n  \"franchise_id\": \"\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10504,7 +9301,7 @@
                   ]
                 }
               },
-              "description": "**POST** `/api/export/order-report`\n\nOrder Reports Excel download. Omit empty filter fields.\n\n**Filters:** `from_date`, `to_date`, `order_status`, `quote_status`, `category_id`, `service_id`, `partner_id`, `user_id`, `customer_payment_status` (alias `user_payment_status` / `payment_status`), `partner_payment_status`, `state_id`, `city_id`, `area_id`, `franchise_id` (super admin only), `search`.\n\n**Scope:** franchise admin/employee → own franchise (+ legacy orders). Super admin/staff → all; optional `franchise_id`."
+              "description": "**POST** `/api/export/order-report`\n\nOrder Reports Excel download (includes **Subcategory** column). Omit empty filter fields.\n\n**Filters:** `from_date`, `to_date`, `order_status`, `quote_status`, `category_id`, `subcategory_id`, `service_id`, `partner_id`, `user_id`, `customer_payment_status` (alias `user_payment_status` / `payment_status`), `partner_payment_status`, `state_id`, `city_id`, `area_id`, `franchise_id` (super admin only), `search`.\n\n**Scope:** franchise admin/employee → own franchise (+ legacy orders). Super admin/staff → all; optional `franchise_id`."
             },
             {
               "name": "Export — quote report",
@@ -17892,7 +16689,7 @@
                       }
                     ],
                     "url": {
-                      "raw": "{{baseUrl}}/api/order/getAll?page=1&limit=10&order_status={{orderStatus}}&payment_status={{paymentStatus}}&search={{search}}&from_date={{from_date}}&to_date={{to_date}}&franchise_id={{franchiseId}}&user_id={{customerUserId}}&partner_id={{partnerId}}&employee_id={{employeeId}}&category_id=&service_id=&city_id=&sort_by=created_at&sort_order=desc",
+                      "raw": "{{baseUrl}}/api/order/getAll?page=1&limit=10&order_status={{orderStatus}}&payment_status={{paymentStatus}}&search={{search}}&from_date={{from_date}}&to_date={{to_date}}&franchise_id={{franchiseId}}&user_id={{customerUserId}}&partner_id={{partnerId}}&employee_id={{employeeId}}&category_id=&subcategory_id=&service_id=&city_id=&sort_by=created_at&sort_order=desc",
                       "host": [
                         "{{baseUrl}}"
                       ],
@@ -17976,6 +16773,12 @@
                           "description": "Category ObjectId filter"
                         },
                         {
+                          "key": "subcategory_id",
+                          "value": "{{subcategoryId}}",
+                          "disabled": true,
+                          "description": "Subcategory ObjectId filter"
+                        },
+                        {
                           "key": "service_id",
                           "value": "",
                           "disabled": true,
@@ -18005,7 +16808,7 @@
                         }
                       ]
                     },
-                    "description": "**GET /api/order/getAll** — paginated order list (staff/backoffice).\n\n**Access:** Super admin, staff, franchise admin, franchise employee. Partner / customer → **403** (customers: **GET /api/order/getCustomerOrder?user_id=**).\n\n**Date filters:** Enable only `from_date` for single-day; only `to_date` for single-day; both for range.\n\n**Response:** Hydrated rows with display names; `payment_status` on each record.\n\nSee `docs/ORDER_GETALL_API_CHANGES.md` for franchise scope and search behavior."
+                    "description": "**GET /api/order/getAll** — paginated order list (staff/backoffice).\n\n**Access:** Super admin, staff, franchise admin, franchise employee. Partner / customer → **403** (customers: **GET /api/order/getCustomerOrder?user_id=**).\n\n**Date filters:** Enable only `from_date` for single-day; only `to_date` for single-day; both for range.\n\n**Response:** Hydrated rows with display names (`category_id`, `subcategory_id`, `service_id`); `payment_status` on each record. Optional filter `subcategory_id`.\n\nSee `docs/ORDER_GETALL_API_CHANGES.md` for franchise scope and search behavior."
                   },
                   "response": [],
                   "description": "\n\n_Source: Help-PR-Orders-Module.postman_collection.json_"
@@ -18033,7 +16836,7 @@
                         "{{orderId}}"
                       ]
                     },
-                    "description": "**GET /api/order/get/:id** — full order detail in one call.\n\n**Includes:** populated customer/city/category/partner/employee/franchise/service/quote; **`service_items`** with line detail; **`additional_charges`**; **`order_payments`**; **`order_offer`** (if offer applied); **`payment_status`**; customer payment breakdown fields.\n\n**Access:** Super admin / staff — any order. Franchise admin / employee — own franchise only. Partner / customer → **403**.\n\nUse this instead of separate list-charges / list-payments calls for read-only UI."
+                    "description": "**GET /api/order/get/:id** — full order detail in one call.\n\n**Includes:** populated customer/city/category/subcategory/partner/employee/franchise/service/quote; **`service_items`** with line detail; **`additional_charges`**; **`order_payments`**; **`order_offer`** (if offer applied); **`payment_status`**; customer payment breakdown fields.\n\n**Access:** Super admin / staff — any order. Franchise admin / employee — own franchise only. Partner / customer → **403**.\n\nUse this instead of separate list-charges / list-payments calls for read-only UI."
                   },
                   "response": [],
                   "description": "\n\n_Source: Help-PR-Orders-Module.postman_collection.json_"
@@ -18121,7 +16924,7 @@
                     ],
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"user_id\": \"REPLACE_CUSTOMER_OBJECT_ID\",\n  \"user_unique_id\": \"CUST001\",\n  \"city_id\": \"REPLACE_CITY_OBJECT_ID\",\n  \"category_id\": \"REPLACE_CATEGORY_OBJECT_ID\",\n  \"created_by_id\": \"REPLACE_STAFF_OR_CUSTOMER_OBJECT_ID\",\n  \"is_paid\": false,\n  \"payment_mode_id\": \"\",\n  \"transaction_id\": \"\",\n  \"order_date\": \"2026-06-01\",\n  \"address\": \"123 Sample Street, City\",\n  \"total_service_charge\": 3000,\n  \"service_id\": \"REPLACE_SERVICE_OBJECT_ID\",\n  \"type\": 2,\n  \"partner_id\": \"REPLACE_PARTNER_OBJECT_ID\",\n  \"order_description\": \"Optional customer-facing notes\",\n  \"admin_description\": \"Optional internal admin note (omit or null if unset)\",\n  \"service_items\": [\n    {\n      \"user_id\": \"REPLACE_CUSTOMER_OBJECT_ID\",\n      \"partner_id\": \"REPLACE_PARTNER_OBJECT_ID\",\n      \"category_id\": \"REPLACE_CATEGORY_OBJECT_ID\",\n      \"service_id\": \"REPLACE_SERVICE_OBJECT_ID\",\n      \"service_date\": \"2026-06-01T00:00:00.000Z\",\n      \"service_from_time\": \"2026-06-01T09:00:00.000Z\",\n      \"service_to_time\": \"2026-06-01T17:00:00.000Z\",\n      \"total_service_charge\": 3000\n    }\n  ],\n  \"additional_charges\": [\n    {\n      \"amount\": 150,\n      \"label\": \"Transport\",\n      \"payment_method\": \"upi\",\n      \"charge_type\": \"transport\"\n    }\n  ],\n  \"order_payments\": [\n    {\n      \"payer_type\": \"customer\",\n      \"amount\": 500,\n      \"status\": \"completed\",\n      \"payment_method\": \"upi\",\n      \"transaction_reference\": \"UPIREF123\"\n    }\n  ]\n}",
+                      "raw": "{\n  \"user_id\": \"REPLACE_CUSTOMER_OBJECT_ID\",\n  \"user_unique_id\": \"CUST001\",\n  \"city_id\": \"REPLACE_CITY_OBJECT_ID\",\n  \"category_id\": \"REPLACE_CATEGORY_OBJECT_ID\",\n  \"subcategory_id\": \"REPLACE_SUBCATEGORY_OBJECT_ID\",\n  \"created_by_id\": \"REPLACE_STAFF_OR_CUSTOMER_OBJECT_ID\",\n  \"is_paid\": false,\n  \"payment_mode_id\": \"\",\n  \"transaction_id\": \"\",\n  \"order_date\": \"2026-06-01\",\n  \"address\": \"123 Sample Street, City\",\n  \"total_service_charge\": 3000,\n  \"service_id\": \"REPLACE_SERVICE_OBJECT_ID\",\n  \"type\": 2,\n  \"partner_id\": \"REPLACE_PARTNER_OBJECT_ID\",\n  \"order_description\": \"Optional customer-facing notes\",\n  \"admin_description\": \"Optional internal admin note (omit or null if unset)\",\n  \"service_items\": [\n    {\n      \"user_id\": \"REPLACE_CUSTOMER_OBJECT_ID\",\n      \"partner_id\": \"REPLACE_PARTNER_OBJECT_ID\",\n      \"category_id\": \"REPLACE_CATEGORY_OBJECT_ID\",\n      \"subcategory_id\": \"REPLACE_SUBCATEGORY_OBJECT_ID\",\n      \"service_id\": \"REPLACE_SERVICE_OBJECT_ID\",\n      \"service_date\": \"2026-06-01T00:00:00.000Z\",\n      \"service_from_time\": \"2026-06-01T09:00:00.000Z\",\n      \"service_to_time\": \"2026-06-01T17:00:00.000Z\",\n      \"total_service_charge\": 3000\n    }\n  ],\n  \"additional_charges\": [\n    {\n      \"amount\": 150,\n      \"label\": \"Transport\",\n      \"payment_method\": \"upi\",\n      \"charge_type\": \"transport\"\n    }\n  ],\n  \"order_payments\": [\n    {\n      \"payer_type\": \"customer\",\n      \"amount\": 500,\n      \"status\": \"completed\",\n      \"payment_method\": \"upi\",\n      \"transaction_reference\": \"UPIREF123\"\n    }\n  ]\n}",
                       "options": {
                         "raw": {
                           "language": "json"
@@ -18139,7 +16942,7 @@
                         "create"
                       ]
                     },
-                    "description": "**POST /api/order/create** — creates order + **exactly one** `order_service`.\n\n**Optional text:** `order_description` (customer-facing), `admin_description` (internal — super admin, staff, franchise admin/employee only; omit or `null`). Not copied from linked quote.\n\n**Razorpay:** use **3a. Create order (Razorpay online)** for `payment_mode_id: \"2\"` (not this request's empty `payment_mode_id`).\n\n**Nested (optional):**\n- **`additional_charges`**: array or `{ create: [...] }` — each item: `amount` (required), `label`, `description`, `payment_method`, `charge_type`.\n- **`order_payments`**: array or `{ create: [...] }` — each item: `payer_type` (`customer`|`partner`), `amount`, optional `status`, `payment_method`, `transaction_reference`, `paid_at`, `notes`.\n\nServer recalculates **`total_price`** and **`payment_status`** after nested rows. Response may include **`record.nested`** with created ids.\n\nOmit both arrays for order-only create. See `docs/ORDER_MODULE_FRONTEND.md` §7."
+                    "description": "**POST /api/order/create** — creates order + **exactly one** `order_service`.\n\nInclude optional **`subcategory_id`** (Category → Subcategory → Service) on the order and/or `service_items[0]`.\n\n**Optional text:** `order_description` (customer-facing), `admin_description` (internal — super admin, staff, franchise admin/employee only; omit or `null`). Not copied from linked quote.\n\n**Razorpay:** use **3a. Create order (Razorpay online)** for `payment_mode_id: \"2\"` (not this request's empty `payment_mode_id`).\n\n**Nested (optional):**\n- **`additional_charges`**: array or `{ create: [...] }` — each item: `amount` (required), `label`, `description`, `payment_method`, `charge_type`.\n- **`order_payments`**: array or `{ create: [...] }` — each item: `payer_type` (`customer`|`partner`), `amount`, optional `status`, `payment_method`, `transaction_reference`, `paid_at`, `notes`.\n\nServer recalculates **`total_price`** and **`payment_status`** after nested rows. Response may include **`record.nested`** with created ids.\n\nOmit both arrays for order-only create. See `docs/ORDER_MODULE_FRONTEND.md` §7."
                   },
                   "response": [],
                   "description": "\n\n_Source: Help-PR-Orders-Module.postman_collection.json_"
@@ -18162,7 +16965,7 @@
                     ],
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"user_id\": \"REPLACE_CUSTOMER_OBJECT_ID\",\n  \"partner_id\": \"REPLACE_PARTNER_OBJECT_ID\",\n  \"employee_id\": null,\n  \"franchise_id\": null,\n  \"city_id\": \"REPLACE_CITY_OBJECT_ID\",\n  \"category_id\": \"REPLACE_CATEGORY_OBJECT_ID\",\n  \"service_id\": \"REPLACE_SERVICE_OBJECT_ID\",\n  \"address\": \"456 Updated Street\",\n  \"address_id\": null,\n  \"order_date\": \"2026-06-15\",\n  \"order_description\": \"Updated job notes\",\n  \"customer_description\": \"Customer note\",\n  \"admin_description\": \"Updated internal admin note (null to clear)\",\n  \"from_date\": \"2026-06-15\",\n  \"to_date\": \"2026-06-16\",\n  \"work_start_time\": \"09:00\",\n  \"work_end_time\": \"18:00\",\n  \"payment_schedule_type\": \"single\",\n  \"customer_payment_method\": \"upi\",\n  \"order_status\": \"completed\",\n  \"total_service_charge\": 4000,\n  \"offer_id\": null,\n  \"service_items\": {\n    \"update\": [\n      {\n        \"_id\": \"{{orderServiceId}}\",\n        \"partner_id\": \"REPLACE_PARTNER_OBJECT_ID\",\n        \"service_date\": \"2026-06-15T00:00:00.000Z\",\n        \"service_from_time\": \"2026-06-15T09:00:00.000Z\",\n        \"service_to_time\": \"2026-06-15T18:00:00.000Z\",\n        \"total_service_charge\": 4000,\n        \"service_status\": \"completed\"\n      }\n    ]\n  },\n  \"additional_charges\": {\n    \"create\": [{ \"amount\": 100, \"label\": \"Materials\", \"charge_type\": \"misc\" }],\n    \"update\": [{ \"_id\": \"REPLACE_CHARGE_OBJECT_ID\", \"amount\": 200 }],\n    \"delete\": []\n  },\n  \"order_payments\": {\n    \"create\": [\n      {\n        \"payer_type\": \"customer\",\n        \"amount\": 1000,\n        \"status\": \"completed\",\n        \"payment_method\": \"upi\"\n      }\n    ],\n    \"update\": [],\n    \"delete\": []\n  }\n}",
+                      "raw": "{\n  \"user_id\": \"REPLACE_CUSTOMER_OBJECT_ID\",\n  \"partner_id\": \"REPLACE_PARTNER_OBJECT_ID\",\n  \"employee_id\": null,\n  \"franchise_id\": null,\n  \"city_id\": \"REPLACE_CITY_OBJECT_ID\",\n  \"category_id\": \"REPLACE_CATEGORY_OBJECT_ID\",\n  \"subcategory_id\": \"REPLACE_SUBCATEGORY_OBJECT_ID\",\n  \"service_id\": \"REPLACE_SERVICE_OBJECT_ID\",\n  \"address\": \"456 Updated Street\",\n  \"address_id\": null,\n  \"order_date\": \"2026-06-15\",\n  \"order_description\": \"Updated job notes\",\n  \"customer_description\": \"Customer note\",\n  \"admin_description\": \"Updated internal admin note (null to clear)\",\n  \"from_date\": \"2026-06-15\",\n  \"to_date\": \"2026-06-16\",\n  \"work_start_time\": \"09:00\",\n  \"work_end_time\": \"18:00\",\n  \"payment_schedule_type\": \"single\",\n  \"customer_payment_method\": \"upi\",\n  \"order_status\": \"completed\",\n  \"total_service_charge\": 4000,\n  \"offer_id\": null,\n  \"service_items\": {\n    \"update\": [\n      {\n        \"_id\": \"{{orderServiceId}}\",\n        \"partner_id\": \"REPLACE_PARTNER_OBJECT_ID\",\n        \"category_id\": \"REPLACE_CATEGORY_OBJECT_ID\",\n        \"subcategory_id\": \"REPLACE_SUBCATEGORY_OBJECT_ID\",\n        \"service_id\": \"REPLACE_SERVICE_OBJECT_ID\",\n        \"service_date\": \"2026-06-15T00:00:00.000Z\",\n        \"service_from_time\": \"2026-06-15T09:00:00.000Z\",\n        \"service_to_time\": \"2026-06-15T18:00:00.000Z\",\n        \"total_service_charge\": 4000,\n        \"service_status\": \"completed\"\n      }\n    ]\n  },\n  \"additional_charges\": {\n    \"create\": [{ \"amount\": 100, \"label\": \"Materials\", \"charge_type\": \"misc\" }],\n    \"update\": [{ \"_id\": \"REPLACE_CHARGE_OBJECT_ID\", \"amount\": 200 }],\n    \"delete\": []\n  },\n  \"order_payments\": {\n    \"create\": [\n      {\n        \"payer_type\": \"customer\",\n        \"amount\": 1000,\n        \"status\": \"completed\",\n        \"payment_method\": \"upi\"\n      }\n    ],\n    \"update\": [],\n    \"delete\": []\n  }\n}",
                       "options": {
                         "raw": {
                           "language": "json"
@@ -18181,7 +16984,7 @@
                         "{{orderId}}"
                       ]
                     },
-                    "description": "**PUT /api/order/update/:id** — single payload for header, line, pricing, charges, and payments. **Remove keys you are not changing.**\n\n**Header:** `user_id`, `partner_id`, `employee_id`, `franchise_id`, `city_id`, `category_id`, `service_id`, `address`, `address_id`, `order_date`, `order_description`, `customer_description`, **`admin_description`** (admin roles only; `null` to clear), schedule, `payment_schedule_type`, `customer_payment_method`.\n\n**Pricing:** `total_service_charge`, `offer_id` (`null` = remove).\n\n**Status:** `order_status`.\n\n**Line:** `service_items.update[]` with `_id` = `{{orderServiceId}}` (optional when order has one line).\n\n**Nested:** `additional_charges`, `order_payments` — `{ create, update, delete }`.\n\n**Do not send** order `is_paid`. Response: `record`, optional `nested`, optional `pricing`.\n\nSee `docs/ORDER_MODULE_FRONTEND.md` §8."
+                    "description": "**PUT /api/order/update/:id** — single payload for header, line, pricing, charges, and payments. **Remove keys you are not changing.**\n\n**Header:** `user_id`, `partner_id`, `employee_id`, `franchise_id`, `city_id`, `category_id`, `subcategory_id`, `service_id`, `address`, `address_id`, `order_date`, `order_description`, `customer_description`, **`admin_description`** (admin roles only; `null` to clear), schedule, `payment_schedule_type`, `customer_payment_method`.\n\n**Pricing:** `total_service_charge`, `offer_id` (`null` = remove).\n\n**Status:** `order_status`.\n\n**Line:** `service_items.update[]` with `_id` = `{{orderServiceId}}` (optional when order has one line).\n\n**Nested:** `additional_charges`, `order_payments` — `{ create, update, delete }`.\n\n**Do not send** order `is_paid`. Response: `record`, optional `nested`, optional `pricing`.\n\nSee `docs/ORDER_MODULE_FRONTEND.md` §8."
                   },
                   "response": [],
                   "description": "\n\n_Source: Help-PR-Orders-Module.postman_collection.json_"
@@ -26131,6 +24934,16 @@
     {
       "key": "addressId",
       "value": ""
+    },
+    {
+      "key": "phoneNumber",
+      "value": "",
+      "description": "Customer phone for Auth → Customer / User"
+    },
+    {
+      "key": "otp",
+      "value": "",
+      "description": "OTP code for Verify OTP"
     }
   ]
 }

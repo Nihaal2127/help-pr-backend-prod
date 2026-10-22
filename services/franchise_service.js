@@ -11,6 +11,7 @@ const User = require('../models/user');
 const Address = require('../models/address');
 const PartnerService = require('../models/partner_service');
 const PartnerCategory = require('../models/partner_category');
+const PartnerSubcategory = require('../models/partner_subcategory');
 const { applyPagination, applyDropDownFilter } = require('../utils/pagination');
 const { loadFranchiseCallerScope } = require('../utils/franchise_user_scope');
 const {
@@ -896,6 +897,9 @@ const RELATED_CATALOG_SERVICE_SELECT =
 const RELATED_CATALOG_CATEGORY_SELECT =
     'category_id name desc image_url is_active is_request approval_status rejection_reason requested_by created_at updated_at';
 
+const RELATED_CATALOG_SUBCATEGORY_SELECT =
+    'subcategory_id name desc image_url category_id is_active is_request approval_status rejection_reason requested_by created_at updated_at';
+
 const getFranchiseRelatedCatalog = async (franchiseIdRaw) => {
     try {
         const parsed = parseObjectId(franchiseIdRaw, 'franchise_id');
@@ -905,12 +909,18 @@ const getFranchiseRelatedCatalog = async (franchiseIdRaw) => {
             _id: parsed.oid,
             deleted_at: null,
         })
-            .select('_id name area_id')
+            .select('_id name area_id subcategories')
             .lean();
         if (!franchise) return fail(404, 'Franchise not found.');
 
         const franchiseEffective = await resolveFranchiseEffectiveCatalog(parsed.oid);
         if (!franchiseEffective.ok) return fail(franchiseEffective.status, franchiseEffective.message);
+
+        const franchiseSubcategoryEnabled = new Map();
+        for (const sid of franchise.subcategories || []) {
+            const key = sid?.toString?.() || String(sid);
+            if (key) franchiseSubcategoryEnabled.set(key, true);
+        }
 
         const [partners, employees, customers] = await Promise.all([
             User.find({
@@ -936,8 +946,9 @@ const getFranchiseRelatedCatalog = async (franchiseIdRaw) => {
 
         let psRows = [];
         let pcRows = [];
+        let pscRows = [];
         if (partnerIds.length > 0) {
-            [psRows, pcRows] = await Promise.all([
+            [psRows, pcRows, pscRows] = await Promise.all([
                 PartnerService.find({
                     partner_id: { $in: partnerIds },
                     deleted_at: null,
@@ -951,6 +962,14 @@ const getFranchiseRelatedCatalog = async (franchiseIdRaw) => {
                     deleted_at: null,
                 })
                     .select('partner_id category_id services is_active created_at updated_at')
+                    .lean(),
+                PartnerSubcategory.find({
+                    partner_id: { $in: partnerIds },
+                    deleted_at: null,
+                })
+                    .select(
+                        'partner_id category_id subcategory_id services is_active created_at updated_at'
+                    )
                     .lean(),
             ]);
         }
@@ -973,8 +992,11 @@ const getFranchiseRelatedCatalog = async (franchiseIdRaw) => {
         const partnerCategoryIds = [
             ...new Set(pcRows.map((r) => r.category_id?.toString()).filter(Boolean)),
         ];
+        const partnerSubcategoryIds = [
+            ...new Set(pscRows.map((r) => r.subcategory_id?.toString()).filter(Boolean)),
+        ];
 
-        const [serviceRows, categoryRows] = await Promise.all([
+        const [serviceRows, categoryRows, subcategoryRows] = await Promise.all([
             partnerServiceIds.length === 0
                 ? []
                 : Service.find({
@@ -991,10 +1013,19 @@ const getFranchiseRelatedCatalog = async (franchiseIdRaw) => {
                   })
                       .select(RELATED_CATALOG_CATEGORY_SELECT)
                       .lean(),
+            partnerSubcategoryIds.length === 0
+                ? []
+                : Subcategory.find({
+                      _id: { $in: partnerSubcategoryIds },
+                      deleted_at: null,
+                  })
+                      .select(RELATED_CATALOG_SUBCATEGORY_SELECT)
+                      .lean(),
         ]);
 
         const svcById = new Map(serviceRows.map((s) => [s._id.toString(), s]));
         const catById = new Map(categoryRows.map((c) => [c._id.toString(), c]));
+        const subById = new Map(subcategoryRows.map((s) => [s._id.toString(), s]));
 
         const partnerServiceMap = new Map();
         for (const row of psRows) {
@@ -1101,6 +1132,53 @@ const getFranchiseRelatedCatalog = async (franchiseIdRaw) => {
             );
         }
 
+        const partnerSubcategoryMap = new Map();
+        for (const row of pscRows) {
+            const subKey = row.subcategory_id?.toString();
+            const sub = subById.get(subKey);
+            if (!sub) continue;
+            const pid = row.partner_id.toString();
+            const partnerEnabled = Boolean(row.is_active);
+            const globalSubcategoryActive = isGlobalCatalogRowActive(sub);
+            const franchiseSubEnabled =
+                franchiseSubcategoryEnabled.get(subKey) === true;
+            const effectiveActive = computeCategoryEffectiveActive({
+                globalActive: globalSubcategoryActive,
+                franchiseEnabled: franchiseSubEnabled,
+                partnerEnabled,
+            });
+
+            const item = {
+                _id: row._id,
+                category_id: row.category_id,
+                subcategory_id: row.subcategory_id,
+                services: Array.isArray(row.services) ? row.services : [],
+                is_active: partnerEnabled,
+                partner_enabled: partnerEnabled,
+                global_active: globalSubcategoryActive,
+                franchise_enabled: franchiseSubEnabled,
+                effective_active: effectiveActive,
+                created_at: row.created_at ?? null,
+                updated_at: row.updated_at ?? null,
+                subcategory: sub,
+            };
+
+            if (effectiveActive) {
+                if (!partnerSubcategoryMap.has(pid)) partnerSubcategoryMap.set(pid, []);
+                partnerSubcategoryMap.get(pid).push(item);
+            }
+        }
+
+        for (const [, list] of partnerSubcategoryMap) {
+            list.sort((a, b) =>
+                String(a.subcategory?.name || '').localeCompare(
+                    String(b.subcategory?.name || ''),
+                    'en',
+                    { sensitivity: 'base' }
+                )
+            );
+        }
+
         const partnersWithServices = partners.map((p) => {
             const key = p._id.toString();
             return {
@@ -1108,13 +1186,18 @@ const getFranchiseRelatedCatalog = async (franchiseIdRaw) => {
                 /** Effectively available offerings (global ∩ franchise ∩ partner). */
                 active_services_providing: partnerServiceMap.get(key) || [],
                 active_categories_providing: partnerCategoryMap.get(key) || [],
+                active_subcategories_providing: partnerSubcategoryMap.get(key) || [],
             };
         });
 
         return ok(200, {
             message: 'Franchise catalog fetched successfully.',
             record: {
-                franchise: franchise,
+                franchise: {
+                    _id: franchise._id,
+                    name: franchise.name,
+                    area_id: franchise.area_id,
+                },
                 partners: partnersWithServices,
                 employees,
                 customers,

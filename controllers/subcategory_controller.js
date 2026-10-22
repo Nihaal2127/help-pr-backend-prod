@@ -457,18 +457,20 @@ const create = async (req, res) => {
       });
     }
 
-    const serviceResult = await checkObjectIdExists(
-      Service,
-      service_ids,
-      "service"
-    );
-    if (serviceResult.exists === false) {
-      const statusCode = getIdValidationStatus(serviceResult.message);
-      return res.status(statusCode).json({
-        success: false,
-        status: statusCode,
-        message: serviceResult.message,
-      });
+    if (service_ids.length > 0) {
+      const serviceResult = await checkObjectIdExists(
+        Service,
+        service_ids,
+        "service"
+      );
+      if (serviceResult.exists === false) {
+        const statusCode = getIdValidationStatus(serviceResult.message);
+        return res.status(statusCode).json({
+          success: false,
+          status: statusCode,
+          message: serviceResult.message,
+        });
+      }
     }
 
     const isRequest = Boolean(
