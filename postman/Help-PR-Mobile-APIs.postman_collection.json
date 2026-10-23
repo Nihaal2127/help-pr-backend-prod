@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "help-pr-mobile-apis-only",
     "name": "Help PR — Mobile APIs only",
-    "description": "Postman collection for **`/api/mobile/*`** (common + partner + customer apps).\n\n## Razorpay online payments (test mode)\n\n| Flow | Where in collection |\n|------|---------------------|\n| Partner subscription upgrade | **Partner → Subscription** — Apply (Razorpay online) → Get payment status |\n| Customer order payment | **User** — Create order payment (Razorpay online) → Get order payment status |\n| Quote deposit | **User → Quotes** — Convert quote to order (Razorpay deposit) → Get quote deposit payment status |\n\n**Env (Lambda):** `RAZORPAY_*` on server; set `{{baseUrl}}` in Postman. Webhook: `{RAZORPAY_BASE_URL}/api/razorpay/razorpayWebhook`.\n\n**Additional charges:** no separate Razorpay API — customer pays updated due via **order payments**. **Partner payouts:** admin `/api/partner_payout` (manual bank transfer), not Razorpay.\n\nFull audit: `docs/RAZORPAY_ONLINE_PAYMENTS_AUDIT.md`\n\n## Common (partner + user)\n1. **Location** → States → Cities → Areas → Pincodes (`/api/mobile/states`, …)\n\n## Partner\n1. **Common → Location** → **Phone login** → **Verify OTP** (dev OTP: `123456`) — or **Login** (email/password) / Google / Apple → **Forgot password** (3-step OTP reset: forgot → verify OTP → reset password) → **Home** (assigned quotes + orders) → **Quotes** (accept/reject pending) → **Orders** (assigned jobs) → **Appointments** (calendar on partner orders) → Update → **Bank accounts (list)** → Catalog → My services → **Ratings** (per-service reviews)\n\n## Customer (User)\n1. **Login** → **Verify OTP** (dev OTP: `123456`) — or **Forgot password** (3-step email OTP reset when customer has email on file)\n2. **Pincodes (search)** or set `{{homeLocation}}` — e.g. `500032,Gachibowli,Hyderabad,Telangana`\n3. **Home** — categories, services, partners for franchise (Bearer + `location` query)\n4. **Partners** — list → **Get partner profile** (catalog + professional summary) → **Get partner ratings** / **List partner service ratings** → **Create quote** with `partner_id`\n5. **Addresses** — create / get / update / delete\n6. **Quotes** — create / list / get / update / cancel / **convert-to-order** (`franchise_id` required on create)\n7. **Posts** — feed, liked/saved lists, like, save, share, report\n8. **Orders & payments** — list orders → **Create order payment (Razorpay online)** or cash/offline → **Get order payment status**\n9. **Update** — multipart `profile_photo` + profile fields\n\n**Partner 403** (catalog/bank / my-services while not approved): account must be verified first.\n\n**Appointments:** `docs/APPOINTMENT_MODULE_FRONTEND.md`\n\n**Chat & disputes:** User → **Chat & Disputes** (support chat, raise/list disputes). See `docs/CHAT_MODULE_FRONTEND.md`.",
+    "description": "Postman collection for **`/api/mobile/*`** (common + partner + customer apps).\n\n## Razorpay online payments (test mode)\n\n| Flow | Where in collection |\n|------|---------------------|\n| Partner subscription upgrade | **Partner → Subscription** — Apply (Razorpay online) → Get payment status |\n| Customer order payment | **User** — Create order payment (Razorpay online) → Get order payment status |\n| Quote deposit | **User → Quotes** — Convert quote to order (Razorpay deposit) → Get quote deposit payment status |\n\n**Env (Lambda):** `RAZORPAY_*` on server; set `{{baseUrl}}` in Postman. Webhook: `{RAZORPAY_BASE_URL}/api/razorpay/razorpayWebhook`.\n\n**Additional charges:** no separate Razorpay API — customer pays updated due via **order payments**. **Partner payouts:** admin `/api/partner_payout` (manual bank transfer), not Razorpay.\n\nFull audit: `docs/RAZORPAY_ONLINE_PAYMENTS_AUDIT.md`\n\n## Common (partner + user)\n1. **Location** → States → Cities → Areas → Pincodes (`/api/mobile/states`, …)\n\n## Partner\n1. **Common → Location** → **Phone login** → **Verify OTP** (dev OTP: `123456`) — or **Login** (email/password) / Google / Apple → **Forgot password** (3-step OTP reset: forgot → verify OTP → reset password) → **Home** (assigned quotes + orders) → **Quotes** (accept/reject pending) → **Orders** (assigned jobs) → **Appointments** (calendar on partner orders) → Update → **Bank accounts (list)** → Catalog → My services → **Ratings** (per-service reviews)\n\n## Customer (User)\n1. **Login** → **Verify OTP** (dev OTP: `123456`) — or **Forgot password** (3-step email OTP reset when customer has email on file)\n2. **Pincodes (search)** or set `{{homeLocation}}` — e.g. `500032,Gachibowli,Hyderabad,Telangana`\n3. **Home** — nested **category → subcategories → services**, partners for franchise (Bearer + `location` query). Sets `{{subcategoryId}}`\n4. **Partners** — list → **Get partner profile** (catalog + professional summary) → **Get partner ratings** / **List partner service ratings** → **Create quote** with `partner_id`\n5. **Addresses** — create / get / update / delete\n6. **Quotes** — create / list / get / update / cancel / **convert-to-order** (`franchise_id` required on create)\n7. **Posts** — feed, liked/saved lists, like, save, share, report\n8. **Orders & payments** — list orders → **Create order payment (Razorpay online)** or cash/offline → **Get order payment status**\n9. **Update** — multipart `profile_photo` + profile fields\n\n**Partner 403** (catalog/bank / my-services while not approved): account must be verified first.\n\n**Appointments:** `docs/APPOINTMENT_MODULE_FRONTEND.md`\n\n**Chat & disputes:** User → **Chat & Disputes** (support chat, raise/list disputes). See `docs/CHAT_MODULE_FRONTEND.md`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -847,7 +847,7 @@
         },
         {
           "name": "Catalog",
-          "description": "Bearer required. Run **after** Update sets location (`franchise_id`). **GET /categories** returns each category with nested `services`.",
+          "description": "Bearer required. Run **after** Update sets location (`franchise_id`). **GET /categories** returns each category with nested `subcategories[]` → `services[]` (leftover services without a subcategory stay on `services[]`).",
           "item": [
             {
               "name": "Categories",
@@ -860,10 +860,14 @@
                       "  const j = pm.response.json();",
                       "  const rec = j?.data?.[0];",
                       "  if (rec?._id) pm.collectionVariables.set('categoryId', String(rec._id));",
-                      "  const svc0 = rec?.services?.[0];",
-                      "  const svc1 = rec?.services?.[1];",
-                      "  if (svc0?._id) pm.collectionVariables.set('serviceId', String(svc0._id));",
-                      "  if (svc1?._id) pm.collectionVariables.set('serviceId2', String(svc1._id));",
+                      "  const nested = [];",
+                      "  for (const sub of rec?.subcategories || []) {",
+                      "    for (const s of sub.services || []) nested.push({ sub, svc: s });",
+                      "  }",
+                      "  for (const s of rec?.services || []) nested.push({ sub: null, svc: s });",
+                      "  if (nested[0]?.sub?._id) pm.collectionVariables.set('subcategoryId', String(nested[0].sub._id));",
+                      "  if (nested[0]?.svc?._id) pm.collectionVariables.set('serviceId', String(nested[0].svc._id));",
+                      "  if (nested[1]?.svc?._id) pm.collectionVariables.set('serviceId2', String(nested[1].svc._id));",
                       "} catch (e) {}"
                     ],
                     "type": "text/javascript"
@@ -900,7 +904,7 @@
                     "categories"
                   ]
                 },
-                "description": "**GET /api/mobile/partner/categories**\n\n- **400** if no `franchise_id` — complete location on Update first\n- **200** `data[]`: `_id`, `name`, `desc`, `image_url`, `services[]` (`_id`, `name`, `desc`, `tax`, `image_url`, `category_id`, `payment_type`)\n- Sets `{{categoryId}}`, `{{serviceId}}`, `{{serviceId2}}` from first category's services"
+                "description": "**GET /api/mobile/partner/categories**\n\n- **400** if no `franchise_id` — complete location on Update first\n- **200** `data[]`: `_id`, `name`, `desc`, `image_url`, `subcategories[]` (`_id`, `name`, `desc`, `image_url`, `subcategory_id`, `services[]` with `_id`, `name`, `desc`, `tax`, `image_url`, `category_id`, `payment_type`). Leftover services with no subcategory stay on category `services[]`.\n- Sets `{{categoryId}}`, `{{subcategoryId}}`, `{{serviceId}}`, `{{serviceId2}}`"
               },
               "response": []
             }
@@ -908,7 +912,7 @@
         },
         {
           "name": "My services",
-          "description": "Bearer required. Partner's **saved** catalog. Each service includes `is_active` (local on/off). **PATCH status** and **PUT** require `verification_status` = 2 (approved). Run **List** first to set `{{partnerServiceId}}`. Run **Catalog** to refresh `{{categoryId}}` / `{{serviceId}}` for **Update**.",
+          "description": "Bearer required. Partner's **saved** catalog grouped **category → subcategories → services**. Each service includes `is_active` (local on/off). **PATCH status** and **PUT** require `verification_status` = 2 (approved). Run **List** first to set `{{partnerServiceId}}`. Run **Catalog** to refresh `{{categoryId}}` / `{{subcategoryId}}` / `{{serviceId}}` for **Update**.",
           "item": [
             {
               "name": "List my services",
@@ -924,7 +928,14 @@
                       "    pm.collectionVariables.set('myServiceCategoryId', String(cat.category_id));",
                       "    pm.collectionVariables.set('categoryId', String(cat.category_id));",
                       "  }",
-                      "  const svc = cat?.services?.[0];",
+                      "  const nested = [];",
+                      "  for (const sub of cat?.subcategories || []) {",
+                      "    for (const s of sub.services || []) nested.push({ sub, svc: s });",
+                      "  }",
+                      "  for (const s of cat?.services || []) nested.push({ sub: null, svc: s });",
+                      "  const svc = nested[0]?.svc;",
+                      "  const sub = nested[0]?.sub;",
+                      "  if (sub?.subcategory_id) pm.collectionVariables.set('subcategoryId', String(sub.subcategory_id));",
                       "  if (svc?._id) pm.collectionVariables.set('partnerServiceId', String(svc._id));",
                       "  if (svc?.service_id) {",
                       "    pm.collectionVariables.set('myServiceServiceId', String(svc.service_id));",
@@ -933,7 +944,10 @@
                       "  if (svc?.price != null) pm.collectionVariables.set('myServicePrice', String(svc.price));",
                       "  if (svc?.description) pm.collectionVariables.set('myServiceDescription', String(svc.description));",
                       "  if (svc?.is_active !== undefined) pm.collectionVariables.set('myServiceIsActive', String(svc.is_active));",
-                      "  const allSvcs = (j?.data || []).flatMap((c) => c?.services || []);",
+                      "  const allSvcs = (j?.data || []).flatMap((c) => [",
+                      "    ...(c.subcategories || []).flatMap((sub) => sub.services || []),",
+                      "    ...(c.services || [])",
+                      "  ]);",
                       "  if (allSvcs[1]?._id) pm.collectionVariables.set('partnerServiceId2', String(allSvcs[1]._id));",
                       "} catch (e) {}"
                     ],
@@ -971,7 +985,7 @@
                     "my-services"
                   ]
                 },
-                "description": "**GET /api/mobile/partner/my-services**\n\n- **Auth:** Bearer `{{token}}`\n- **200** `data[]`: grouped by category — `category_id`, `category_name`, `services[]` with `_id` (partner_service row), `service_id`, `service_name`, `description`, `price`, `is_active`, `is_accept_request`, `tax`, `payment_type`, `minimum_deposit`, …\n- Empty catalog → `data: []`\n- Sets `{{partnerServiceId}}`, `{{partnerServiceId2}}` (second row, for bulk status), `{{myServiceCategoryId}}`, `{{myServiceServiceId}}`, `{{myServicePrice}}`, `{{myServiceDescription}}`, `{{myServiceIsActive}}`"
+                "description": "**GET /api/mobile/partner/my-services**\n\n- **Auth:** Bearer `{{token}}`\n- **200** `data[]`: grouped **category → subcategories → services** — `category_id`, `category_name`, `subcategories[]` (`subcategory_id`, `subcategory_name`, `services[]` with `_id` partner_service row, `service_id`, `service_name`, `description`, `price`, `is_active`, …). Leftover services with no subcategory stay on category `services[]`.\n- Empty catalog → `data: []`\n- Sets `{{partnerServiceId}}`, `{{partnerServiceId2}}`, `{{myServiceCategoryId}}`, `{{subcategoryId}}`, `{{myServiceServiceId}}`, `{{myServicePrice}}`, `{{myServiceDescription}}`, `{{myServiceIsActive}}`"
               },
               "response": []
             },
@@ -1119,7 +1133,12 @@
                       "try {",
                       "  const j = pm.response.json();",
                       "  const cat = j?.data?.[0];",
-                      "  const svc = cat?.services?.[0];",
+                      "  const nested = [];",
+                      "  for (const sub of cat?.subcategories || []) {",
+                      "    for (const s of sub.services || []) nested.push(s);",
+                      "  }",
+                      "  nested.push(...(cat?.services || []));",
+                      "  const svc = nested[0];",
                       "  if (svc?._id) pm.collectionVariables.set('partnerServiceId', String(svc._id));",
                       "  if (svc?.price != null) pm.collectionVariables.set('myServicePrice', String(svc.price));",
                       "  if (svc?.description) pm.collectionVariables.set('myServiceDescription', String(svc.description));",
@@ -1153,7 +1172,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"services\": [\n    {\n      \"_id\": \"{{partnerServiceId}}\",\n      \"category_id\": \"{{categoryId}}\",\n      \"service_id\": \"{{serviceId}}\",\n      \"price\": {{myServicePrice}},\n      \"description\": \"{{myServiceDescription}}\"\n    }\n  ]\n}",
+                  "raw": "{\n  \"services\": [\n    {\n      \"_id\": \"{{partnerServiceId}}\",\n      \"category_id\": \"{{categoryId}}\",\n      \"subcategory_id\": \"{{subcategoryId}}\",\n      \"service_id\": \"{{serviceId}}\",\n      \"price\": {{myServicePrice}},\n      \"description\": \"{{myServiceDescription}}\"\n    }\n  ]\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1172,7 +1191,7 @@
                     "my-services"
                   ]
                 },
-                "description": "**PUT /api/mobile/partner/my-services**\n\n- **Auth:** Bearer — partner must be **approved** (`verification_status` 2)\n- **Body:** `services` array; each item **required:** `_id` (partner_service row from List), `category_id`, `service_id`, `price`, `description`\n- **200:** updated grouped `data[]` + message\n- **403** if not approved | **404** if `_id` not found | **409** duplicate `service_id` on another row\n\nRun **List my services** first. Use **Catalog → Categories** to change `categoryId` / `serviceId` dropdown values."
+                "description": "**PUT /api/mobile/partner/my-services**\n\n- **Auth:** Bearer — partner must be **approved** (`verification_status` 2)\n- **Body:** `services` array; each item **required:** `_id` (partner_service row from List), `category_id`, `service_id`, `price`, `description`. Optional `subcategory_id` (resolved from category+service when omitted).\n- **200:** updated grouped `data[]` (category → subcategories → services)\n- **403** if not approved | **404** if `_id` not found | **409** duplicate `service_id` on another row\n\nRun **List my services** first. Use **Catalog → Categories** to change `categoryId` / `subcategoryId` / `serviceId`."
               },
               "response": []
             }
@@ -1732,7 +1751,7 @@
                     }
                   ]
                 },
-                "description": "**GET /api/mobile/partner/quotes**\n\n- **Auth:** Bearer partner (`type` 2)\n- Returns quotes where `partner_id` = logged-in partner\n- Default statuses: **pending**, **accepted** (when `status` query omitted)\n- **200:** `totalItems`, `totalPages`, `currentPage`, `limit`, `records[]`"
+                "description": "**GET /api/mobile/partner/quotes**\n\n- **Auth:** Bearer partner (`type` 2)\n- Returns quotes where `partner_id` = logged-in partner\n- Default statuses: **pending**, **accepted** (when `status` query omitted)\n- **200:** `totalItems`, `totalPages`, `currentPage`, `limit`, `records[]` (populated `category_id`, `subcategory_id`, `service_id`)"
               },
               "response": []
             },
@@ -1786,7 +1805,7 @@
                     "{{quoteId}}"
                   ]
                 },
-                "description": "**GET /api/mobile/partner/quotes/:id**\n\n- **Auth:** Bearer partner — must be assigned on quote (`partner_id`)"
+                "description": "**GET /api/mobile/partner/quotes/:id**\n\n- **Auth:** Bearer partner — must be assigned on quote (`partner_id`)\n- **200** `data`: quote with populated `category_id`, `subcategory_id`, `service_id`"
               },
               "response": []
             },
@@ -2082,7 +2101,7 @@
                     }
                   ]
                 },
-                "description": "**GET /api/mobile/partner/orders**\n\n- **Auth:** Bearer partner (`type` 2)\n- Lists orders assigned to the authenticated partner (`partner_id`)\n- **Pagination:** `page`, `limit` (max 50)\n- **Search:** `search` (or `q`) on order fields plus linked customer, category, service, city, franchise, and quote text\n- **Filters:** `status`, `partner_work_status`, `from_date`, `to_date`, `is_paid`, `user_payment_status` (or `payment_status`), `partner_payment_status`, and optional ObjectId filters: `franchise_id`, `user_id`, `category_id`, `service_id`, `city_id`, `address_id`\n- **200:** `totalItems`, `todayCount`, `totalPages`, `currentPage`, `limit`, `records[]` (includes `partner_work_status`)"
+                "description": "**GET /api/mobile/partner/orders**\n\n- **Auth:** Bearer partner (`type` 2)\n- Lists orders assigned to the authenticated partner (`partner_id`)\n- **Pagination:** `page`, `limit` (max 50)\n- **Search:** `search` (or `q`) on order fields plus linked customer, category, service, city, franchise, and quote text\n- **Filters:** `status`, `partner_work_status`, `from_date`, `to_date`, `is_paid`, `user_payment_status` (or `payment_status`), `partner_payment_status`, and optional ObjectId filters: `franchise_id`, `user_id`, `category_id`, `service_id`, `city_id`, `address_id`\n- **200:** `totalItems`, `todayCount`, `totalPages`, `currentPage`, `limit`, `records[]` (includes `partner_work_status`; populated `category_id`, `subcategory_id`, `service_id`)"
               },
               "response": []
             },
@@ -2139,7 +2158,7 @@
                     "{{orderId}}"
                   ]
                 },
-                "description": "**GET /api/mobile/partner/orders/:orderId**\n\n- **Auth:** Bearer partner — order must be assigned to caller (`partner_id`)\n- **Path `orderId`:** order Mongo `_id` (24-char hex)\n\n**200 `record`:** full order detail including `partner_summary` (partner earnings rollup), `partner_work_status`, `work_proof_image_urls`, `service_items[]`, `additional_charges[]`, payments, refunds when applicable. Use `partner_summary` for money UI; extra charges: partner `amount`, not `total_amount`.\n\n**404** order not found or not assigned to partner | **400** invalid order id"
+                "description": "**GET /api/mobile/partner/orders/:orderId**\n\n- **Auth:** Bearer partner — order must be assigned to caller (`partner_id`)\n- **Path `orderId`:** order Mongo `_id` (24-char hex)\n\n**200 `record`:** full order detail including populated `category_id`, `subcategory_id`, `service_id`, `partner_summary` (partner earnings rollup), `partner_work_status`, `work_proof_image_urls`, `service_items[]`, `additional_charges[]`, payments, refunds when applicable. Use `partner_summary` for money UI; extra charges: partner `amount`, not `total_amount`.\n\n**404** order not found or not assigned to partner | **400** invalid order id"
               },
               "response": []
             },
@@ -2192,7 +2211,7 @@
                     "invoice"
                   ]
                 },
-                "description": "**GET /api/mobile/partner/orders/:orderId/invoice**\n\n- **Auth:** Bearer partner\n- Downloads a printable HTML invoice for one order assigned to the caller (`partner_id`)\n- **Path `orderId`:** order Mongo `_id` (24-char hex)\n- **200:** `text/html` attachment (`invoice-<orderId>.html`) with line items, additional charges, totals, and customer payments\n- Uses the same invoice builder as user `GET /api/mobile/user/orders/:orderId/invoice` and admin `GET /api/order/invoice/:id`\n\n**404** order not found or not assigned to partner | **400** invalid order id"
+                "description": "**GET /api/mobile/partner/orders/:orderId/invoice**\n\n- **Auth:** Bearer partner\n- Downloads a printable HTML invoice for one order assigned to the caller (`partner_id`)\n- **Path `orderId`:** order Mongo `_id` (24-char hex)\n- **200:** `text/html` attachment (`invoice-<orderId>.html`) with line items (Category / Subcategory / Service), additional charges, totals, and customer payments\n- Uses the same invoice builder as user `GET /api/mobile/user/orders/:orderId/invoice` and admin `GET /api/order/invoice/:id`\n\n**404** order not found or not assigned to partner | **400** invalid order id"
               },
               "response": []
             },
@@ -2572,7 +2591,7 @@
                 },
                 {
                   "key": "partner_services",
-                  "value": "[{\"category_id\":\"{{categoryId}}\",\"services\":[{\"service_id\":\"{{serviceId}}\",\"description\":\"Home cleaning\",\"price\":499},{\"service_id\":\"{{serviceId2}}\",\"description\":\"Deep cleaning\",\"price\":799}]}]",
+                  "value": "[{\"category_id\":\"{{categoryId}}\",\"subcategories\":[{\"subcategory_id\":\"{{subcategoryId}}\",\"services\":[{\"service_id\":\"{{serviceId}}\",\"description\":\"Home cleaning\",\"price\":499},{\"service_id\":\"{{serviceId2}}\",\"description\":\"Deep cleaning\",\"price\":799}]}]}]",
                   "type": "text",
                   "description": "Catalog + approved (status 2). Disable while pending to avoid 403."
                 },
@@ -2668,7 +2687,7 @@
                 "update"
               ]
             },
-            "description": "**PUT /api/mobile/partner/update**\n\n**Auth:** Bearer `{{token}}`\n**Body:** `multipart/form-data` (do not set Content-Type manually)\n\n### Before sending\n1. **Common → Location** → States → Cities → Areas → Pincodes\n2. **Login** (or Register)\n3. While pending: disable `partner_services` and `bank_account` (or clear values)\n4. After approval (`verification_status` = 2): run **Catalog**, then enable catalog + bank fields\n5. Select files: `image`, `aadhar_card` (and optional other verification files)\n\n| Section | Fields |\n|---------|--------|\n| Profile / location | gender, experience, state_id, city_id, area_id, pincode, address, image, name, email, phone_number, date_of_birth, device_token, password, confirm_password |\n| Services (approved) | partner_services |\n| Banks (approved) | bank_account |\n| Documents | aadhar_card, pan_card, driving_license, vehicle_registration, police_verification_certificate |\n\n`partner_documents` JSON is not supported. To list banks without updating profile, use **Bank accounts → List bank accounts**."
+            "description": "**PUT /api/mobile/partner/update**\n\n**Auth:** Bearer `{{token}}`\n**Body:** `multipart/form-data` (do not set Content-Type manually)\n\n### Before sending\n1. **Common → Location** → States → Cities → Areas → Pincodes\n2. **Login** (or Register)\n3. While pending: disable `partner_services` and `bank_account` (or clear values)\n4. After approval (`verification_status` = 2): run **Catalog**, then enable catalog + bank fields\n5. Select files: `image`, `aadhar_card` (and optional other verification files)\n\n| Section | Fields |\n|---------|--------|\n| Profile / location | gender, experience, state_id, city_id, area_id, pincode, address, image, name, email, phone_number, date_of_birth, device_token, password, confirm_password |\n| Services (approved) | partner_services (nested `category_id` → `subcategories[]` → `services[]`; response uses the same hierarchy) |\n| Banks (approved) | bank_account |\n| Documents | aadhar_card, pan_card, driving_license, vehicle_registration, police_verification_certificate |\n\n`partner_documents` JSON is not supported. To list banks without updating profile, use **Bank accounts → List bank accounts**."
           },
           "response": []
         },
@@ -3616,7 +3635,7 @@
                     }
                   ]
                 },
-                "description": "**GET /api/mobile/partner/posts/order-options**"
+                "description": "**GET /api/mobile/partner/posts/order-options**\n\nCompleted orders available to link to a post. Each record includes `category_id`, `subcategory_id`, `subcategory_name`, `service_id`, `service_name`, `already_linked`."
               },
               "response": []
             },
@@ -3719,7 +3738,7 @@
                     }
                   ]
                 },
-                "description": "**GET /api/mobile/partner/posts** — paginated list of own posts.\n\nIncludes all statuses: `pending`, `published`, `rejected`, `hidden`, `removed`. Each record has `status` and `rejection_reason`."
+                "description": "**GET /api/mobile/partner/posts** — paginated list of own posts.\n\nIncludes all statuses: `pending`, `published`, `rejected`, `hidden`, `removed`. Each record has `status`, `rejection_reason`, and `linked` (`category_name`, `subcategory_name`, `service_name`)."
               },
               "response": []
             },
@@ -3746,7 +3765,7 @@
                     "{{postId}}"
                   ]
                 },
-                "description": "**GET /api/mobile/partner/posts/:postId** — single own post.\n\n**200 `data`:** full post including `status`, `rejection_reason`, `linked`, `partner`."
+                "description": "**GET /api/mobile/partner/posts/:postId** — single own post.\n\n**200 `data`:** full post including `status`, `rejection_reason`, `linked` (`category_name`, `subcategory_name`, `service_name`), `partner`."
               },
               "response": []
             },
@@ -4335,11 +4354,22 @@
                   "  }",
                   "  const cat0 = j?.data?.categories?.[0];",
                   "  if (cat0?._id) pm.collectionVariables.set('categoryId', String(cat0._id));",
-                  "  const svc0 = cat0?.services?.[0];",
-                  "  if (svc0?._id) pm.collectionVariables.set('serviceId', String(svc0._id));",
+                  "  const nested = [];",
+                  "  for (const sub of cat0?.subcategories || []) {",
+                  "    for (const s of sub.services || []) nested.push({ sub, svc: s });",
+                  "  }",
+                  "  for (const s of cat0?.services || []) nested.push({ sub: null, svc: s });",
+                  "  if (nested[0]?.sub?._id) pm.collectionVariables.set('subcategoryId', String(nested[0].sub._id));",
+                  "  if (nested[0]?.svc?._id) pm.collectionVariables.set('serviceId', String(nested[0].svc._id));",
                   "  const p0 = j?.data?.partners?.[0];",
                   "  if (p0?._id) pm.collectionVariables.set('quotePartnerId', String(p0._id));",
-                  "  const pSvc = p0?.categories?.[0]?.services?.[0];",
+                  "  const pCat = p0?.categories?.[0];",
+                  "  const pNested = [];",
+                  "  for (const sub of pCat?.subcategories || []) {",
+                  "    for (const s of sub.services || []) pNested.push(s);",
+                  "  }",
+                  "  pNested.push(...(pCat?.services || []));",
+                  "  const pSvc = pNested[0];",
                   "  if (pSvc?.price != null && !Number.isNaN(Number(pSvc.price))) {",
                   "    pm.collectionVariables.set('quoteTotalServiceCharge', String(pSvc.price));",
                   "  }",
@@ -4385,7 +4415,7 @@
                 }
               ]
             },
-            "description": "**GET /api/mobile/user/home?location=**\n\n- **Auth:** Bearer `{{token}}` (run **Verify OTP** first)\n- **Query `location`:** `pincode,area_name,city_name,state_name` — same line as **Pincodes (search)** e.g. `500032,Gachibowli,Hyderabad,Telangana`\n\n**200** `data`:\n- `services_available` (boolean; `false` when area has no active franchise — `franchise_id`/`franchise_name` null, `categories`/`partners` empty; `orders` still returned)\n- `franchise_id`, `franchise_name`\n- `location` (resolved ids)\n- `categories[]` with nested `services[]` (`partner_count`, `price_range` from **subscribed** partners only; `price`, `payment_type`)\n- `partners[]` (top **20** by `plan_priority` desc; active subscription; `subscription_plan_name`, `categories[]` → `services[]`)\n- `orders.in_progress[]` (up to **10**) — sorted by schedule: today-overlap (`from_date`–`to_date` includes today UTC) first, then future dates ascending, then past; tie-break `updated_at` desc; excludes refunded payment rollups; not location-scoped\n- `orders.completed[]` (up to **10**) — sorted by `updated_at` desc; no schedule date filter; same refund/location rules as in-progress\n- Each order has hydrated `category_id`, `service_id`, `partner_id`, `franchise_id` objects (same shape as **GET /api/mobile/user/orders** list) plus `category_name`, `service_name`, `partner_name`, `partner_profile_url`\n\n**Auth:** customer only (`type` 4). **400** invalid location format | **404** location not found"
+            "description": "**GET /api/mobile/user/home?location=**\n\n- **Auth:** Bearer `{{token}}` (run **Verify OTP** first)\n- **Query `location`:** `pincode,area_name,city_name,state_name` — same line as **Pincodes (search)** e.g. `500032,Gachibowli,Hyderabad,Telangana`\n\n**200** `data`:\n- `services_available` (boolean; `false` when area has no active franchise — `franchise_id`/`franchise_name` null, `categories`/`partners` empty; `orders` still returned)\n- `franchise_id`, `franchise_name`\n- `location` (resolved ids)\n- `categories[]` with nested `subcategories[]` → `services[]` (`partner_count`, `price_range` from **subscribed** partners only; `price`, `payment_type`). Leftover services with no subcategory stay on category `services[]`.\n- `partners[]` (top **20** by `plan_priority` desc; active subscription; `subscription_plan_name`, `categories[]` → `subcategories[]` → `services[]`)\n- `orders.in_progress[]` (up to **10**) — sorted by schedule: today-overlap (`from_date`–`to_date` includes today UTC) first, then future dates ascending, then past; tie-break `updated_at` desc; excludes refunded payment rollups; not location-scoped\n- `orders.completed[]` (up to **10**) — sorted by `updated_at` desc; no schedule date filter; same refund/location rules as in-progress\n- Each order has hydrated `category_id`, `subcategory_id`, `service_id`, `partner_id`, `franchise_id` objects (same shape as **GET /api/mobile/user/orders** list) plus `category_name`, `subcategory_name`, `service_name`, `partner_name`, `partner_profile_url`\n\n**Auth:** customer only (`type` 4). **400** invalid location format | **404** location not found"
           },
           "response": []
         },
@@ -4527,7 +4557,7 @@
                 }
               ]
             },
-            "description": "**GET /api/mobile/user/orders**\n\n- **Auth:** Bearer customer\n- Lists orders for authenticated customer only\n- **Pagination:** `page`, `limit` (max 50)\n- **Search:** `search` (or `q`) on order fields plus linked user, partner, category, service, city, franchise, and quote text\n- **Filters:** `status`, `from_date`, `to_date`, `is_paid`, `user_payment_status` (or `payment_status`), and optional ObjectId filters: `franchise_id`, `partner_id`, `category_id`, `service_id`, `city_id`, `address_id`\n- **200:** `totalItems` (all matching filters), `todayCount` (subset whose schedule overlaps **today** UTC, same filters), `totalPages`, `currentPage`, `limit`, `records[]` — each record includes hydrated `user_id`, `partner_id`, `employee_id`, `franchise_id`, `city_id`, `category_id`, `service_id`, `created_by_id`, `address_id`, and `quote_id` objects (admin getAll parity); `refunds` / `refund_summary` when applicable; `service_items` is omitted from list rows"
+            "description": "**GET /api/mobile/user/orders**\n\n- **Auth:** Bearer customer\n- Lists orders for authenticated customer only\n- **Pagination:** `page`, `limit` (max 50)\n- **Search:** `search` (or `q`) on order fields plus linked user, partner, category, service, city, franchise, and quote text\n- **Filters:** `status`, `from_date`, `to_date`, `is_paid`, `user_payment_status` (or `payment_status`), and optional ObjectId filters: `franchise_id`, `partner_id`, `category_id`, `service_id`, `city_id`, `address_id`\n- **200:** `totalItems` (all matching filters), `todayCount` (subset whose schedule overlaps **today** UTC, same filters), `totalPages`, `currentPage`, `limit`, `records[]` — each record includes hydrated `user_id`, `partner_id`, `employee_id`, `franchise_id`, `city_id`, `category_id`, `subcategory_id`, `service_id`, `created_by_id`, `address_id`, and `quote_id` objects (admin getAll parity); `refunds` / `refund_summary` when applicable; `service_items` is omitted from list rows"
           },
           "response": []
         },
@@ -4687,7 +4717,7 @@
                 "{{orderId}}"
               ]
             },
-            "description": "**GET /api/mobile/user/orders/:orderId**\n\n- **Auth:** Bearer customer\n- Returns full detail for one order belonging to the authenticated customer\n- **Path `orderId`:** order Mongo `_id` (24-char hex)\n\n**200 `record` includes:** hydrated `user_id`, `partner_id`, `employee_id`, `franchise_id`, `city_id`, `category_id`, `service_id`, `created_by_id`, `address_id`, and `quote_id` objects (same shape as orders list / admin getAll); display names (`user_name`, `partner_name`, etc.); **`service_items[]`** with `partner_info`, `service_info`, review fields when present; **`additional_charges`**, **`order_payments`**, **`order_offer`**; **`refunds`**, **`refund_summary`** when applicable; payment breakdown fields.\n\n**404** order not found or not owned by caller | **400** invalid order id"
+            "description": "**GET /api/mobile/user/orders/:orderId**\n\n- **Auth:** Bearer customer\n- Returns full detail for one order belonging to the authenticated customer\n- **Path `orderId`:** order Mongo `_id` (24-char hex)\n\n**200 `record` includes:** hydrated `user_id`, `partner_id`, `employee_id`, `franchise_id`, `city_id`, `category_id`, `subcategory_id`, `service_id`, `created_by_id`, `address_id`, and `quote_id` objects (same shape as orders list / admin getAll); display names (`user_name`, `partner_name`, `subcategory_name`, etc.); **`service_items[]`** with `partner_info`, `service_info`, review fields when present; **`additional_charges`**, **`order_payments`**, **`order_offer`**; **`refunds`**, **`refund_summary`** when applicable; payment breakdown fields.\n\n**404** order not found or not owned by caller | **400** invalid order id"
           },
           "response": []
         },
@@ -4740,7 +4770,7 @@
                 "invoice"
               ]
             },
-            "description": "**GET /api/mobile/user/orders/:orderId/invoice**\n\n- **Auth:** Bearer customer\n- Downloads a printable HTML invoice for one order owned by the caller\n- **Path `orderId`:** order Mongo `_id` (24-char hex)\n- **200:** `text/html` attachment (`invoice-<orderId>.html`) with line items, additional charges, totals, and customer payments\n- Uses the same invoice builder as admin `GET /api/order/invoice/:id`\n\n**404** order not found or not owned by caller | **400** invalid order id"
+            "description": "**GET /api/mobile/user/orders/:orderId/invoice**\n\n- **Auth:** Bearer customer\n- Downloads a printable HTML invoice for one order owned by the caller\n- **Path `orderId`:** order Mongo `_id` (24-char hex)\n- **200:** `text/html` attachment (`invoice-<orderId>.html`) with line items (Category / Subcategory / Service), additional charges, totals, and customer payments\n- Uses the same invoice builder as admin `GET /api/order/invoice/:id`\n\n**404** order not found or not owned by caller | **400** invalid order id"
           },
           "response": []
         },
@@ -5159,7 +5189,13 @@
                   "  });",
                   "  const p0 = j?.data?.partners?.[0];",
                   "  if (p0?._id) pm.collectionVariables.set('quotePartnerId', String(p0._id));",
-                  "  const pSvc = p0?.categories?.[0]?.services?.[0];",
+                  "  const pCat = p0?.categories?.[0];",
+                  "  const pNested = [];",
+                  "  for (const sub of pCat?.subcategories || []) {",
+                  "    for (const s of sub.services || []) pNested.push(s);",
+                  "  }",
+                  "  pNested.push(...(pCat?.services || []));",
+                  "  const pSvc = pNested[0];",
                   "  if (pSvc?.price != null && !Number.isNaN(Number(pSvc.price))) {",
                   "    pm.collectionVariables.set('quoteTotalServiceCharge', String(pSvc.price));",
                   "  }",
@@ -5748,7 +5784,13 @@
                   "    pm.expect(j.data.partner.ratings).to.have.property('average_rating');",
                   "    pm.expect(j.data.partner.ratings).to.have.property('rating_count');",
                   "  });",
-                  "  const svc0 = j?.data?.categories?.[0]?.services?.[0];",
+                  "  const cat0 = j?.data?.categories?.[0];",
+                  "  const nested = [];",
+                  "  for (const sub of cat0?.subcategories || []) {",
+                  "    for (const s of sub.services || []) nested.push({ sub, svc: s });",
+                  "  }",
+                  "  for (const s of cat0?.services || []) nested.push({ sub: null, svc: s });",
+                  "  const svc0 = nested[0]?.svc;",
                   "  if (svc0) {",
                   "    pm.test('Service catalog includes ratings', function () {",
                   "      pm.expect(svc0).to.have.property('average_rating');",
@@ -5760,9 +5802,11 @@
                   "  }",
                   "  const p = j?.data?.partner;",
                   "  if (p?._id) pm.collectionVariables.set('quotePartnerId', String(p._id));",
-                  "  const svc = j?.data?.categories?.[0]?.services?.[0];",
+                  "  const svc = nested[0]?.svc;",
+                  "  const sub = nested[0]?.sub;",
+                  "  if (cat0?.category_id) pm.collectionVariables.set('categoryId', String(cat0.category_id));",
+                  "  if (sub?.subcategory_id) pm.collectionVariables.set('subcategoryId', String(sub.subcategory_id));",
                   "  if (svc?.service_id) pm.collectionVariables.set('serviceId', String(svc.service_id));",
-                  "  if (svc?.category_id) pm.collectionVariables.set('categoryId', String(svc.category_id));",
                   "  if (svc?.price != null && !Number.isNaN(Number(svc.price))) {",
                   "    pm.collectionVariables.set('quoteTotalServiceCharge', String(svc.price));",
                   "  }",
@@ -5811,7 +5855,7 @@
                 }
               ]
             },
-            "description": "**GET /api/mobile/user/partners/:partnerId**\n\nCustomer partner detail + full catalog for requesting a quote.\n\n| Param / query | Required | Notes |\n|---------------|----------|--------|\n| `partnerId` | Yes | Partner Mongo `_id` (`{{quotePartnerId}}` from Home, Partners list, or Saved partners) |\n| `franchise_id` | No | Optional franchise scope. Omit when opening a saved partner (resolved from partner). Pass when browsing within a franchise (e.g. Home) |\n\n**200 `data.partner`:** name, profile, `experience` / `professional_summary`, subscription plan, optional `business_info`, `location`, `joined_at`, `completed_services_count`, `is_saved`, **`average_rating`**, **`rating_count`**, **`ratings`** `{ average_rating, rating_count }`\n\n**200 `data.categories[].services[]`:** plus **`average_rating`** / **`rating_count`** and **`ratings`** (partner on that service), **`service_average_rating`** / **`service_rating_count`** (global service), `description`, `price`, `tax`, `payment_type`, `minimum_deposit`, `is_accept_request`\n\nRatings roll up from completed order reviews (`POST /api/mobile/user/orders/:orderId/review`). Use **Get partner ratings** for `service_ratings[]` and `recent_reviews[]`. Use **List partner service ratings** for a paginated list of who rated a particular service.\n\n**Quote flow:** pick a service → `POST /quotes/create` with `partner_id`, global `service_id`, `category_id`, `total_service_charge` = service `price`."
+            "description": "**GET /api/mobile/user/partners/:partnerId**\n\nCustomer partner detail + full catalog for requesting a quote.\n\n| Param / query | Required | Notes |\n|---------------|----------|--------|\n| `partnerId` | Yes | Partner Mongo `_id` (`{{quotePartnerId}}` from Home, Partners list, or Saved partners) |\n| `franchise_id` | No | Optional franchise scope. Omit when opening a saved partner (resolved from partner). Pass when browsing within a franchise (e.g. Home) |\n\n**200 `data.partner`:** name, profile, `experience` / `professional_summary`, subscription plan, optional `business_info`, `location`, `joined_at`, `completed_services_count`, `is_saved`, **`average_rating`**, **`rating_count`**, **`ratings`** `{ average_rating, rating_count }`\n\n**200 `data.categories[]`:** nested **`subcategories[]` → `services[]`** (leftover services with no subcategory stay on category `services[]`). Each service includes **`average_rating`** / **`rating_count`** and **`ratings`** (partner on that service), **`service_average_rating`** / **`service_rating_count`** (global service), `description`, `price`, `tax`, `payment_type`, `minimum_deposit`, `is_accept_request`.\n\nRatings roll up from completed order reviews (`POST /api/mobile/user/orders/:orderId/review`). Use **Get partner ratings** for `service_ratings[]` and `recent_reviews[]`. Use **List partner service ratings** for a paginated list of who rated a particular service.\n\n**Quote flow:** pick a service → `POST /quotes/create` with `partner_id`, `category_id`, `subcategory_id`, `service_id`, `total_service_charge` = service `price`."
           },
           "response": []
         },
@@ -6168,7 +6212,7 @@
         },
         {
           "name": "Quotes",
-          "description": "Customer quote requests (Phase 1). **Auth:** Bearer customer JWT (`type` 4) after **Verify OTP**.\n\n**Prerequisites:** **Home** (`{{franchiseId}}`, `{{categoryId}}`, `{{serviceId}}`), **Addresses → Create** (`{{addressId}}`). For **with partner**, run **Partners (list)** first (`{{quotePartnerId}}`). Partner must **Accept** quote before convert.\n\n**Convert to order:** offline (`cash`, `upi`, …) → **200**; **`payment_method: online`** → **202** + `data.payment.payment_url` — use **Get order payment status** on the new order.\n\n**Two create types (same endpoint):**\n| Type | `partner_id` | Initial status |\n|------|----------------|----------------|\n| Without partner | omit or `\"\"` | **new** |\n| With partner | valid partner ObjectId | **pending** |",
+          "description": "Customer quote requests (Phase 1). **Auth:** Bearer customer JWT (`type` 4) after **Verify OTP**.\n\n**Prerequisites:** **Home** (`{{franchiseId}}`, `{{categoryId}}`, `{{subcategoryId}}`, `{{serviceId}}`), **Addresses → Create** (`{{addressId}}`). For **with partner**, run **Partners (list)** first (`{{quotePartnerId}}`). Partner must **Accept** quote before convert.\n\n**Convert to order:** offline (`cash`, `upi`, …) → **200**; **`payment_method: online`** → **202** + `data.payment.payment_url` — use **Get order payment status** on the new order.\n\n**Two create types (same endpoint):**\n| Type | `partner_id` | Initial status |\n|------|----------------|----------------|\n| Without partner | omit or `\"\"` | **new** |\n| With partner | valid partner ObjectId | **pending** |",
           "item": [
             {
               "name": "Create quote (without partner)",
@@ -6218,7 +6262,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"franchise_id\": \"{{franchiseId}}\",\n  \"category_id\": \"{{categoryId}}\",\n  \"service_id\": \"{{serviceId}}\",\n  \"address_id\": \"{{addressId}}\",\n  \"total_service_charge\": {{quoteTotalServiceCharge}},\n  \"from_date\": \"{{quoteFromDate}}\",\n  \"to_date\": \"{{quoteToDate}}\",\n  \"work_hours_per_day\": {{quoteWorkHoursPerDay}},\n  \"total_work_hours\": {{quoteTotalWorkHours}},\n  \"work_start_time\": \"{{quoteWorkStartTime}}\",\n  \"work_end_time\": \"{{quoteWorkEndTime}}\",\n  \"quote_description\": \"{{quoteDescription}}\"\n}",
+                  "raw": "{\n  \"franchise_id\": \"{{franchiseId}}\",\n  \"category_id\": \"{{categoryId}}\",\n  \"subcategory_id\": \"{{subcategoryId}}\",\n  \"service_id\": \"{{serviceId}}\",\n  \"address_id\": \"{{addressId}}\",\n  \"total_service_charge\": {{quoteTotalServiceCharge}},\n  \"from_date\": \"{{quoteFromDate}}\",\n  \"to_date\": \"{{quoteToDate}}\",\n  \"work_hours_per_day\": {{quoteWorkHoursPerDay}},\n  \"total_work_hours\": {{quoteTotalWorkHours}},\n  \"work_start_time\": \"{{quoteWorkStartTime}}\",\n  \"work_end_time\": \"{{quoteWorkEndTime}}\",\n  \"quote_description\": \"{{quoteDescription}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -6238,7 +6282,7 @@
                     "create"
                   ]
                 },
-                "description": "**POST /api/mobile/user/quotes/create** — no partner\n\n- **No `partner_id` in body** → quote status **new**, `partner_id` null\n- **Pricing:** `total_service_charge` / `total_price` are **0** until a partner is assigned (**Update** with `partner_id` → server sets charge from `partner_service.price`)\n- Do not send `total_service_charge` on this flow\n- Franchise admin sees quote under `franchise_id`; partner assigned later via **Update** or admin"
+                "description": "**POST /api/mobile/user/quotes/create** — no partner\n\n- Send `category_id`, `subcategory_id`, `service_id` (run **Home** first)\n- **No `partner_id` in body** → quote status **new**, `partner_id` null\n- **Pricing:** `total_service_charge` / `total_price` are **0** until a partner is assigned (**Update** with `partner_id` → server sets charge from `partner_service.price`)\n- Do not send `total_service_charge` on this flow\n- Franchise admin sees quote under `franchise_id`; partner assigned later via **Update** or admin"
               },
               "response": []
             },
@@ -6290,7 +6334,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"franchise_id\": \"{{franchiseId}}\",\n  \"category_id\": \"{{categoryId}}\",\n  \"service_id\": \"{{serviceId}}\",\n  \"address_id\": \"{{addressId}}\",\n  \"partner_id\": \"{{quotePartnerId}}\",\n  \"total_service_charge\": {{quoteTotalServiceCharge}},\n  \"from_date\": \"{{quoteFromDate}}\",\n  \"to_date\": \"{{quoteToDate}}\",\n  \"work_hours_per_day\": {{quoteWorkHoursPerDay}},\n  \"total_work_hours\": {{quoteTotalWorkHours}},\n  \"work_start_time\": \"{{quoteWorkStartTime}}\",\n  \"work_end_time\": \"{{quoteWorkEndTime}}\",\n  \"quote_description\": \"{{quoteDescription}}\"\n}",
+                  "raw": "{\n  \"franchise_id\": \"{{franchiseId}}\",\n  \"category_id\": \"{{categoryId}}\",\n  \"subcategory_id\": \"{{subcategoryId}}\",\n  \"service_id\": \"{{serviceId}}\",\n  \"address_id\": \"{{addressId}}\",\n  \"partner_id\": \"{{quotePartnerId}}\",\n  \"total_service_charge\": {{quoteTotalServiceCharge}},\n  \"from_date\": \"{{quoteFromDate}}\",\n  \"to_date\": \"{{quoteToDate}}\",\n  \"work_hours_per_day\": {{quoteWorkHoursPerDay}},\n  \"total_work_hours\": {{quoteTotalWorkHours}},\n  \"work_start_time\": \"{{quoteWorkStartTime}}\",\n  \"work_end_time\": \"{{quoteWorkEndTime}}\",\n  \"quote_description\": \"{{quoteDescription}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -6310,7 +6354,7 @@
                     "create"
                   ]
                 },
-                "description": "**POST /api/mobile/user/quotes/create** — with partner\n\n- **Required:** `partner_id` (run **Partners (list)** or **Home** to set `{{quotePartnerId}}`)\n- **`total_service_charge` optional:** resolved from that partner's `partner_service.price` when omitted\n- Status **pending**; partner can **Accept** under **Partner → Quotes**"
+                "description": "**POST /api/mobile/user/quotes/create** — with partner\n\n- Send `category_id`, `subcategory_id`, `service_id` (run **Home** or **Get partner profile** first)\n- **Required:** `partner_id` (run **Partners (list)** or **Home** to set `{{quotePartnerId}}`)\n- **`total_service_charge` optional:** resolved from that partner's `partner_service.price` when omitted\n- Status **pending**; partner can **Accept** under **Partner → Quotes**"
               },
               "response": []
             },
@@ -6407,7 +6451,7 @@
                     }
                   ]
                 },
-                "description": "**GET /api/mobile/user/quotes**\n\n- **Auth:** Bearer customer\n- Lists quotes for authenticated customer only\n- **Pagination:** `page`, `limit` (max 50)\n- **Search:** `search` (or `q`) on `quote_sequence_id`, `quote_description`, `cancellation_reason`, `rejection_reason`\n- **Date range:** `from_date`, `to_date` (YYYY-MM-DD) — quotes whose schedule window overlaps the range (same as admin quote list)\n- **Filters:** optional `status`, optional `franchise_id`\n- **200:** `totalItems` (all matching filters), `todayCount` (subset whose schedule overlaps **today** UTC, same filters), `totalPages`, `currentPage`, `limit`, `records[]`"
+                "description": "**GET /api/mobile/user/quotes**\n\n- **Auth:** Bearer customer\n- Lists quotes for authenticated customer only\n- **Pagination:** `page`, `limit` (max 50)\n- **Search:** `search` (or `q`) on `quote_sequence_id`, `quote_description`, `cancellation_reason`, `rejection_reason`\n- **Date range:** `from_date`, `to_date` (YYYY-MM-DD) — quotes whose schedule window overlaps the range (same as admin quote list)\n- **Filters:** optional `status`, optional `franchise_id`\n- **200:** `totalItems` (all matching filters), `todayCount` (subset whose schedule overlaps **today** UTC, same filters), `totalPages`, `currentPage`, `limit`, `records[]` (populated `category_id`, `subcategory_id`, `service_id`)"
               },
               "response": []
             },
@@ -6462,7 +6506,7 @@
                     "{{quoteId}}"
                   ]
                 },
-                "description": "**GET /api/mobile/user/quotes/:id**\n\n- **Auth:** Bearer customer — own quotes only\n- **200** `data`: quote detail with populated refs + partner service enrichment"
+                "description": "**GET /api/mobile/user/quotes/:id**\n\n- **Auth:** Bearer customer — own quotes only\n- **200** `data`: quote detail with populated `category_id`, `subcategory_id`, `service_id` + partner service enrichment"
               },
               "response": []
             },
@@ -7053,7 +7097,7 @@
                     }
                   ]
                 },
-                "description": "**GET /api/mobile/user/posts/feed**\n\nRun **Home** first for `{{franchiseId}}`.\n\n| Query | Required | Notes |\n|-------|----------|--------|\n| `franchise_id` | Yes | Franchise ObjectId |\n| `page` | No | Default 1 (`{{postsPage}}`) |\n| `limit` | No | Default 10, max 50 (`{{postsLimit}}`) |\n\nEach record includes `partner`, `linked`, `is_liked`, `is_saved`, counts, and `share_url`. Sets `{{postId}}` and `{{postShareToken}}` from the first row."
+                "description": "**GET /api/mobile/user/posts/feed**\n\nRun **Home** first for `{{franchiseId}}`.\n\n| Query | Required | Notes |\n|-------|----------|--------|\n| `franchise_id` | Yes | Franchise ObjectId |\n| `page` | No | Default 1 (`{{postsPage}}`) |\n| `limit` | No | Default 10, max 50 (`{{postsLimit}}`) |\n\nEach record includes `partner`, `linked` (`category_name`, `subcategory_name`, `service_name`), `is_liked`, `is_saved`, counts, and `share_url`. Sets `{{postId}}` and `{{postShareToken}}` from the first row."
               },
               "response": []
             },
@@ -8032,6 +8076,12 @@
       "value": "",
       "type": "string",
       "description": "From User → Home (first category) or Partner Catalog — used in Partners list category_id"
+    },
+    {
+      "key": "subcategoryId",
+      "value": "",
+      "type": "string",
+      "description": "From User → Home / Partner Catalog / My services — first subcategory under the selected category"
     },
     {
       "key": "serviceId",

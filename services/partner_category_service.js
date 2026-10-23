@@ -438,7 +438,6 @@ async function mergePartnerCatalogFromNormalizedRows(partnerId, normalizedRows) 
         $setOnInsert: {
           partner_id: partnerOid,
           subcategory_id: toOid(subStr),
-          category_id: catOid,
           is_active: true,
           created_at: new Date(),
           deleted_at: null,

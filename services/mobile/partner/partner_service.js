@@ -478,7 +478,6 @@ async function mergeMobilePartnerCatalogFromNormalizedRows(partnerId, normalized
         $setOnInsert: {
           partner_id: partnerOid,
           subcategory_id: toOid(subStr),
-          category_id: catOid,
           is_active: true,
           created_at: now,
           deleted_at: null,
