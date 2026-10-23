@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const PartnerService = require('../../../models/partner_service');
 const Category = require('../../../models/category');
+const Subcategory = require('../../../models/subcategory');
 const Service = require('../../../models/service');
 const { rebuildPartnerCategoriesFromPartnerServices } = require('../../../services/partner_category_service');
 const { resolveFranchiseEffectiveCatalog } = require('../../../utils/catalog_availability_resolver');
@@ -94,6 +95,51 @@ const assertCategoryAndServiceAvailable = async (categoryOid, serviceOid, franch
   return ok(200, {});
 };
 
+const resolveSubcategoryForService = async (categoryOid, serviceOid, requestedSubcategoryId) => {
+  if (isPresentFieldValue(requestedSubcategoryId)) {
+    const parsed = parseObjectId(requestedSubcategoryId, 'subcategory_id');
+    if (!parsed.ok) {
+      return fail(400, parsed.message);
+    }
+
+    const subcategory = await Subcategory.findOne({
+      _id: parsed.oid,
+      deleted_at: null,
+    }).lean();
+    if (!subcategory) {
+      return fail(400, 'Subcategory not found.');
+    }
+    if (
+      !subcategory.is_active ||
+      subcategory.is_request ||
+      subcategory.approval_status !== 'approve'
+    ) {
+      return fail(400, 'Subcategory is not available.');
+    }
+    if (String(subcategory.category_id) !== String(categoryOid)) {
+      return fail(400, 'Subcategory does not belong to the selected category.');
+    }
+    const serviceIds = (subcategory.services || []).map((id) => String(id));
+    if (!serviceIds.includes(String(serviceOid))) {
+      return fail(400, 'Service does not belong to the selected subcategory.');
+    }
+    return ok(200, { oid: parsed.oid });
+  }
+
+  const subcategory = await Subcategory.findOne({
+    category_id: categoryOid,
+    services: serviceOid,
+    deleted_at: null,
+    is_active: true,
+    is_request: false,
+    approval_status: 'approve',
+  })
+    .select('_id')
+    .lean();
+
+  return ok(200, { oid: subcategory?._id ?? null });
+};
+
 const mapPartnerServiceRow = (row) => {
   const service = row.service_id;
   return {
@@ -127,6 +173,10 @@ const listPartnerMyServices = async (partnerId) => {
     })
       .populate([
         { path: 'category_id', select: 'name desc image_url' },
+        {
+          path: 'subcategory_id',
+          select: 'name desc image_url subcategory_id category_id',
+        },
         { path: 'service_id', select: 'name desc image_url category_id' },
       ])
       .sort({ category_id: 1, created_at: 1 })
@@ -151,14 +201,44 @@ const listPartnerMyServices = async (partnerId) => {
           category_name: category?.name ?? null,
           category_desc: category?.desc ?? null,
           category_image_url: category?.image_url ?? null,
-          services: [],
+          subcategories: new Map(),
+          leftoverServices: [],
         });
       }
 
-      categoryMap.get(categoryKey).services.push(mapPartnerServiceRow(row));
+      const catNode = categoryMap.get(categoryKey);
+      const serviceRow = mapPartnerServiceRow(row);
+      const subcategory = row.subcategory_id;
+      const subKey = subcategory?._id
+        ? String(subcategory._id)
+        : row.subcategory_id
+          ? String(row.subcategory_id)
+          : '';
+
+      if (subKey) {
+        if (!catNode.subcategories.has(subKey)) {
+          catNode.subcategories.set(subKey, {
+            subcategory_id: subcategory?._id ?? row.subcategory_id,
+            subcategory_name: subcategory?.name ?? null,
+            subcategory_desc: subcategory?.desc ?? null,
+            subcategory_image_url: subcategory?.image_url ?? null,
+            services: [],
+          });
+        }
+        catNode.subcategories.get(subKey).services.push(serviceRow);
+      } else {
+        catNode.leftoverServices.push(serviceRow);
+      }
     }
 
-    const data = Array.from(categoryMap.values());
+    const data = Array.from(categoryMap.values()).map((cat) => ({
+      category_id: cat.category_id,
+      category_name: cat.category_name,
+      category_desc: cat.category_desc,
+      category_image_url: cat.category_image_url,
+      subcategories: Array.from(cat.subcategories.values()),
+      ...(cat.leftoverServices.length > 0 ? { services: cat.leftoverServices } : {}),
+    }));
 
     return ok(200, {
       message: 'Partner services fetched successfully.',
@@ -231,6 +311,15 @@ const updatePartnerMyServices = async (partnerId, servicesInput) => {
         return availability;
       }
 
+      const subcategoryResult = await resolveSubcategoryForService(
+        categoryParsed.oid,
+        serviceParsed.oid,
+        item.subcategory_id
+      );
+      if (!subcategoryResult.ok) {
+        return subcategoryResult;
+      }
+
       const existing = await PartnerService.findOne({
         _id: idParsed.oid,
         partner_id: partnerOid,
@@ -253,6 +342,7 @@ const updatePartnerMyServices = async (partnerId, servicesInput) => {
       }
 
       existing.category_id = categoryParsed.oid;
+      existing.subcategory_id = subcategoryResult.data.oid;
       existing.service_id = serviceParsed.oid;
       existing.price = priceParsed.n;
       existing.description = descriptionParsed.text;

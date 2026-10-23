@@ -2,6 +2,10 @@ const Category = require('../../../models/category');
 const Service = require('../../../models/service');
 const PartnerService = require('../../../models/partner_service');
 const { resolveFranchiseEffectiveCatalog } = require('../../../utils/catalog_availability_resolver');
+const {
+  loadActiveSubcategoriesForCategories,
+  nestMappedServicesUnderSubcategories,
+} = require('../user/franchise_partner_scope');
 const { loadPartnerFranchiseId } = require('../shared/partner_access_helpers');
 const { fail, ok } = require('../../../utils/mobile_service_result');
 
@@ -85,6 +89,7 @@ const listFranchiseCategoriesForPartner = async (partnerId) => {
             .lean();
 
     const serviceById = new Map(serviceDocs.map((s) => [String(s._id), s]));
+    const subcategories = await loadActiveSubcategoriesForCategories(categories.map((c) => c._id));
 
     const mapServiceRecord = (s) => ({
       _id: s._id,
@@ -108,15 +113,21 @@ const listFranchiseCategoriesForPartner = async (partnerId) => {
         .map((id) => serviceById.get(String(id)))
         .filter((s) => s && String(s.category_id) === String(c._id))
         .map(mapServiceRecord);
+      const nested = nestMappedServicesUnderSubcategories(c._id, services, subcategories);
 
       return {
         _id: c._id,
         name: c.name,
         desc: c.desc,
         image_url: c.image_url,
-        services,
+        subcategories: nested.subcategories,
+        ...(nested.leftoverServices.length > 0 ? { services: nested.leftoverServices } : {}),
       };
-    }).filter((c) => Array.isArray(c.services) && c.services.length > 0);
+    }).filter(
+      (c) =>
+        (Array.isArray(c.subcategories) && c.subcategories.length > 0) ||
+        (Array.isArray(c.services) && c.services.length > 0)
+    );
 
     return ok(200, {
       message: 'Categories fetched successfully.',

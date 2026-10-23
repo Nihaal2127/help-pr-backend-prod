@@ -6,6 +6,7 @@ const { startOfUtcDay, endOfUtcDay } = require('../../../utils/date_bounds');
 const {
   hydrateUserRef,
   hydrateCategoryRef,
+  hydrateSubcategoryRef,
   hydrateServiceRef,
   hydrateFranchiseRef,
 } = require('../../../utils/list_aggregation');
@@ -30,6 +31,11 @@ const HOME_ORDER_POPULATE = [
     path: 'category_id',
     select:
       'name category_id desc image_url approval_status is_request is_active rejection_reason',
+  },
+  {
+    path: 'subcategory_id',
+    select:
+      'name subcategory_id desc image_url category_id approval_status is_request is_active rejection_reason',
   },
   {
     path: 'service_id',
@@ -119,6 +125,7 @@ const compareInProgressHomeOrders = (left, right, todayStart, todayEnd) => {
 const mapMobileHomeOrder = (order) => {
   const formatted = stripAdminDescriptionForPublicApi(formatOrderForApi(order));
   const category = hydrateCategoryRef(formatted.category_id);
+  const subcategory = hydrateSubcategoryRef(formatted.subcategory_id);
   const service = hydrateServiceRef(formatted.service_id);
   const partner = hydrateUserRef(formatted.partner_id);
   const franchise = hydrateFranchiseRef(formatted.franchise_id);
@@ -136,10 +143,12 @@ const mapMobileHomeOrder = (order) => {
     user_payment_status: formatted.user_payment_status ?? formatted.payment_status ?? 'unpaid',
     is_paid: Boolean(formatted.is_paid),
     category_id: category,
+    subcategory_id: subcategory,
     service_id: service,
     partner_id: partner,
     franchise_id: franchise,
     category_name: category?.name ?? null,
+    subcategory_name: subcategory?.name ?? null,
     service_name: service?.name ?? null,
     partner_name: partner?.name ?? null,
     partner_profile_url: partner?.profile_url ?? null,

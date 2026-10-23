@@ -767,6 +767,7 @@ const buildOrderInvoiceHtml = (record, options = {}) => {
   const franchiseName = record.franchise_info?.name || '—';
   const address = formatAddressLine(record);
   const category = record.category_info?.name || '—';
+  const subcategory = record.subcategory_info?.name || '—';
   const service = record.service_info?.name || '—';
   const paymentStatus = record.user_payment_status || record.payment_status || '—';
   const orderStatus = record.order_status || '—';
@@ -845,6 +846,7 @@ const buildOrderInvoiceHtml = (record, options = {}) => {
         <div class="card-header">${iconSvg('tools')} Service details</div>
         <div class="card-body">
           <p class="service-field"><strong>Category:</strong>${escapeHtml(category)}</p>
+          <p class="service-field"><strong>Subcategory:</strong>${escapeHtml(subcategory)}</p>
           <p class="service-field"><strong>Service:</strong>${escapeHtml(service)}</p>
         </div>
       </div>

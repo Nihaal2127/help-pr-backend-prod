@@ -4,6 +4,7 @@ const OrderService = require('../../../models/order_services');
 const User = require('../../../models/user');
 const Service = require('../../../models/service');
 const Category = require('../../../models/category');
+const Subcategory = require('../../../models/subcategory');
 const City = require('../../../models/city');
 const State = require('../../../models/state');
 const Address = require('../../../models/address');
@@ -298,6 +299,7 @@ const fetchPaginatedMobileOrderList = async ({
   const collections = getListCollectionNames({
     users: User,
     categories: Category,
+    subcategories: Subcategory,
     services: Service,
     cities: City,
     franchise: Franchise,

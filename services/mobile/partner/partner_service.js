@@ -20,6 +20,7 @@ const {
   getPartnerDocumentList,
 } = require('../../../controllers/partner_document_controller');
 const PartnerCategory = require('../../../models/partner_category');
+const PartnerSubcategory = require('../../../models/partner_subcategory');
 const PartnerService = require('../../../models/partner_service');
 const {
   loadMasterPaymentTypesByServiceId,
@@ -416,6 +417,8 @@ async function mergeMobilePartnerCatalogFromNormalizedRows(partnerId, normalized
   if (!Array.isArray(normalizedRows) || normalizedRows.length === 0) return;
 
   const byCat = new Map();
+  const bySub = new Map();
+  const subCategoryBySub = new Map();
   const latestByService = new Map();
 
   for (const row of normalizedRows) {
@@ -425,6 +428,12 @@ async function mergeMobilePartnerCatalogFromNormalizedRows(partnerId, normalized
     if (!byCat.has(categoryKey)) byCat.set(categoryKey, new Set());
     byCat.get(categoryKey).add(serviceKey);
     latestByService.set(serviceKey, row);
+    if (row.subcategory_id) {
+      const subKey = String(row.subcategory_id);
+      if (!bySub.has(subKey)) bySub.set(subKey, new Set());
+      bySub.get(subKey).add(serviceKey);
+      subCategoryBySub.set(subKey, categoryKey);
+    }
   }
 
   const now = new Date();
@@ -456,6 +465,31 @@ async function mergeMobilePartnerCatalogFromNormalizedRows(partnerId, normalized
     );
   }
 
+  for (const [subStr, serviceSet] of bySub) {
+    const catOid = toOid(subCategoryBySub.get(subStr));
+    const serviceOids = [...serviceSet].map((id) => toOid(id));
+    await PartnerSubcategory.findOneAndUpdate(
+      {
+        partner_id: partnerOid,
+        subcategory_id: toOid(subStr),
+        deleted_at: null,
+      },
+      {
+        $setOnInsert: {
+          partner_id: partnerOid,
+          subcategory_id: toOid(subStr),
+          category_id: catOid,
+          is_active: true,
+          created_at: now,
+          deleted_at: null,
+        },
+        $set: { updated_at: now, category_id: catOid },
+        $addToSet: { services: { $each: serviceOids } },
+      },
+      { upsert: true, new: true }
+    );
+  }
+
   const masterPaymentTypes = await loadMasterPaymentTypesByServiceId([...latestByService.keys()]);
 
   // keep partner_service additive too (no delete/replace)
@@ -465,6 +499,7 @@ async function mergeMobilePartnerCatalogFromNormalizedRows(partnerId, normalized
     const requestedPaymentType = row.payment_type != null ? String(row.payment_type).trim() : '';
     const updateFields = {
       category_id: categoryOid,
+      subcategory_id: row.subcategory_id ? toOid(row.subcategory_id) : null,
       description: row.description != null ? String(row.description) : '',
       price: coerceNumber(row.price, 0),
       payment_type: requestedPaymentType,
@@ -1327,6 +1362,81 @@ const assignFranchiseIdFromLocation = async (user) => {
   return okPass();
 };
 
+const nestMobilePartnerServicesCatalog = (rows) => {
+  const byCat = new Map();
+
+  for (const r of rows || []) {
+    const catRef = r.category_id;
+    const catId =
+      catRef && typeof catRef === 'object' && catRef._id
+        ? String(catRef._id)
+        : catRef
+          ? String(catRef)
+          : null;
+    if (!catId) continue;
+
+    if (!byCat.has(catId)) {
+      byCat.set(catId, {
+        category_id:
+          catRef && typeof catRef === 'object' && catRef._id
+            ? { _id: catRef._id, name: catRef.name ?? null }
+            : catRef,
+        subcategories: new Map(),
+        services: [],
+      });
+    }
+    const catNode = byCat.get(catId);
+
+    const servicePayload = {
+      _id: r._id,
+      service_id:
+        r.service_id && typeof r.service_id === 'object' && r.service_id._id
+          ? { _id: r.service_id._id, name: r.service_id.name ?? null }
+          : r.service_id,
+      description: r.description ?? '',
+      price: r.price ?? 0,
+      payment_type: r.payment_type ?? '',
+      tax: r.tax ?? 0,
+      minimum_deposit: r.minimum_deposit ?? 0,
+      is_active: r.is_active !== false,
+      is_accept_request: r.is_accept_request === true,
+    };
+
+    const subRef = r.subcategory_id;
+    const subId =
+      subRef && typeof subRef === 'object' && subRef._id
+        ? String(subRef._id)
+        : subRef
+          ? String(subRef)
+          : null;
+
+    if (subId) {
+      if (!catNode.subcategories.has(subId)) {
+        catNode.subcategories.set(subId, {
+          subcategory_id:
+            subRef && typeof subRef === 'object' && subRef._id
+              ? {
+                  _id: subRef._id,
+                  name: subRef.name ?? null,
+                  subcategory_id: subRef.subcategory_id ?? '',
+                }
+              : subRef,
+          services: [],
+        });
+      }
+      catNode.subcategories.get(subId).services.push(servicePayload);
+    } else {
+      catNode.services.push(servicePayload);
+    }
+  }
+
+  return [...byCat.values()].map((cat) => ({
+    category_id: cat.category_id,
+    subcategories: [...cat.subcategories.values()],
+    ...(cat.services.length > 0 ? { services: cat.services } : {}),
+  }));
+};
+
 const buildPartnerResponseData = async (partnerId) => {
   const populated = await User.findById(partnerId)
     .populate([
@@ -1346,6 +1456,7 @@ const buildPartnerResponseData = async (partnerId) => {
     PartnerService.find({ partner_id: partnerOid, deleted_at: null })
       .populate([
         { path: 'category_id', select: 'name' },
+        { path: 'subcategory_id', select: 'name subcategory_id' },
         { path: 'service_id', select: 'name' },
       ])
       .lean(),
@@ -1369,7 +1480,7 @@ const buildPartnerResponseData = async (partnerId) => {
     verification_status_message: verificationStatusToMessage(populated?.verification_status),
     ...attachPartnerRatingFields(populated),
     ...engagementCounts,
-    partner_services,
+    partner_services: nestMobilePartnerServicesCatalog(partner_services),
     bank_accounts,
     partner_documents,
     documents: partner_documents,

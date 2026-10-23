@@ -8,6 +8,7 @@ const User = require('../models/user');
 const Order = require('../models/order');
 const OrderService = require('../models/order_services');
 const Category = require('../models/category');
+const Subcategory = require('../models/subcategory');
 const Service = require('../models/service');
 const { fieldLabel } = require('../utils/field_labels');
 const { USER_TYPE_PARTNER } = require('../constants/user_types');
@@ -113,7 +114,7 @@ const validateOrderLink = async (partnerId, orderId) => {
     _id: orderParsed.oid,
     deleted_at: null,
   })
-    .select('_id partner_id franchise_id category_id service_id order_status unique_id')
+    .select('_id partner_id franchise_id category_id subcategory_id service_id order_status unique_id')
     .lean();
 
   if (!order) {
@@ -146,6 +147,7 @@ const validateOrderLink = async (partnerId, orderId) => {
   return ok(200, {
     orderOid: orderParsed.oid,
     category_id: order.category_id,
+    subcategory_id: order.subcategory_id ?? null,
     service_id: order.service_id,
     order_unique_id: order.unique_id,
   });
@@ -167,7 +169,7 @@ const assertOrderPostLinkPreconditions = async (partnerId, orderId) => {
     _id: orderParsed.oid,
     deleted_at: null,
   })
-    .select('_id partner_id franchise_id category_id service_id order_status')
+    .select('_id partner_id franchise_id category_id subcategory_id service_id order_status')
     .lean();
 
   if (!order) {
@@ -196,6 +198,7 @@ const assertOrderPostLinkPreconditions = async (partnerId, orderId) => {
   return ok(200, {
     orderOid: orderParsed.oid,
     category_id: order.category_id,
+    subcategory_id: order.subcategory_id ?? null,
     service_id: order.service_id,
   });
 };
@@ -242,6 +245,7 @@ const createOrderPostFromUrls = async (partnerId, orderId, imageUrls, descriptio
     post_type: POST_TYPE_ORDER,
     order_id: orderLink.data.orderOid,
     category_id: orderLink.data.category_id,
+    subcategory_id: orderLink.data.subcategory_id ?? null,
     service_id: orderLink.data.service_id,
     legacy_service_name: '',
     description: descParsed.text,
@@ -268,17 +272,52 @@ const createOrderPostFromUrls = async (partnerId, orderId, imageUrls, descriptio
 
 const loadLinkedLabels = async (posts) => {
   const categoryIds = new Set();
+  const subcategoryIds = new Set();
   const serviceIds = new Set();
+  const orderIdsNeedingSub = new Set();
 
   for (const post of posts) {
     if (post.category_id) categoryIds.add(String(post.category_id));
+    if (post.subcategory_id) subcategoryIds.add(String(post.subcategory_id));
     if (post.service_id) serviceIds.add(String(post.service_id));
+    if (!post.subcategory_id && post.post_type === POST_TYPE_ORDER && post.order_id) {
+      orderIdsNeedingSub.add(String(post.order_id));
+    }
   }
 
-  const [categories, services] = await Promise.all([
+  const ordersNeedingSub =
+    orderIdsNeedingSub.size === 0
+      ? []
+      : await Order.find({
+          _id: { $in: [...orderIdsNeedingSub] },
+          deleted_at: null,
+        })
+          .select('subcategory_id')
+          .lean();
+
+  const orderSubById = new Map();
+  for (const order of ordersNeedingSub) {
+    if (!order.subcategory_id) continue;
+    const subKey = String(order.subcategory_id);
+    orderSubById.set(String(order._id), subKey);
+    subcategoryIds.add(subKey);
+  }
+
+  const [categories, subcategories, services] = await Promise.all([
     categoryIds.size
       ? Category.find({ _id: { $in: [...categoryIds] }, deleted_at: null })
           .select('name')
+          .lean()
+      : [],
+    subcategoryIds.size || serviceIds.size
+      ? Subcategory.find({
+          deleted_at: null,
+          $or: [
+            ...(subcategoryIds.size ? [{ _id: { $in: [...subcategoryIds] } }] : []),
+            ...(serviceIds.size ? [{ services: { $in: [...serviceIds] } }] : []),
+          ],
+        })
+          .select('name services')
           .lean()
       : [],
     serviceIds.size
@@ -289,9 +328,19 @@ const loadLinkedLabels = async (posts) => {
   ]);
 
   const categoryById = new Map(categories.map((c) => [String(c._id), c.name]));
+  const subcategoryById = new Map(subcategories.map((s) => [String(s._id), s.name]));
   const serviceById = new Map(services.map((s) => [String(s._id), s.name]));
+  const serviceToSubId = new Map();
+  for (const sub of subcategories) {
+    for (const sid of sub.services || []) {
+      const key = String(sid);
+      if (!serviceToSubId.has(key)) {
+        serviceToSubId.set(key, String(sub._id));
+      }
+    }
+  }
 
-  return { categoryById, serviceById };
+  return { categoryById, subcategoryById, orderSubById, serviceToSubId, serviceById };
 };
 
 const loadLikedPostIds = async (userId, postIds) => {
@@ -480,7 +529,32 @@ const loadPartnerSummaries = async (partnerIds) => {
   );
 };
 
-const buildLinkedBlock = (post, { categoryById, serviceById, orderDetail = null }) => {
+const resolvePostSubcategoryId = (post, { orderSubById, serviceToSubId }) => {
+  if (post.subcategory_id) return String(post.subcategory_id);
+  if (post.post_type === POST_TYPE_ORDER && post.order_id) {
+    const fromOrder = orderSubById.get(String(post.order_id));
+    if (fromOrder) return fromOrder;
+  }
+  if (post.service_id) {
+    return serviceToSubId.get(String(post.service_id)) || null;
+  }
+  return null;
+};
+
+const buildLinkedBlock = (
+  post,
+  {
+    categoryById,
+    subcategoryById,
+    orderSubById,
+    serviceToSubId,
+    serviceById,
+    orderDetail = null,
+  }
+) => {
+  const subcategoryId = resolvePostSubcategoryId(post, { orderSubById, serviceToSubId });
+  const subcategory_name = subcategoryId ? subcategoryById.get(subcategoryId) || null : null;
+
   if (post.post_type === POST_TYPE_ORDER) {
     const ratingInfo = orderDetail
       ? pickOrderServiceRating(orderDetail.serviceLines, post)
@@ -490,6 +564,7 @@ const buildLinkedBlock = (post, { categoryById, serviceById, orderDetail = null 
       order_id: post.order_id,
       service_name: post.service_id ? serviceById.get(String(post.service_id)) || null : null,
       category_name: post.category_id ? categoryById.get(String(post.category_id)) || null : null,
+      subcategory_name,
       rating: ratingInfo.rating,
       review_text: ratingInfo.review_text,
       reviewed_at: ratingInfo.reviewed_at,
@@ -501,6 +576,7 @@ const buildLinkedBlock = (post, { categoryById, serviceById, orderDetail = null 
       legacy_service_name: post.legacy_service_name || '',
       service_name: post.service_id ? serviceById.get(String(post.service_id)) || null : null,
       category_name: post.category_id ? categoryById.get(String(post.category_id)) || null : null,
+      subcategory_name,
     };
   }
 
@@ -528,6 +604,9 @@ const mapPostRecord = (post, options = {}) => {
     savedPostIds = new Set(),
     partnerById = new Map(),
     categoryById = new Map(),
+    subcategoryById = new Map(),
+    orderSubById = new Map(),
+    serviceToSubId = new Map(),
     serviceById = new Map(),
     orderById = new Map(),
     saveCountByPostId = new Map(),
@@ -558,7 +637,14 @@ const mapPostRecord = (post, options = {}) => {
     reports_count: post.reports_count ?? 0,
     created_at: post.created_at,
     updated_at: post.updated_at,
-    linked: buildLinkedBlock(post, { categoryById, serviceById, orderDetail }),
+    linked: buildLinkedBlock(post, {
+      categoryById,
+      subcategoryById,
+      orderSubById,
+      serviceToSubId,
+      serviceById,
+      orderDetail,
+    }),
   };
 
   if (includeSaveCount) {
@@ -609,6 +695,9 @@ const mapPostRecords = async (posts, options = {}) => {
       savedPostIds,
       partnerById,
       categoryById: labelMaps.categoryById,
+      subcategoryById: labelMaps.subcategoryById,
+      orderSubById: labelMaps.orderSubById,
+      serviceToSubId: labelMaps.serviceToSubId,
       serviceById: labelMaps.serviceById,
       orderById,
       saveCountByPostId,

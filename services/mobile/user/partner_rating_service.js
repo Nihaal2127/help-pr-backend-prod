@@ -191,6 +191,28 @@ const listPartnerServiceRatingsForCustomer = async (partnerId, query = {}) => {
   }
 };
 
+const collectCatalogServices = (category) => {
+  const services = [...(category.services || [])];
+  for (const sub of category.subcategories || []) {
+    services.push(...(sub.services || []));
+  }
+  return services;
+};
+
+const mapCatalogServices = (category, mapper) => {
+  const next = { ...category };
+  if (Array.isArray(category.services)) {
+    next.services = category.services.map(mapper);
+  }
+  if (Array.isArray(category.subcategories)) {
+    next.subcategories = category.subcategories.map((sub) => ({
+      ...sub,
+      services: (sub.services || []).map(mapper),
+    }));
+  }
+  return next;
+};
+
 /**
  * Attach global + partner-specific rating rollups to partner catalog services.
  */
@@ -201,7 +223,7 @@ const enrichPartnerCatalogWithRatings = async (partnerId, categories) => {
 
   const serviceIds = [];
   for (const cat of categories) {
-    for (const svc of cat.services || []) {
+    for (const svc of collectCatalogServices(cat)) {
       if (svc?.service_id) {
         serviceIds.push(new mongoose.Types.ObjectId(String(svc.service_id)));
       }
@@ -229,9 +251,8 @@ const enrichPartnerCatalogWithRatings = async (partnerId, categories) => {
   );
   const globalSvcMap = new Map(serviceRows.map((row) => [String(row._id), row]));
 
-  return categories.map((cat) => ({
-    ...cat,
-    services: (cat.services || []).map((svc) => {
+  return categories.map((cat) =>
+    mapCatalogServices(cat, (svc) => {
       const sid = String(svc.service_id);
       const partnerRow = partnerSvcMap.get(sid);
       const globalRow = globalSvcMap.get(sid);
@@ -239,8 +260,8 @@ const enrichPartnerCatalogWithRatings = async (partnerId, categories) => {
         ...svc,
         ...attachServiceRatingFields(partnerRow, globalRow),
       };
-    }),
-  }));
+    })
+  );
 };
 
 const resolveCatalogServiceId = (svc) => svc?.service_id ?? svc?._id ?? null;
@@ -261,7 +282,7 @@ const enrichPartnerListRecordsWithServiceRatings = async (records) => {
     if (!partner?._id) continue;
     partnerIds.add(String(partner._id));
     for (const cat of partner.categories || []) {
-      for (const svc of cat.services || []) {
+      for (const svc of collectCatalogServices(cat)) {
         const sid = resolveCatalogServiceId(svc);
         if (sid && mongoose.Types.ObjectId.isValid(String(sid))) {
           serviceIds.add(String(sid));
@@ -297,9 +318,8 @@ const enrichPartnerListRecordsWithServiceRatings = async (records) => {
 
   return records.map((partner) => ({
     ...partner,
-    categories: (partner.categories || []).map((cat) => ({
-      ...cat,
-      services: (cat.services || []).map((svc) => {
+    categories: (partner.categories || []).map((cat) =>
+      mapCatalogServices(cat, (svc) => {
         const sidRaw = resolveCatalogServiceId(svc);
         if (!sidRaw) return svc;
         const sid = String(sidRaw);
@@ -308,8 +328,8 @@ const enrichPartnerListRecordsWithServiceRatings = async (records) => {
           ...svc,
           ...attachServiceRatingFields(partnerSvcMap.get(partnerKey), globalSvcMap.get(sid)),
         };
-      }),
-    })),
+      })
+    ),
   }));
 };
 

@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const PartnerPost = require('../../../models/partner_post');
 const Order = require('../../../models/order');
 const Category = require('../../../models/category');
+const Subcategory = require('../../../models/subcategory');
 const Service = require('../../../models/service');
 const { handleImageUpload } = require('../../../helper/image_uploader');
 const { getUploadType } = require('../../../enum/upload_type_enum');
@@ -95,7 +96,22 @@ const validateLegacyServiceRefs = async (categoryId, serviceId, franchiseId) => 
     }
   }
 
-  return ok(200, { categoryOid, serviceOid });
+  let subcategoryOid = null;
+  if (categoryOid && serviceOid) {
+    const subcategory = await Subcategory.findOne({
+      category_id: categoryOid,
+      services: serviceOid,
+      deleted_at: null,
+      is_active: true,
+      is_request: false,
+      approval_status: 'approve',
+    })
+      .select('_id')
+      .lean();
+    subcategoryOid = subcategory?._id ?? null;
+  }
+
+  return ok(200, { categoryOid, subcategoryOid, serviceOid });
 };
 
 const createPartnerPost = async (partnerId, body, files) => {
@@ -126,6 +142,7 @@ const createPartnerPost = async (partnerId, body, files) => {
 
   let orderOid = null;
   let categoryOid = null;
+  let subcategoryOid = null;
   let serviceOid = null;
   let legacyServiceName = '';
 
@@ -139,6 +156,7 @@ const createPartnerPost = async (partnerId, body, files) => {
 
     orderOid = orderLink.data.orderOid;
     categoryOid = orderLink.data.category_id;
+    subcategoryOid = orderLink.data.subcategory_id ?? null;
     serviceOid = orderLink.data.service_id;
   } else {
     legacyServiceName = String(body.legacy_service_name ?? '').trim();
@@ -156,6 +174,7 @@ const createPartnerPost = async (partnerId, body, files) => {
     );
     if (!refs.ok) return refs;
     categoryOid = refs.data.categoryOid;
+    subcategoryOid = refs.data.subcategoryOid ?? null;
     serviceOid = refs.data.serviceOid;
   }
 
@@ -172,6 +191,7 @@ const createPartnerPost = async (partnerId, body, files) => {
     post_type: postType,
     order_id: orderOid,
     category_id: categoryOid,
+    subcategory_id: subcategoryOid,
     service_id: serviceOid,
     legacy_service_name: legacyServiceName,
     description: descParsed.text,
@@ -254,7 +274,7 @@ const listOrderOptions = async (partnerId, query) => {
   const [totalItems, orders] = await Promise.all([
     Order.countDocuments(filter),
     Order.find(filter)
-      .select('_id unique_id category_id service_id created_at updated_at')
+      .select('_id unique_id category_id subcategory_id service_id created_at updated_at')
       .sort({ updated_at: -1 })
       .skip(skip)
       .limit(limit)
@@ -274,10 +294,19 @@ const listOrderOptions = async (partnerId, query) => {
   const linkedOrderIds = new Set(linkedPosts.map((p) => String(p.order_id)));
 
   const serviceIds = [...new Set(orders.map((o) => String(o.service_id)).filter(Boolean))];
-  const services = serviceIds.length
-    ? await Service.find({ _id: { $in: serviceIds }, deleted_at: null }).select('name').lean()
-    : [];
+  const subcategoryIds = [
+    ...new Set(orders.map((o) => String(o.subcategory_id)).filter(Boolean)),
+  ];
+  const [services, subcategories] = await Promise.all([
+    serviceIds.length
+      ? Service.find({ _id: { $in: serviceIds }, deleted_at: null }).select('name').lean()
+      : [],
+    subcategoryIds.length
+      ? Subcategory.find({ _id: { $in: subcategoryIds }, deleted_at: null }).select('name').lean()
+      : [],
+  ]);
   const serviceById = new Map(services.map((s) => [String(s._id), s.name]));
+  const subcategoryById = new Map(subcategories.map((s) => [String(s._id), s.name]));
 
   const records = orders.map((order) => ({
     _id: order._id,
@@ -285,6 +314,10 @@ const listOrderOptions = async (partnerId, query) => {
     service_id: order.service_id,
     service_name: order.service_id ? serviceById.get(String(order.service_id)) || null : null,
     category_id: order.category_id,
+    subcategory_id: order.subcategory_id ?? null,
+    subcategory_name: order.subcategory_id
+      ? subcategoryById.get(String(order.subcategory_id)) || null
+      : null,
     already_linked: linkedOrderIds.has(String(order._id)),
   }));
 

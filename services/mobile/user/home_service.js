@@ -10,6 +10,8 @@ const {
   loadRandomPlatinumPartnerBanners,
   collectEffectivePartnerOfferings,
   mapFranchisePartnerRecords,
+  loadActiveSubcategoriesForCategories,
+  nestMappedServicesUnderSubcategories,
 } = require('./franchise_partner_scope');
 const { enrichPartnerListRecordsWithServiceRatings } = require('./partner_rating_service');
 const { loadCustomerHomeOrders } = require('./home_orders_service');
@@ -118,6 +120,7 @@ const buildFranchiseCategories = async (
           .lean();
 
   const serviceById = new Map(serviceDocs.map((s) => [String(s._id), s]));
+  const subcategories = await loadActiveSubcategoriesForCategories(categories.map((c) => c._id));
 
   const effectiveOfferings = await collectEffectivePartnerOfferings(
     franchiseId,
@@ -152,13 +155,15 @@ const buildFranchiseCategories = async (
       .map((id) => serviceById.get(String(id)))
       .filter((s) => s && String(s.category_id) === String(c._id))
       .map(mapServiceRecord);
+    const nested = nestMappedServicesUnderSubcategories(c._id, services, subcategories);
 
     return {
       _id: c._id,
       name: c.name,
       desc: c.desc,
       image_url: c.image_url,
-      services,
+      subcategories: nested.subcategories,
+      ...(nested.leftoverServices.length > 0 ? { services: nested.leftoverServices } : {}),
     };
   });
 

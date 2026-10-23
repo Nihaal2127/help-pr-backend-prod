@@ -387,6 +387,7 @@ const createOrderPostFromVideo = async (partnerId, orderId, bunnyVideoId, descri
     post_type: POST_TYPE_ORDER,
     order_id: orderLink.data.orderOid,
     category_id: orderLink.data.category_id,
+    subcategory_id: orderLink.data.subcategory_id ?? null,
     service_id: orderLink.data.service_id,
     legacy_service_name: '',
     description: text,

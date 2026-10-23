@@ -4,6 +4,7 @@ const Area = require('../../../models/area');
 const City = require('../../../models/city');
 const User = require('../../../models/user');
 const Category = require('../../../models/category');
+const Subcategory = require('../../../models/subcategory');
 const Service = require('../../../models/service');
 const PartnerCategory = require('../../../models/partner_category');
 const PartnerService = require('../../../models/partner_service');
@@ -20,6 +21,57 @@ const { USER_TYPE_PARTNER } = require('../../../constants/user_types');
 const { attachPartnerRatingFields } = require('../../../utils/rating_format');
 
 const { fail } = require('../../../utils/mobile_service_result');
+
+const ACTIVE_SUBCATEGORY_FILTER = {
+  deleted_at: null,
+  is_active: true,
+  is_request: false,
+  approval_status: 'approve',
+};
+
+const sortByName = (a, b) => String(a.name ?? '').localeCompare(String(b.name ?? ''));
+
+const loadActiveSubcategoriesForCategories = async (categoryIds) => {
+  if (!categoryIds?.length) return [];
+  return Subcategory.find({
+    category_id: { $in: categoryIds },
+    ...ACTIVE_SUBCATEGORY_FILTER,
+  })
+    .select('name desc image_url subcategory_id category_id services')
+    .sort({ name: 1 })
+    .lean();
+};
+
+const nestMappedServicesUnderSubcategories = (categoryId, mappedServices, subcategories) => {
+  const remaining = new Map((mappedServices || []).map((svc) => [String(svc._id), svc]));
+  const nested = [];
+
+  for (const sub of subcategories || []) {
+    if (String(sub.category_id) !== String(categoryId)) continue;
+    const services = [];
+    for (const sid of sub.services || []) {
+      const key = String(sid);
+      const svc = remaining.get(key);
+      if (!svc) continue;
+      services.push(svc);
+      remaining.delete(key);
+    }
+    if (services.length === 0) continue;
+    nested.push({
+      _id: sub._id,
+      name: sub.name,
+      desc: sub.desc,
+      image_url: sub.image_url,
+      subcategory_id: sub.subcategory_id,
+      services,
+    });
+  }
+
+  return {
+    subcategories: nested,
+    leftoverServices: [...remaining.values()],
+  };
+};
 
 const sanitizeCsvField = (value) => String(value ?? '').replace(/,/g, ' ').trim();
 const normalizeKey = (value) => sanitizeCsvField(value).toLowerCase();
@@ -463,7 +515,7 @@ const collectEffectivePartnerOfferings = async (
     service_id: { $in: serviceOids },
     deleted_at: null,
   })
-    .select('partner_id category_id service_id price is_active')
+    .select('partner_id category_id subcategory_id service_id price is_active')
     .lean();
 
   if (offeringRows.length === 0) {
@@ -478,8 +530,13 @@ const collectEffectivePartnerOfferings = async (
       offeringRows.map((r) => (r.category_id ? String(r.category_id) : '')).filter(Boolean)
     ),
   ];
+  const subcategoryIdStrs = [
+    ...new Set(
+      offeringRows.map((r) => (r.subcategory_id ? String(r.subcategory_id) : '')).filter(Boolean)
+    ),
+  ];
 
-  const [serviceDocs, categoryDocs] = await Promise.all([
+  const [serviceDocs, categoryDocs, subcategoryDocs] = await Promise.all([
     Service.find({ _id: { $in: serviceIdStrs }, deleted_at: null })
       .select('_id name is_active is_request category_id')
       .lean(),
@@ -488,10 +545,16 @@ const collectEffectivePartnerOfferings = async (
       : Category.find({ _id: { $in: categoryIdStrs }, deleted_at: null })
           .select('_id name is_active is_request')
           .lean(),
+    subcategoryIdStrs.length === 0
+      ? []
+      : Subcategory.find({ _id: { $in: subcategoryIdStrs }, deleted_at: null })
+          .select('_id name is_active is_request')
+          .lean(),
   ]);
 
   const serviceDocById = new Map(serviceDocs.map((s) => [String(s._id), s]));
   const categoryDocById = new Map(categoryDocs.map((c) => [String(c._id), c]));
+  const subcategoryDocById = new Map(subcategoryDocs.map((s) => [String(s._id), s]));
 
   const effectiveRows = [];
 
@@ -520,13 +583,17 @@ const collectEffectivePartnerOfferings = async (
 
     const serviceDoc = serviceDocById.get(serviceKey);
     const categoryDoc = categoryKey ? categoryDocById.get(categoryKey) : null;
+    const subcategoryKey = row.subcategory_id ? String(row.subcategory_id) : '';
+    const subcategoryDoc = subcategoryKey ? subcategoryDocById.get(subcategoryKey) : null;
 
     effectiveRows.push({
       partner_id: row.partner_id,
       category_id: row.category_id,
+      subcategory_id: row.subcategory_id ?? null,
       service_id: row.service_id,
       price: row.price,
       category_name: categoryDoc?.name ?? null,
+      subcategory_name: subcategoryDoc?.name ?? null,
       service_name: serviceDoc?.name ?? null,
     });
   }
@@ -551,27 +618,53 @@ const groupOfferingsByPartner = (effectiveRows) => {
       categoryMap.set(categoryKey, {
         _id: row.category_id,
         name: row.category_name,
-        services: [],
+        subcategories: new Map(),
+        leftoverServices: [],
       });
     }
 
-    categoryMap.get(categoryKey).services.push({
+    const catNode = categoryMap.get(categoryKey);
+    const servicePayload = {
       _id: row.service_id,
       name: row.service_name,
       price: row.price,
-    });
+    };
+
+    const subKey = row.subcategory_id ? String(row.subcategory_id) : '';
+    if (subKey) {
+      if (!catNode.subcategories.has(subKey)) {
+        catNode.subcategories.set(subKey, {
+          _id: row.subcategory_id,
+          name: row.subcategory_name,
+          services: [],
+        });
+      }
+      catNode.subcategories.get(subKey).services.push(servicePayload);
+    } else {
+      catNode.leftoverServices.push(servicePayload);
+    }
   }
 
   const result = new Map();
   for (const [partnerKey, categoryMap] of byPartner) {
     const categories = [...categoryMap.values()]
-      .map((cat) => ({
-        ...cat,
-        services: cat.services.sort((a, b) =>
-          String(a.name ?? '').localeCompare(String(b.name ?? ''))
-        ),
-      }))
-      .sort((a, b) => String(a.name ?? '').localeCompare(String(b.name ?? '')));
+      .map((cat) => {
+        const subcategories = [...cat.subcategories.values()]
+          .map((sub) => ({
+            ...sub,
+            services: sub.services.sort(sortByName),
+          }))
+          .sort(sortByName);
+        return {
+          _id: cat._id,
+          name: cat.name,
+          subcategories,
+          ...(cat.leftoverServices.length > 0
+            ? { services: cat.leftoverServices.sort(sortByName) }
+            : {}),
+        };
+      })
+      .sort(sortByName);
 
     result.set(partnerKey, categories);
   }
@@ -667,6 +760,10 @@ const buildPartnerDetailCatalog = async (franchiseId, partnerId) => {
     .populate([
       { path: 'category_id', select: 'name desc image_url is_active is_request approval_status' },
       {
+        path: 'subcategory_id',
+        select: 'name desc image_url subcategory_id category_id is_active is_request approval_status',
+      },
+      {
         path: 'service_id',
         select: 'name desc image_url category_id is_active is_request approval_status payment_type',
       },
@@ -709,20 +806,60 @@ const buildPartnerDetailCatalog = async (franchiseId, partnerId) => {
         category_name: category?.name ?? null,
         category_desc: category?.desc ?? null,
         category_image_url: category?.image_url ?? null,
-        services: [],
+        subcategories: new Map(),
+        leftoverServices: [],
       });
     }
 
-    categoryMap.get(categoryKey).services.push(mapCustomerPartnerServiceRow(row));
+    const catNode = categoryMap.get(categoryKey);
+    const serviceRow = mapCustomerPartnerServiceRow(row);
+    const subcategory = row.subcategory_id;
+    const subKey = subcategory?._id
+      ? String(subcategory._id)
+      : row.subcategory_id
+        ? String(row.subcategory_id)
+        : '';
+
+    if (subKey) {
+      if (!catNode.subcategories.has(subKey)) {
+        catNode.subcategories.set(subKey, {
+          subcategory_id: subcategory?._id ?? row.subcategory_id,
+          subcategory_name: subcategory?.name ?? null,
+          subcategory_desc: subcategory?.desc ?? null,
+          subcategory_image_url: subcategory?.image_url ?? null,
+          services: [],
+        });
+      }
+      catNode.subcategories.get(subKey).services.push(serviceRow);
+    } else {
+      catNode.leftoverServices.push(serviceRow);
+    }
   }
 
+  const sortServicesByName = (a, b) =>
+    String(a.service_name ?? '').localeCompare(String(b.service_name ?? ''));
+
   const categories = [...categoryMap.values()]
-    .map((cat) => ({
-      ...cat,
-      services: cat.services.sort((a, b) =>
-        String(a.service_name ?? '').localeCompare(String(b.service_name ?? ''))
-      ),
-    }))
+    .map((cat) => {
+      const subcategories = [...cat.subcategories.values()]
+        .map((sub) => ({
+          ...sub,
+          services: sub.services.sort(sortServicesByName),
+        }))
+        .sort((a, b) =>
+          String(a.subcategory_name ?? '').localeCompare(String(b.subcategory_name ?? ''))
+        );
+      return {
+        category_id: cat.category_id,
+        category_name: cat.category_name,
+        category_desc: cat.category_desc,
+        category_image_url: cat.category_image_url,
+        subcategories,
+        ...(cat.leftoverServices.length > 0
+          ? { services: cat.leftoverServices.sort(sortServicesByName) }
+          : {}),
+      };
+    })
     .sort((a, b) =>
       String(a.category_name ?? '').localeCompare(String(b.category_name ?? ''))
     );
@@ -837,6 +974,8 @@ module.exports = {
   loadSubscribedFranchisePartners,
   loadRandomPlatinumPartnerBanners,
   collectEffectivePartnerOfferings,
+  loadActiveSubcategoriesForCategories,
+  nestMappedServicesUnderSubcategories,
   mapFranchisePartnerRecords,
   buildPartnerDetailCatalog,
   listPartnersOfferingService,

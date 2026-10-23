@@ -37,6 +37,11 @@ const partnerPostSchema = new mongoose.Schema(
       default: null,
       ref: 'category',
     },
+    subcategory_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+      ref: 'subcategory',
+    },
     service_id: {
       type: mongoose.Schema.Types.ObjectId,
       default: null,

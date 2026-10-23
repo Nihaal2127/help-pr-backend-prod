@@ -62,11 +62,19 @@ const partnerMatchesCategory = (partner, categoryId) => {
   return (partner.categories || []).some((c) => String(c._id) === key);
 };
 
+const catalogServicesOf = (category) => {
+  const services = [...(category.services || [])];
+  for (const sub of category.subcategories || []) {
+    services.push(...(sub.services || []));
+  }
+  return services;
+};
+
 const partnerMatchesService = (partner, serviceId) => {
   if (!serviceId) return true;
   const key = String(serviceId);
   return (partner.categories || []).some((c) =>
-    (c.services || []).some((s) => String(s._id) === key)
+    catalogServicesOf(c).some((s) => String(s._id) === key)
   );
 };
 
@@ -74,7 +82,7 @@ const collectPartnerOfferingPrices = (partner, serviceId, categoryId) => {
   const prices = [];
   for (const cat of partner.categories || []) {
     if (categoryId && String(cat._id) !== String(categoryId)) continue;
-    for (const svc of cat.services || []) {
+    for (const svc of catalogServicesOf(cat)) {
       if (serviceId && String(svc._id) !== String(serviceId)) continue;
       const price = Number(svc.price);
       if (!Number.isNaN(price)) prices.push(price);

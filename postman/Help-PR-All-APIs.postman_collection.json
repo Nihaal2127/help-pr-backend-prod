@@ -34,8 +34,8 @@
                   }
                 }
               ],
-              "request": {
-                "method": "POST",
+          "request": {
+            "method": "POST",
                 "header": [
                   {
                     "key": "Content-Type",
@@ -51,85 +51,85 @@
                     }
                   }
                 },
-                "url": {
+            "url": {
                   "raw": "{{baseUrl}}/api/auth/login",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "auth",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
                     "login"
-                  ]
-                },
+              ]
+          },
                 "description": "**POST /api/auth/login** — email + password.\n\nSaves JWT to **`token`** and **`accessToken`**."
               },
               "response": []
-            },
-            {
+        },
+        {
               "name": "Logout",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Authorization",
-                    "value": "Bearer {{accessToken}}",
-                    "type": "text"
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
                   },
                   {
                     "key": "Content-Type",
                     "value": "application/json"
-                  }
-                ],
-                "url": {
-                  "raw": "{{baseUrl}}/api/auth/logout",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "auth",
-                    "logout"
-                  ]
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
                 },
                 "description": "**POST /api/auth/logout** — requires Bearer JWT."
               },
               "response": []
+        },
+        {
+          "name": "Forgot password",
+          "request": {
+            "auth": {
+              "type": "noauth"
             },
-            {
-              "name": "Forgot password",
-              "request": {
-                "auth": {
-                  "type": "noauth"
-                },
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
                   "raw": "{\n  \"email\": \"{{email}}\"\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "url": {
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
                   "raw": "{{baseUrl}}/api/auth/forgotPassword",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "auth",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
                     "forgotPassword"
                   ]
                 },
@@ -145,30 +145,30 @@
           "item": [
             {
               "name": "User login",
-              "request": {
-                "auth": {
-                  "type": "noauth"
-                },
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
                   "raw": "{\n  \"phone_number\": \"{{phoneNumber}}\",\n  \"device_token\": \"{{deviceToken}}\"\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
                 "url": {
                   "raw": "{{baseUrl}}/api/auth/userLogin",
                   "host": [
@@ -186,40 +186,40 @@
             },
             {
               "name": "Send OTP",
-              "request": {
-                "auth": {
-                  "type": "noauth"
-                },
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
                   "raw": "{\n  \"phone_number\": \"{{phoneNumber}}\"\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/otp/send_otp",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "otp",
-                    "send_otp"
-                  ]
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/otp/send_otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "otp",
+                "send_otp"
+              ]
                 },
                 "description": "**POST /api/otp/send_otp**"
               },
@@ -227,30 +227,30 @@
             },
             {
               "name": "Verify OTP",
-              "request": {
-                "auth": {
-                  "type": "noauth"
-                },
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
                   "raw": "{\n  \"phone_number\": \"{{phoneNumber}}\",\n  \"otp\": \"{{otp}}\",\n  \"device_token\": \"{{deviceToken}}\"\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
                 "url": {
                   "raw": "{{baseUrl}}/api/otp/verify_otp",
                   "host": [
@@ -2218,7 +2218,7 @@
               "name": "200 — category request created",
               "originalRequest": {
                 "method": "POST",
-                "header": [],
+            "header": [],
                 "body": {
                   "mode": "raw",
                   "raw": ""
@@ -2238,7 +2238,7 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [],
+            "header": [],
               "cookie": [],
               "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Category created successfully.\",\n  \"record\": {\n    \"_id\": \"64a700000000000000000001\",\n    \"name\": \"Requested Category\",\n    \"desc\": \"Description for approvers\",\n    \"category_id\": \"CAT-00001\",\n    \"image_url\": \"https://example.com/cat.png\",\n    \"services\": [\"64a700000000000000000010\"],\n    \"city_ids\": [],\n    \"state_ids\": [],\n    \"is_active\": false,\n    \"is_request\": true,\n    \"approval_status\": \"pending\",\n    \"rejection_reason\": null,\n    \"requested_by\": \"64a700000000000000000099\"\n  }\n}"
             }
@@ -3199,14 +3199,14 @@
                   "mode": "raw",
                   "raw": ""
                 },
-                "url": {
+            "url": {
                   "raw": "{{baseUrl}}/api/service/create-request",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "service",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "service",
                     "create-request"
                   ]
                 }
@@ -4038,7 +4038,7 @@
               ]
             },
             "description": "Public mobile signup — **no JWT**. Different from Create partner."
-          }
+            }
         },
         {
           "name": "Get all partners",
@@ -4267,7 +4267,7 @@
               ]
             },
             "description": "Partner password (`type` 2)."
-          }
+            }
         },
         {
           "name": "Get partner dropdown",
@@ -5057,7 +5057,7 @@
                 "partner_service",
                 "franchiseCategoryServices"
               ]
-            },
+          },
             "description": "POST /api/partner_service/franchiseCategoryServices — body franchise_id + category_id. requireBackoffice JWT."
           },
           "response": [],
@@ -7638,7 +7638,7 @@
               ]
             },
             "description": "**POST /api/quote/create**\n\nInclude **`subcategory_id`** (Category → Subcategory → Service). Optional if omitted.\n\nPricing: `total_service_charge` (or `service_price`). Saves `quoteId`."
-          }
+            }
         },
         {
           "name": "Get all",
@@ -7725,7 +7725,7 @@
               ]
             },
             "description": "View quote. Response includes populated **`subcategory_id`** (`_id`, `name`, `subcategory_id` code)."
-          }
+            }
         },
         {
           "name": "Update",
@@ -7765,7 +7765,7 @@
               ]
             },
             "description": "**PUT /api/quote/update/:id** — while status is **new** or **pending**.\n\nCan change **`category_id` / `subcategory_id` / `service_id`**. Subcategory must belong to category; service must belong to subcategory."
-          }
+            }
         },
         {
           "name": "Delete",
@@ -7791,7 +7791,7 @@
               ]
             },
             "description": "Soft delete quote."
-          }
+            }
         },
         {
           "name": "Get customer quotes",
@@ -7856,7 +7856,7 @@
               ]
             },
             "description": "Approve / release quote to partner."
-          }
+            }
         },
         {
           "name": "Cancel",
@@ -7896,7 +7896,7 @@
               ]
             },
             "description": "Cancel quote."
-          }
+            }
         },
         {
           "name": "Reject",

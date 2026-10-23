@@ -475,6 +475,22 @@ const hydrateCategoryRef = (category) => {
   };
 };
 
+const hydrateSubcategoryRef = (subcategory) => {
+  if (!subcategory || typeof subcategory !== "object" || subcategory._id == null) return null;
+  return {
+    _id: subcategory._id,
+    name: subcategory.name,
+    subcategory_id: subcategory.subcategory_id,
+    desc: subcategory.desc,
+    image_url: subcategory.image_url,
+    category_id: subcategory.category_id,
+    approval_status: subcategory.approval_status,
+    is_request: subcategory.is_request,
+    is_active: subcategory.is_active,
+    rejection_reason: subcategory.rejection_reason,
+  };
+};
+
 const hydrateServiceRef = (service) => {
   if (!service || typeof service !== "object" || service._id == null) return null;
   return {
@@ -547,6 +563,9 @@ const embedOrderDetailForeignKeys = (record) => {
   const employee = hydrateUserRef(record.employee_info);
   const createdBy = hydrateUserRef(record.created_by_info);
   const category = hydrateCategoryRef(record.category_info);
+  const subcategory =
+    hydrateSubcategoryRef(record.subcategory_info) ||
+    hydrateSubcategoryRef(record.subcategory_id);
   const service = hydrateServiceRef(record.service_info);
   const franchise = hydrateFranchiseRef(record.franchise_info);
   const city = hydrateCityRef(record.city_info);
@@ -559,6 +578,7 @@ const embedOrderDetailForeignKeys = (record) => {
     employee_info: _e,
     created_by_info: _c,
     category_info: _cat,
+    subcategory_info: _sub,
     service_info: _svc,
     franchise_info: _f,
     address_info: _a,
@@ -575,6 +595,7 @@ const embedOrderDetailForeignKeys = (record) => {
     employee_id: employee,
     created_by_id: createdBy,
     category_id: category,
+    subcategory_id: subcategory,
     service_id: service,
     franchise_id: franchise,
     city_id: city,
@@ -586,6 +607,7 @@ const embedOrderDetailForeignKeys = (record) => {
     partner_unique_id: partner?.user_id ?? null,
     employee_name: employee?.name ?? null,
     category_name: category?.name ?? null,
+    subcategory_name: subcategory?.name ?? null,
     service_name: service?.name ?? null,
     city_name: city?.name ?? null,
   };
@@ -601,6 +623,7 @@ module.exports = {
   buildListFacetStages,
   hydrateUserRef,
   hydrateCategoryRef,
+  hydrateSubcategoryRef,
   hydrateServiceRef,
   hydrateFranchiseRef,
   hydrateCityRef,

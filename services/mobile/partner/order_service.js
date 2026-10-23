@@ -42,6 +42,8 @@ const MOBILE_PARTNER_ORDER_LIST_SEARCH_FIELDS = [
   '_created_by.user_id',
   '_category.name',
   '_category.category_id',
+  '_subcategory.name',
+  '_subcategory.subcategory_id',
   '_service.name',
   '_service.service_id',
   '_city.name',
