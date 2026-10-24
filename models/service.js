@@ -9,6 +9,7 @@ const serviceSchema = new mongoose.Schema(
         commission: { type: Number, required: false, default: 0 },
         payment_type: { type: String, required: false, default: "" },
         minimum_deposit: { type: Number, required: false, default: 0 },
+        direct_order: { type: Boolean, default: true },
         category_id: { type: mongoose.Schema.Types.ObjectId, default: null, ref: 'category' },
         image_url: { type: String, required: true, default: "" },
         is_active: { type: Boolean, default: true },

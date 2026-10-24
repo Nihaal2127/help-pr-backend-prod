@@ -715,6 +715,8 @@ const create = async (req, res) => {
       });
     }
 
+    const isCreateRequest =
+      typeof req.path === "string" && req.path.includes("/create-request");
     const newService = new Service({
       name: trimmedName,
       desc,
@@ -722,6 +724,9 @@ const create = async (req, res) => {
       commission: asBodyNumber(commission, 0),
       payment_type: normalizePaymentType(payment_type),
       minimum_deposit: asBodyNumber(minimum_deposit, 0),
+      ...(isCreateRequest
+        ? {}
+        : { direct_order: asBodyBool(req.body.direct_order, true) !== false }),
       category_id,
       service_id,
       city_ids,
@@ -753,11 +758,14 @@ const create = async (req, res) => {
       await category.save();
     }
 
+    const createdRecord = stripServiceLocationFields(savedService);
+    if (isCreateRequest) delete createdRecord.direct_order;
+
     return res.status(200).json({
       success: true,
       status: 200,
       message: 'Service created successfully.',
-      record: stripServiceLocationFields(savedService),
+      record: createdRecord,
     });
   } catch (error) {
     console.error('Error creating Service:', error.message);
@@ -799,6 +807,7 @@ const update = async (req, res) => {
   delete updateData.requested_by;
   if (typeof req.path === "string" && req.path.includes("/update-request")) {
     updateData.is_request = true;
+    delete updateData.direct_order;
   }
   if (Object.prototype.hasOwnProperty.call(updateData, "tax")) {
     updateData.tax = asBodyNumber(updateData.tax, 0);
@@ -811,6 +820,9 @@ const update = async (req, res) => {
   }
   if (Object.prototype.hasOwnProperty.call(updateData, "payment_type")) {
     updateData.payment_type = normalizePaymentType(updateData.payment_type);
+  }
+  if (Object.prototype.hasOwnProperty.call(updateData, "direct_order")) {
+    updateData.direct_order = asBodyBool(updateData.direct_order, true) !== false;
   }
 
   try {
@@ -1018,11 +1030,16 @@ const update = async (req, res) => {
       }
     }
 
+    const updatedRecord = stripServiceLocationFields(updatedService);
+    if (typeof req.path === "string" && req.path.includes("/update-request")) {
+      delete updatedRecord.direct_order;
+    }
+
     res.status(200).json({
       success: true,
       status: 200,
       message: 'Service updated successfully',
-      record: stripServiceLocationFields(updatedService),
+      record: updatedRecord,
     });
   } catch (error) {
     res.status(500).json({
