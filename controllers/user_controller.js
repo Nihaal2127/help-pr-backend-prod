@@ -1990,6 +1990,16 @@ const create = async (req, res) => {
       ...(is_blocked !== undefined ? { is_blocked } : {}),
       chat: resolvedChat,
       is_business,
+      ...(userType === 2
+        ? {
+            direct_order:
+              req.body.direct_order === undefined ||
+              req.body.direct_order === null ||
+              req.body.direct_order === ''
+                ? true
+                : parseBooleanInput(req.body.direct_order),
+          }
+        : {}),
       type: Number.isFinite(userType) ? userType : type,
       registration_type: resolveRegistrationTypeForUserCreate(req),
       device_token,
@@ -2417,6 +2427,20 @@ const update = async (req, res) => {
       updateData.chat = true;
     }
 
+    if (Number(user.type) !== 2) {
+      delete updateData.direct_order;
+    } else if (Object.prototype.hasOwnProperty.call(updateData, 'direct_order')) {
+      if (
+        updateData.direct_order === undefined ||
+        updateData.direct_order === null ||
+        updateData.direct_order === ''
+      ) {
+        delete updateData.direct_order;
+      } else {
+        updateData.direct_order = parseBooleanInput(updateData.direct_order);
+      }
+    }
+
     if (updateData.is_blocked !== undefined) {
       const blocked = parseBooleanInput(updateData.is_blocked);
       updateData.is_blocked = blocked;
@@ -2460,6 +2484,7 @@ const update = async (req, res) => {
       'is_active',
       'is_blocked',
       'is_business',
+      'direct_order',
       'type',
       'device_token',
       'created_by_id',

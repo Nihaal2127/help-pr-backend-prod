@@ -38,6 +38,7 @@ var userSchema = new schema(
     is_blocked: { type: Boolean, default: false },
     chat: { type: Boolean, default: true },
     is_business: { type: Boolean, default: false },
+    direct_order: { type: Boolean, default: true },
     type: { type: Number, required: true, default: 1 },
     /*
       1 for Admin
