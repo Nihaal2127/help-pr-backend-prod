@@ -2874,19 +2874,19 @@ const getById = async (req, res) => {
       const userCityRef = response.city_id;
       const userCityId =
         userCityRef && typeof userCityRef === 'object' ? userCityRef._id : userCityRef;
-      const storedFranchiseRef = user.franchise_id;
-      const storedFranchiseId =
-        storedFranchiseRef && typeof storedFranchiseRef === 'object'
-          ? storedFranchiseRef._id ?? storedFranchiseRef
-          : storedFranchiseRef;
+      const userAreaRef = response.area_id ?? user.area_id;
+      const userAreaId =
+        userAreaRef && typeof userAreaRef === 'object'
+          ? userAreaRef._id ?? userAreaRef
+          : userAreaRef;
       let franchiseName = null;
       let franchiseEmail = null;
       let franchiseCities = [];
       response.franchise_id = null;
-      if (storedFranchiseId && mongoose.Types.ObjectId.isValid(String(storedFranchiseId))) {
+      if (userAreaId && mongoose.Types.ObjectId.isValid(String(userAreaId))) {
         const franchise = await Franchise.findOne({
-          _id: storedFranchiseId,
           deleted_at: null,
+          area_id: userAreaId,
         })
           .select('name admin_id city_id')
           .populate({ path: 'city_id', select: 'name' })
