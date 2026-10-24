@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "help-pr-all-apis-merged",
     "name": "Help PR — All APIs (single collection)",
-    "description": "**Single Postman collection** for `help-pr-backend-staging`. Import only this file.\n\n**Generated:** 2026-05-20 via `node postman/merge-all-collections.mjs`\n\n**Sources merged (8) from `postman/archive/`:**\n- `archive/Help-PR-Orders-Module.postman_collection.json`\n- `archive/Help-PR-Order-Charges-Payments.postman_collection.json`\n- `archive/Help-PR-Partner-Franchise-Dropdowns.postman_collection.json`\n- `archive/content-expense-expense-category-management.postman_collection (1).json`\n- `archive/Area-Management.postman_collection.json`\n- `archive/Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json`\n- `archive/Help-PR-Area-Franchise-Subscription.postman_collection.json`\n- `archive/Help-PR-Admin-Dashboard.postman_collection.json`\n- Built-in: Partner payout (4 requests)\n- Built-in: Order refunds (4 requests)\n- Built-in: Partners browse — admin `GET /api/partners` (2 requests)\n- Built-in: Partner post management — admin `/api/partner-post` (4 requests)\n- Built-in: Appointment calendar — admin `/api/appointment` (6 requests)\n\n**Dedup:** Same HTTP method + path template (+ getCount `type` in body) → one request; higher-priority source wins.\n\n**Setup:** Set `baseUrl`. Run **00 — Auth → Admin / Staff → Login** to set `accessToken` / `token`.\n\n**Docs:** `docs/ORDER_MODULE_FRONTEND.md`, `docs/RAZORPAY_ONLINE_PAYMENTS_AUDIT.md`, `docs/SUBSCRIPTION_CHANGE_FRONTEND.md`, `docs/ORDER_GETALL_API_CHANGES.md`, `docs/APPOINTMENT_MODULE_FRONTEND.md`, `docs/PARTNER_PAYOUT_FRONTEND.md`, `docs/PARTNER_POST_FRONTEND.md`, `docs/REFUND_API.md`, `docs/REFUND_FRONTEND.md`, `postman/Help-PR-Refunds.postman_collection.json`\n\n**Mobile:** folder **Mobile → Partner** / **Mobile → User** — run `node postman/build-mobile-folder.mjs` to refresh.\n\n*** Subcategory patch 2026-10-17: added folder **10b — Subcategory (catalog)** (`/api/subcategory`). ***\n\n*** Franchise subcategories patch 2026-10-19: create/update/get bodies include `subcategories` on franchise document. ***",
+    "description": "**Single Postman collection** for `help-pr-backend-staging`. Import only this file.\n\n**Generated:** 2026-05-20 via `node postman/merge-all-collections.mjs`\n\n**Sources merged (8) from `postman/archive/`:**\n- `archive/Help-PR-Orders-Module.postman_collection.json`\n- `archive/Help-PR-Order-Charges-Payments.postman_collection.json`\n- `archive/Help-PR-Partner-Franchise-Dropdowns.postman_collection.json`\n- `archive/content-expense-expense-category-management.postman_collection (1).json`\n- `archive/Area-Management.postman_collection.json`\n- `archive/Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json`\n- `archive/Help-PR-Area-Franchise-Subscription.postman_collection.json`\n- `archive/Help-PR-Admin-Dashboard.postman_collection.json`\n- Built-in: Partner payout (4 requests)\n- Built-in: Order refunds (4 requests)\n- Built-in: Partners browse — admin `GET /api/partners` (2 requests)\n- Built-in: Partner post management — admin `/api/partner-post` (4 requests)\n- Built-in: Appointment calendar — admin `/api/appointment` (6 requests)\n\n**Dedup:** Same HTTP method + path template (+ getCount `type` in body) → one request; higher-priority source wins.\n\n**Setup:** Set `baseUrl`. Run **00 — Auth → Admin / Staff → Login** to set `accessToken` / `token`.\n\n**Docs:** `docs/ORDER_MODULE_FRONTEND.md`, `docs/RAZORPAY_ONLINE_PAYMENTS_AUDIT.md`, `docs/SUBSCRIPTION_CHANGE_FRONTEND.md`, `docs/ORDER_GETALL_API_CHANGES.md`, `docs/APPOINTMENT_MODULE_FRONTEND.md`, `docs/PARTNER_PAYOUT_FRONTEND.md`, `docs/PARTNER_POST_FRONTEND.md`, `docs/REFUND_API.md`, `docs/REFUND_FRONTEND.md`, `postman/Help-PR-Refunds.postman_collection.json`\n\n**Mobile:** folder **Mobile → Partner** / **Mobile → User** — run `node postman/build-mobile-folder.mjs` to refresh.\n\n*** Subcategory patch 2026-10-17: added folder **10b — Subcategory (catalog)** (`/api/subcategory`). ***\n\n*** Franchise subcategories patch 2026-10-19: create/update/get bodies include `subcategories` on franchise document. ***\n\n*** Direct order patch 2026-10-24: `direct_order` (boolean, default true) on Service create/update/get/getAll and Partner user create/update/get/getAll. Not on service create-request / update-request. ***",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -3124,10 +3124,33 @@
     },
     {
       "name": "11 — Service (catalog)",
-      "description": "**/api/service** — one request per endpoint.\n\nIncludes both **direct** (`create` / `update`) and **franchise request** (`create-request` / `update-request`) flows.",
+      "description": "**/api/service** — one request per endpoint.\n\nIncludes both **direct** (`create` / `update`) and **franchise request** (`create-request` / `update-request`) flows.\n\n**`direct_order`** (boolean, default `true`): accepted on **Create** / **Update**; returned on **Get all** / **Get by id** / **Get dropdown**. Not accepted and not returned on **Create request** / **Update request**.",
       "item": [
         {
           "name": "Create",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "  const j = pm.response.json();",
+                  "  if (j && j.record && j.record._id) {",
+                  "    pm.collectionVariables.set('id', String(j.record._id));",
+                  "    pm.collectionVariables.set('serviceId', String(j.record._id));",
+                  "  }",
+                  "  if (j && j.record) {",
+                  "    pm.test('record.direct_order is boolean', function () {",
+                  "      pm.expect(j.record).to.have.property('direct_order');",
+                  "      pm.expect(j.record.direct_order).to.be.a('boolean');",
+                  "    });",
+                  "  }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -3135,8 +3158,22 @@
                 "key": "Authorization",
                 "value": "Bearer {{accessToken}}",
                 "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
               }
             ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Home Cleaning {{$timestamp}}\",\n  \"desc\": \"Standard home cleaning service\",\n  \"image_url\": \"https://example.com/svc.png\",\n  \"category_id\": \"{{categoryId}}\",\n  \"tax\": 18,\n  \"commission\": 10,\n  \"payment_type\": \"per_hour\",\n  \"minimum_deposit\": 20,\n  \"direct_order\": true,\n  \"is_active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": {
               "raw": "{{baseUrl}}/api/service/create",
               "host": [
@@ -3147,7 +3184,8 @@
                 "service",
                 "create"
               ]
-            }
+            },
+            "description": "**POST /api/service/create**\n\nOptional boolean **`direct_order`** (default `true`). Saves `id` / `serviceId`. Response `record.direct_order` is boolean.\n\nOmit `direct_order` to verify default `true`. Set `false` to turn Direct order off."
           },
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → 04 — Service Management (catalog)_"
         },
@@ -3232,7 +3270,7 @@
                 "type": "text"
               }
             ],
-            "description": "Franchise-scoped via `requested_by`.",
+            "description": "List catalog services. Each `records[]` includes **`direct_order`** (boolean, default `true`).",
             "url": {
               "raw": "{{baseUrl}}/api/service/getAll?page=1&limit=10&keyword=",
               "host": [
@@ -3272,7 +3310,7 @@
                 "type": "text"
               }
             ],
-            "description": "Detail / view action.",
+            "description": "View one service. `record.direct_order` is boolean (default `true`).",
             "url": {
               "raw": "{{baseUrl}}/api/service/get/{{id}}",
               "host": [
@@ -3325,7 +3363,7 @@
                 "type": "text"
               }
             ],
-            "description": "Full update for live services (`is_request=false`) when allowed. Multipart per `serviceUpdateParser`.",
+            "description": "Full update for live services (`is_request=false`) when allowed. Multipart per `serviceUpdateParser`.\n\nOptional **`direct_order`**: `true` | `false` (default `true` on create). Returned on `record`.",
             "url": {
               "raw": "{{baseUrl}}/api/service/update/{{id}}",
               "host": [
@@ -3360,6 +3398,12 @@
                   "key": "image_url",
                   "value": "https://example.com/svc.png",
                   "type": "text"
+                },
+                {
+                  "key": "direct_order",
+                  "value": "{{directOrder}}",
+                  "type": "text",
+                  "description": "true | false — Direct order toggle"
                 },
                 {
                   "key": "image",
@@ -3784,7 +3828,7 @@
     },
     {
       "name": "12 — Partner",
-      "description": "**/api/user** partner (`type` 2) — one request per action.\nSame routes as User, dedicated partner bodies (`{{partnerId}}`, nested `partner_services`).",
+      "description": "**/api/user** partner (`type` 2) — one request per action.\nSame routes as User, dedicated partner bodies (`{{partnerId}}`, nested `partner_services`).\n\n**`direct_order`** (boolean, default `true`): accepted on **Create partner** / **Update partner**; returned on **Get all partners** / **Get partner by id**. Ignored for non-partner user types.",
       "item": [
         {
           "name": "Create partner",
@@ -3897,6 +3941,12 @@
                   "type": "text"
                 },
                 {
+                  "key": "direct_order",
+                  "value": "{{directOrder}}",
+                  "type": "text",
+                  "description": "true | false — Direct order toggle (default true)"
+                },
+                {
                   "key": "partner_services",
                   "value": "[{\"category_id\":\"{{categoryId}}\",\"is_active\":true,\"subcategories\":[{\"subcategory_id\":\"{{subcategoryId}}\",\"is_active\":true,\"services\":[{\"service_id\":\"{{serviceId}}\",\"description\":\"Offering under subcategory\",\"price\":499,\"payment_type\":\"online\",\"tax\":0,\"minimum_deposit\":0,\"is_active\":true}]}]}]",
                   "type": "text",
@@ -3933,7 +3983,7 @@
                 "create"
               ]
             },
-            "description": "Admin/web partner create (`type` 2). Optional `service_cities`. Saves `partnerId`."
+            "description": "Admin/web partner create (`type` 2). Optional `service_cities`. Optional **`direct_order`** (boolean, default `true`). Saves `partnerId`."
           }
         },
         {
@@ -4072,7 +4122,8 @@
                 },
                 {
                   "key": "type",
-                  "value": "2"
+                  "value": "2",
+                  "description": "Partner list (`type=2`). Each record includes **direct_order** (boolean, default true)."
                 },
                 {
                   "key": "keyword",
@@ -4097,7 +4148,7 @@
                 }
               ]
             },
-            "description": "Partner list (`type=2`)."
+            "description": "Partner list (`type=2`). Each record includes **`direct_order`** (boolean, default `true`)."
           }
         },
         {
@@ -4123,7 +4174,7 @@
                 "{{partnerId}}"
               ]
             },
-            "description": "Includes nested `partner_services` (category → subcategory → service), bank, documents."
+            "description": "Includes nested `partner_services` (category → subcategory → service), bank, documents, and **`direct_order`** (boolean, default `true`)."
           }
         },
         {
@@ -4154,6 +4205,12 @@
                   "key": "is_active",
                   "value": "true",
                   "type": "text"
+                },
+                {
+                  "key": "direct_order",
+                  "value": "{{directOrder}}",
+                  "type": "text",
+                  "description": "true | false — Direct order toggle"
                 },
                 {
                   "key": "partner_services",
@@ -4201,7 +4258,7 @@
                 "{{partnerId}}"
               ]
             },
-            "description": "One update request: profile + optional catalog (`partner_services`) + optional `service_cities` / bank / verification."
+            "description": "One update request: profile + optional **`direct_order`** (`true` | `false`) + optional catalog (`partner_services`) + optional `service_cities` / bank / verification."
           }
         },
         {
@@ -24575,6 +24632,12 @@
       "key": "serviceId",
       "value": "",
       "description": "Catalog service ObjectId for getPartnerDropDown."
+    },
+    {
+      "key": "directOrder",
+      "value": "true",
+      "type": "string",
+      "description": "Direct order toggle for Service create/update and Partner create/update. true | false. Default true."
     },
     {
       "key": "areaSearchName",
