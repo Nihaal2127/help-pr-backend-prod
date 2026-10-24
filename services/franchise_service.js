@@ -954,7 +954,7 @@ const getFranchiseRelatedCatalog = async (franchiseIdRaw) => {
                     deleted_at: null,
                 })
                     .select(
-                        'partner_id category_id service_id is_accept_request description price is_active created_at updated_at'
+                        'partner_id category_id subcategory_id service_id is_accept_request description price is_active created_at updated_at'
                     )
                     .lean(),
                 PartnerCategory.find({
@@ -986,14 +986,38 @@ const getFranchiseRelatedCatalog = async (franchiseIdRaw) => {
             partnerCategoryEnabledByPartner.get(pid).set(cid, Boolean(row.is_active));
         }
 
+        /** partnerId -> subcategoryId -> partner local is_enabled */
+        const partnerSubcategoryEnabledByPartner = new Map();
+        const pscByPartnerSub = new Map();
+        for (const row of pscRows) {
+            const pid = row.partner_id.toString();
+            const subKey = row.subcategory_id?.toString();
+            if (!subKey) continue;
+            if (!partnerSubcategoryEnabledByPartner.has(pid)) {
+                partnerSubcategoryEnabledByPartner.set(pid, new Map());
+            }
+            partnerSubcategoryEnabledByPartner.get(pid).set(subKey, Boolean(row.is_active));
+            pscByPartnerSub.set(`${pid}:${subKey}`, row);
+        }
+
         const partnerServiceIds = [
             ...new Set(psRows.map((r) => r.service_id?.toString()).filter(Boolean)),
         ];
         const partnerCategoryIds = [
-            ...new Set(pcRows.map((r) => r.category_id?.toString()).filter(Boolean)),
+            ...new Set(
+                [
+                    ...pcRows.map((r) => r.category_id?.toString()),
+                    ...psRows.map((r) => r.category_id?.toString()),
+                ].filter(Boolean)
+            ),
         ];
         const partnerSubcategoryIds = [
-            ...new Set(pscRows.map((r) => r.subcategory_id?.toString()).filter(Boolean)),
+            ...new Set(
+                [
+                    ...pscRows.map((r) => r.subcategory_id?.toString()),
+                    ...psRows.map((r) => r.subcategory_id?.toString()),
+                ].filter(Boolean)
+            ),
         ];
 
         const [serviceRows, categoryRows, subcategoryRows] = await Promise.all([
@@ -1042,8 +1066,14 @@ const getFranchiseRelatedCatalog = async (franchiseIdRaw) => {
                 : false;
             const globalServiceActive = isGlobalCatalogRowActive(svc);
             const globalCategoryActive = cat ? isGlobalCatalogRowActive(cat) : false;
+            const subKey = row.subcategory_id?.toString();
             const franchiseServiceEnabled =
-                franchiseEffective.serviceEnabled.get(svcKey) === true;
+                franchiseEffective.serviceEnabled.get(svcKey) === true ||
+                (subKey
+                    ? franchiseSubcategoryEnabled.get(subKey) === true
+                    : catKey
+                      ? franchiseEffective.categoryEnabled.get(catKey) === true
+                      : false);
             const franchiseCategoryEnabled = catKey
                 ? franchiseEffective.categoryEnabled.get(catKey) === true
                 : false;
@@ -1132,16 +1162,43 @@ const getFranchiseRelatedCatalog = async (franchiseIdRaw) => {
             );
         }
 
-        const partnerSubcategoryMap = new Map();
-        for (const row of pscRows) {
+        const partnerSubcategoryAgg = new Map();
+        for (const row of psRows) {
             const subKey = row.subcategory_id?.toString();
-            const sub = subById.get(subKey);
-            if (!sub) continue;
+            if (!subKey) continue;
             const pid = row.partner_id.toString();
-            const partnerEnabled = Boolean(row.is_active);
+            const aggKey = `${pid}:${subKey}`;
+            if (!partnerSubcategoryAgg.has(aggKey)) {
+                partnerSubcategoryAgg.set(aggKey, {
+                    pid,
+                    subKey,
+                    category_id: row.category_id,
+                    serviceIds: [],
+                    created_at: row.created_at ?? null,
+                    updated_at: row.updated_at ?? null,
+                });
+            }
+            const agg = partnerSubcategoryAgg.get(aggKey);
+            if (row.service_id) agg.serviceIds.push(row.service_id);
+            if (row.created_at && (!agg.created_at || row.created_at < agg.created_at)) {
+                agg.created_at = row.created_at;
+            }
+            if (row.updated_at && (!agg.updated_at || row.updated_at > agg.updated_at)) {
+                agg.updated_at = row.updated_at;
+            }
+        }
+
+        const partnerSubcategoryMap = new Map();
+        for (const agg of partnerSubcategoryAgg.values()) {
+            const sub = subById.get(agg.subKey);
+            if (!sub) continue;
+            const psc = pscByPartnerSub.get(`${agg.pid}:${agg.subKey}`);
+            const partnerEnabled = partnerSubcategoryEnabledByPartner.get(agg.pid)?.has(agg.subKey)
+                ? partnerSubcategoryEnabledByPartner.get(agg.pid).get(agg.subKey) === true
+                : true;
             const globalSubcategoryActive = isGlobalCatalogRowActive(sub);
             const franchiseSubEnabled =
-                franchiseSubcategoryEnabled.get(subKey) === true;
+                franchiseSubcategoryEnabled.get(agg.subKey) === true;
             const effectiveActive = computeCategoryEffectiveActive({
                 globalActive: globalSubcategoryActive,
                 franchiseEnabled: franchiseSubEnabled,
@@ -1149,23 +1206,23 @@ const getFranchiseRelatedCatalog = async (franchiseIdRaw) => {
             });
 
             const item = {
-                _id: row._id,
-                category_id: row.category_id,
-                subcategory_id: row.subcategory_id,
-                services: Array.isArray(row.services) ? row.services : [],
+                _id: psc?._id ?? sub._id,
+                category_id: psc?.category_id ?? agg.category_id,
+                subcategory_id: psc?.subcategory_id ?? sub._id,
+                services: agg.serviceIds,
                 is_active: partnerEnabled,
                 partner_enabled: partnerEnabled,
                 global_active: globalSubcategoryActive,
                 franchise_enabled: franchiseSubEnabled,
                 effective_active: effectiveActive,
-                created_at: row.created_at ?? null,
-                updated_at: row.updated_at ?? null,
+                created_at: psc?.created_at ?? agg.created_at ?? null,
+                updated_at: psc?.updated_at ?? agg.updated_at ?? null,
                 subcategory: sub,
             };
 
             if (effectiveActive) {
-                if (!partnerSubcategoryMap.has(pid)) partnerSubcategoryMap.set(pid, []);
-                partnerSubcategoryMap.get(pid).push(item);
+                if (!partnerSubcategoryMap.has(agg.pid)) partnerSubcategoryMap.set(agg.pid, []);
+                partnerSubcategoryMap.get(agg.pid).push(item);
             }
         }
 
