@@ -2,6 +2,7 @@ const {
   listCustomerOrders,
   getCustomerOrderById,
   getCustomerOrderInvoice,
+  createDirectCustomerOrder,
 } = require('../../../services/mobile/user/order_service');
 const { submitOrderReview } = require('../../../services/mobile/user/order_review_service');
 const {
@@ -10,7 +11,16 @@ const {
   sendPaginatedListFromData,
   sendRecordResult,
   sendServiceError,
+  sendServiceResult,
 } = require('../../../utils/mobile_controller_helpers');
+
+const createDirectOrderHandler = wrapMobileHandler(
+  'mobile user direct order create handler',
+  async (req, res) => {
+    const result = await createDirectCustomerOrder(getCallerId(req), req.body || {});
+    return sendServiceResult(res, result);
+  }
+);
 
 const listOrdersHandler = wrapMobileHandler('mobile user order list handler', async (req, res) => {
   const result = await listCustomerOrders(getCallerId(req), req.query);
@@ -42,6 +52,7 @@ const submitOrderReviewHandler = wrapMobileHandler('mobile user submit order rev
 });
 
 module.exports = {
+  createDirectOrderHandler,
   listOrdersHandler,
   getOrderDetailsHandler,
   downloadOrderInvoiceHandler,

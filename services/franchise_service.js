@@ -264,6 +264,19 @@ const loadAdmin = async (adminOid) => {
     return { user, admin_name };
 };
 
+const loadSubcategoryNamesInOrder = async (subcategoryIds) => {
+    const ids = Array.isArray(subcategoryIds) ? subcategoryIds.filter(Boolean) : [];
+    if (ids.length === 0) return [];
+    const rows = await Subcategory.find({
+        _id: { $in: ids },
+        deleted_at: null,
+    })
+        .select('_id name')
+        .lean();
+    const nameById = new Map(rows.map((row) => [row._id.toString(), row.name || '']));
+    return ids.map((id) => nameById.get(String(id)) || '');
+};
+
 const validateFranchiseHierarchy = async ({
     state_id,
     city_id,
@@ -577,7 +590,9 @@ const getFranchiseById = async (id) => {
     try {
         const record = await Franchise.findById(id);
         if (!record) return fail(404, 'No record found');
-        return ok(200, { message: 'Franchise fetched successfully', record });
+        const payload = record.toObject();
+        payload.subcategory_name = await loadSubcategoryNamesInOrder(payload.subcategories);
+        return ok(200, { message: 'Franchise fetched successfully', record: payload });
     } catch (error) {
         console.error('getFranchiseById', error);
         return fail(500, 'Technical issue. Please try again..');

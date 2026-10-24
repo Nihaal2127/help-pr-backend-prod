@@ -1,7 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const userAuthMiddleware = require('../../../middleware/mobile/user/user_auth_middleware');
-const { validateOrderIdParam } = require('../../../middleware/mobile/user/order_middleware');
+const {
+  validateOrderIdParam,
+  validateCreateDirectOrderBody,
+} = require('../../../middleware/mobile/user/order_middleware');
 const {
   validateListOrderPaymentsQuery,
   validatePaymentIdParam,
@@ -9,6 +12,7 @@ const {
   validateUpdateOrderPaymentBody,
 } = require('../../../middleware/mobile/user/order_payment_middleware');
 const {
+  createDirectOrderHandler,
   listOrdersHandler,
   getOrderDetailsHandler,
   downloadOrderInvoiceHandler,
@@ -30,6 +34,12 @@ router.get(
   listAllOrderPaymentsHandler
 );
 router.get('/orders', userAuthMiddleware, listOrdersHandler);
+router.post(
+  '/orders/create',
+  userAuthMiddleware,
+  validateCreateDirectOrderBody,
+  createDirectOrderHandler
+);
 router.get(
   '/orders/:orderId/payments',
   userAuthMiddleware,

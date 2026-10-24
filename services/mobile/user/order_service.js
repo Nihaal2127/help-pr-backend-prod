@@ -1,12 +1,37 @@
 const mongoose = require('mongoose');
 const Order = require('../../../models/order');
+const OrderPayment = require('../../../models/order_payment');
+const User = require('../../../models/user');
+const Service = require('../../../models/service');
+const Address = require('../../../models/address');
 const { loadOrderDetailLean } = require('../../order_detail_service');
 const { buildOrderInvoiceHtml } = require('../../../utils/order_invoice_html');
 const { embedOrderDetailForeignKeys } = require('../../../utils/list_aggregation');
 const { stripAdminDescriptionForPublicApi } = require('../../../utils/admin_description_access');
 const { fail, ok } = require('../../../utils/mobile_service_result');
 const { assertValidCallerObjectId } = require('../shared/order_access_helpers');
-const { safeNotifyOrderInvoiceDownloaded } = require('../../../src/modules/notifications/services/domainHooks');
+const { fieldLabel } = require('../../../utils/field_labels');
+const { formatOrderForApi } = require('../../../utils/order_api_format');
+const { OrderCreationError } = require('../../../errors/order_creation_error');
+const { combineDateAndTime } = require('../../../utils/order_schedule');
+const { resolveQuotePricing } = require('../../quote_pricing_service');
+const {
+  createOrderFromBody,
+  persistOrderAndLinkQuote,
+  ORDER_TYPE_DEFAULT,
+} = require('../../order_creation_service');
+const { validateRefsForCreate } = require('./quote_service');
+const { syncOrderPaymentStatus } = require('../../order_payment_status_service');
+const { syncAllPartnerOrderPaymentsForOrder } = require('../../partner_wallet_order_service');
+const {
+  loadCustomerProfile,
+  initiateOnlineOrderPayment,
+} = require('../../../src/modules/payments/services/orderOnlinePayment.service');
+const { buildQuoteDepositSummary } = require('../../../src/modules/payments/services/quoteDepositPayment.service');
+const {
+  safeNotifyOrderInvoiceDownloaded,
+  safeNotifyOrderPaymentReceived,
+} = require('../../../src/modules/notifications/services/domainHooks');
 const {
   buildOrderListSearchRegex,
   applyOrderManagementStatusFilter,
@@ -59,6 +84,21 @@ const CUSTOMER_OBJECT_ID_FILTER_KEYS = [
   'city_id',
   'address_id',
 ];
+
+const formatMobileOrderForApi = (order) =>
+  stripAdminDescriptionForPublicApi(formatOrderForApi(order));
+
+const isDirectOrderEnabled = (value) => value !== false;
+
+const resolveDirectOrderDescription = (body) => {
+  if (typeof body.order_description === 'string') {
+    return body.order_description.trim();
+  }
+  if (typeof body.quote_description === 'string') {
+    return body.quote_description.trim();
+  }
+  return '';
+};
 
 const listCustomerOrders = async (customerId, query = {}) => {
   try {
@@ -194,8 +234,266 @@ const getCustomerOrderInvoice = async (customerId, orderId) => {
   }
 };
 
+const createDirectCustomerOrder = async (customerId, body) => {
+  try {
+    const refCheck = await validateRefsForCreate(customerId, body);
+    if (!refCheck.ok) return refCheck;
+
+    if (!body.partner_id || !mongoose.Types.ObjectId.isValid(String(body.partner_id))) {
+      return fail(400, `Valid ${fieldLabel('partner_id')} is required.`);
+    }
+
+    const [serviceDoc, partnerDoc] = await Promise.all([
+      Service.findOne({ _id: body.service_id, deleted_at: null })
+        .select('direct_order')
+        .lean(),
+      User.findOne({ _id: body.partner_id, deleted_at: null })
+        .select('direct_order')
+        .lean(),
+    ]);
+
+    if (!isDirectOrderEnabled(serviceDoc?.direct_order) || !isDirectOrderEnabled(partnerDoc?.direct_order)) {
+      return fail(409, 'Direct order is not allowed for this service and partner.');
+    }
+
+    let pricing;
+    try {
+      ({ pricing } = await resolveQuotePricing(body));
+    } catch (pricingErr) {
+      if (pricingErr instanceof OrderCreationError) {
+        return fail(pricingErr.status, pricingErr.message);
+      }
+      throw pricingErr;
+    }
+
+    const minimumDeposit = Number(pricing.minimum_deposit_amount) || 0;
+    const totalPrice = Number(pricing.total_price) || 0;
+    const paidAmount = Number(body.amount);
+
+    if (paidAmount < minimumDeposit) {
+      return fail(
+        409,
+        `Minimum deposit is ${minimumDeposit}. Amount must be at least the minimum deposit.`
+      );
+    }
+    if (totalPrice > 0 && paidAmount > totalPrice) {
+      return fail(409, 'Amount cannot exceed the order total.');
+    }
+
+    const [customer, addressDoc] = await Promise.all([
+      User.findById(customerId).select('user_id').lean(),
+      Address.findById(body.address_id).lean(),
+    ]);
+    if (!customer) {
+      return fail(404, 'Customer not found.');
+    }
+    if (!addressDoc) {
+      return fail(400, 'Address not found.');
+    }
+
+    const service_from_time = combineDateAndTime(body.from_date, body.work_start_time);
+    const service_to_time = combineDateAndTime(body.from_date, body.work_end_time);
+    if (!service_from_time || !service_to_time) {
+      return fail(
+        409,
+        'Could not build service times from from date, work start time, and work end time.'
+      );
+    }
+
+    const charge = Number(pricing.total_service_charge) || 0;
+    if (!(charge > 0)) {
+      return fail(409, 'Service charge must be greater than 0 to create an order.');
+    }
+
+    const orderDescription = resolveDirectOrderDescription(body);
+    const addressStr =
+      addressDoc.address ||
+      [addressDoc.landmark, addressDoc.area].filter(Boolean).join(', ') ||
+      '';
+    const paymentMethod = String(body.payment_method || '').trim().toLowerCase();
+    const resolvedSubcategoryId =
+      body.subcategory_id !== undefined &&
+      body.subcategory_id !== null &&
+      String(body.subcategory_id).trim() !== ''
+        ? body.subcategory_id
+        : null;
+
+    const orderBody = {
+      user_id: customerId,
+      user_unique_id: customer.user_id || '',
+      city_id: addressDoc.city_id,
+      category_id: body.category_id,
+      subcategory_id: resolvedSubcategoryId,
+      is_paid: false,
+      payment_mode_id: '',
+      transaction_id: '',
+      created_by_id: customerId,
+      order_date: body.from_date,
+      total_service_charge: charge,
+      service_price: charge,
+      address: addressStr,
+      type: ORDER_TYPE_DEFAULT,
+      partner_id: body.partner_id,
+      employee_id: null,
+      franchise_id: body.franchise_id,
+      address_id: body.address_id,
+      service_id: body.service_id,
+      from_date: body.from_date,
+      to_date: body.to_date,
+      work_hours_per_day: body.work_hours_per_day,
+      total_work_hours: body.total_work_hours,
+      work_start_time: String(body.work_start_time).trim(),
+      work_end_time: String(body.work_end_time).trim(),
+      customer_description: orderDescription,
+      order_description: orderDescription,
+      quote_id: null,
+      rejection_reason: '',
+      discount_percent: null,
+      discount_code: '',
+      discount_reason: '',
+      payment_schedule_type: 'single',
+      customer_payment_method: paymentMethod,
+      service_items: [
+        {
+          user_id: customerId,
+          partner_id: body.partner_id,
+          category_id: body.category_id,
+          subcategory_id: resolvedSubcategoryId,
+          service_id: body.service_id,
+          service_date: body.from_date,
+          service_from_time,
+          service_to_time,
+          total_service_charge: charge,
+          service_price: charge,
+          is_paid: false,
+          rating: 0,
+        },
+      ],
+    };
+
+    let created;
+    try {
+      const draft = await createOrderFromBody(orderBody, {
+        linkQuote: false,
+        actorUserId: customerId,
+      });
+      created = await persistOrderAndLinkQuote(draft, {
+        notifyPartners: true,
+        requestBody: orderBody,
+        actorUserId: customerId,
+      });
+    } catch (error) {
+      if (error instanceof OrderCreationError) {
+        return fail(error.status, error.message);
+      }
+      throw error;
+    }
+
+    if (paymentMethod === 'online') {
+      const profile = await loadCustomerProfile(customerId);
+      if (!profile.ok) {
+        return fail(profile.status, profile.message);
+      }
+
+      const onlineResult = await initiateOnlineOrderPayment({
+        order: created.order,
+        customer: profile.user,
+        amount: paidAmount,
+        notes: body.notes
+          ? String(body.notes).trim()
+          : 'Order deposit — Razorpay online payment',
+      });
+
+      if (!onlineResult.ok) {
+        return fail(onlineResult.status, onlineResult.message);
+      }
+
+      let paymentRow = onlineResult.payment;
+      if (onlineResult.already_completed && paymentRow?._id) {
+        paymentRow = await OrderPayment.findById(paymentRow._id).lean();
+      }
+
+      const latestOrder = await Order.findById(created.order._id).lean();
+      const depositCollected =
+        onlineResult.already_completed && paymentRow?.status === 'completed';
+
+      return ok(onlineResult.status, {
+        message: onlineResult.resumed
+          ? 'Continue your pending payment to complete this order deposit.'
+          : onlineResult.already_completed
+            ? 'Order created and payment completed successfully.'
+            : 'Order created. Complete payment to collect the deposit.',
+        data: {
+          order: formatMobileOrderForApi(latestOrder || created.order),
+          payment: {
+            ...paymentRow,
+            payment_url: onlineResult.payment_url || null,
+            resumed: Boolean(onlineResult.resumed),
+          },
+          deposit: buildQuoteDepositSummary(minimumDeposit, paidAmount, depositCollected),
+        },
+      });
+    }
+
+    const paymentStatus = body.payment_status ? String(body.payment_status).trim() : 'completed';
+    const allowedPaymentStatuses = new Set(['pending', 'completed']);
+    if (!allowedPaymentStatuses.has(paymentStatus)) {
+      return fail(400, `${fieldLabel('payment_status')} must be either pending or completed.`);
+    }
+
+    const orderPayment = new OrderPayment({
+      order_id: created.order._id,
+      payer_type: 'customer',
+      amount: paidAmount,
+      payment_method: paymentMethod,
+      status: paymentStatus,
+      transaction_reference: body.transaction_reference
+        ? String(body.transaction_reference).trim()
+        : '',
+      paid_at:
+        body.paid_at !== undefined && body.paid_at !== null && body.paid_at !== ''
+          ? new Date(body.paid_at)
+          : paymentStatus === 'completed'
+            ? new Date()
+            : null,
+      notes: body.notes ? String(body.notes).trim() : '',
+    });
+    await orderPayment.save();
+
+    await syncOrderPaymentStatus(created.order._id);
+    await syncAllPartnerOrderPaymentsForOrder(created.order._id);
+
+    const refreshedOrder = await Order.findById(created.order._id).lean();
+
+    if (paymentStatus === 'completed') {
+      void safeNotifyOrderPaymentReceived({
+        order: refreshedOrder || created.order,
+        payment: orderPayment.toObject(),
+        actorUserId: customerId,
+      });
+    }
+
+    return ok(200, {
+      message: 'Order created successfully.',
+      data: {
+        order: formatMobileOrderForApi(refreshedOrder || created.order),
+        payment: orderPayment.toObject(),
+        deposit: buildQuoteDepositSummary(
+          minimumDeposit,
+          paidAmount,
+          paymentStatus === 'completed'
+        ),
+      },
+    });
+  } catch (err) {
+    console.error('mobile user create direct order', err.message);
+    return fail(500, 'Technical issue. Please try again..');
+  }
+};
+
 module.exports = {
   listCustomerOrders,
   getCustomerOrderById,
   getCustomerOrderInvoice,
+  createDirectCustomerOrder,
 };

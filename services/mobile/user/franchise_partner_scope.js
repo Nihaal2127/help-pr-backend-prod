@@ -344,7 +344,7 @@ const loadSubscribedFranchisePartners = async (franchiseId, options = {}) => {
   }
 
   const partnerRows = await User.find(partnerFilter)
-    .select('name profile_url user_id experience average_rating rating_count')
+    .select('name profile_url user_id experience average_rating rating_count direct_order')
     .lean();
 
   if (partnerRows.length === 0) {
@@ -538,7 +538,7 @@ const collectEffectivePartnerOfferings = async (
 
   const [serviceDocs, categoryDocs, subcategoryDocs] = await Promise.all([
     Service.find({ _id: { $in: serviceIdStrs }, deleted_at: null })
-      .select('_id name is_active is_request category_id')
+      .select('_id name is_active is_request category_id direct_order')
       .lean(),
     categoryIdStrs.length === 0
       ? []
@@ -595,6 +595,7 @@ const collectEffectivePartnerOfferings = async (
       category_name: categoryDoc?.name ?? null,
       subcategory_name: subcategoryDoc?.name ?? null,
       service_name: serviceDoc?.name ?? null,
+      direct_order: serviceDoc?.direct_order !== false,
     });
   }
 
@@ -628,6 +629,7 @@ const groupOfferingsByPartner = (effectiveRows) => {
       _id: row.service_id,
       name: row.service_name,
       price: row.price,
+      direct_order: row.direct_order !== false,
     };
 
     const subKey = row.subcategory_id ? String(row.subcategory_id) : '';
@@ -685,6 +687,7 @@ const mapFranchisePartnerRecords = (subscribedPartners, planByPartnerId, effecti
       profile_url: p.profile_url,
       user_id: p.user_id,
       experience: p.experience,
+      direct_order: p.direct_order !== false,
       subscription_plan_name: plan?.plan_name ?? null,
       plan_priority: plan?.priority ?? null,
       banner_image_url:
@@ -711,6 +714,7 @@ const mapCustomerPartnerServiceRow = (row) => {
     payment_type: row.payment_type ?? '',
     minimum_deposit: row.minimum_deposit ?? 0,
     is_accept_request: row.is_accept_request === true,
+    direct_order: service?.direct_order !== false,
   };
 };
 
@@ -765,7 +769,7 @@ const buildPartnerDetailCatalog = async (franchiseId, partnerId) => {
       },
       {
         path: 'service_id',
-        select: 'name desc image_url category_id is_active is_request approval_status payment_type',
+        select: 'name desc image_url category_id is_active is_request approval_status payment_type direct_order',
       },
     ])
     .sort({ category_id: 1, created_at: 1 })

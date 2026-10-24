@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "help-pr-mobile-apis-only",
     "name": "Help PR — Mobile APIs only",
-    "description": "Postman collection for **`/api/mobile/*`** (common + partner + customer apps).\n\n## Razorpay online payments (test mode)\n\n| Flow | Where in collection |\n|------|---------------------|\n| Partner subscription upgrade | **Partner → Subscription** — Apply (Razorpay online) → Get payment status |\n| Customer order payment | **User** — Create order payment (Razorpay online) → Get order payment status |\n| Quote deposit | **User → Quotes** — Convert quote to order (Razorpay deposit) → Get quote deposit payment status |\n\n**Env (Lambda):** `RAZORPAY_*` on server; set `{{baseUrl}}` in Postman. Webhook: `{RAZORPAY_BASE_URL}/api/razorpay/razorpayWebhook`.\n\n**Additional charges:** no separate Razorpay API — customer pays updated due via **order payments**. **Partner payouts:** admin `/api/partner_payout` (manual bank transfer), not Razorpay.\n\nFull audit: `docs/RAZORPAY_ONLINE_PAYMENTS_AUDIT.md`\n\n## Common (partner + user)\n1. **Location** → States → Cities → Areas → Pincodes (`/api/mobile/states`, …)\n\n## Partner\n1. **Common → Location** → **Phone login** → **Verify OTP** (dev OTP: `123456`) — or **Login** (email/password) / Google / Apple → **Forgot password** (3-step OTP reset: forgot → verify OTP → reset password) → **Home** (assigned quotes + orders) → **Quotes** (accept/reject pending) → **Orders** (assigned jobs) → **Appointments** (calendar on partner orders) → Update → **Bank accounts (list)** → Catalog → My services → **Ratings** (per-service reviews)\n\n## Customer (User)\n1. **Login** → **Verify OTP** (dev OTP: `123456`) — or **Forgot password** (3-step email OTP reset when customer has email on file)\n2. **Pincodes (search)** or set `{{homeLocation}}` — e.g. `500032,Gachibowli,Hyderabad,Telangana`\n3. **Home** — nested **category → subcategories → services**, partners for franchise (Bearer + `location` query). Sets `{{subcategoryId}}`\n4. **Partners** — list → **Get partner profile** (catalog + professional summary) → **Get partner ratings** / **List partner service ratings** → **Create quote** with `partner_id`\n5. **Addresses** — create / get / update / delete\n6. **Quotes** — create / list / get / update / cancel / **convert-to-order** (`franchise_id` required on create)\n7. **Posts** — feed, liked/saved lists, like, save, share, report\n8. **Orders & payments** — list orders → **Create order payment (Razorpay online)** or cash/offline → **Get order payment status**\n9. **Update** — multipart `profile_photo` + profile fields\n\n**Partner 403** (catalog/bank / my-services while not approved): account must be verified first.\n\n**Appointments:** `docs/APPOINTMENT_MODULE_FRONTEND.md`\n\n**Chat & disputes:** User → **Chat & Disputes** (support chat, raise/list disputes). See `docs/CHAT_MODULE_FRONTEND.md`.",
+    "description": "Postman collection for **`/api/mobile/*`** (common + partner + customer apps).\n\n## Razorpay online payments (test mode)\n\n| Flow | Where in collection |\n|------|---------------------|\n| Partner subscription upgrade | **Partner → Subscription** — Apply (Razorpay online) → Get payment status |\n| Customer order payment | **User** — Create order payment (Razorpay online) → Get order payment status |\n| Quote deposit | **User → Quotes** — Convert quote to order (Razorpay deposit) → Get quote deposit payment status |\n| Direct order + min deposit | **User** — Create direct order (deposit / Razorpay) → Get order payment status |\n\n**Env (Lambda):** `RAZORPAY_*` on server; set `{{baseUrl}}` in Postman. Webhook: `{RAZORPAY_BASE_URL}/api/razorpay/razorpayWebhook`.\n\n**Additional charges:** no separate Razorpay API — customer pays updated due via **order payments**. **Partner payouts:** admin `/api/partner_payout` (manual bank transfer), not Razorpay.\n\nFull audit: `docs/RAZORPAY_ONLINE_PAYMENTS_AUDIT.md`\n\n## Common (partner + user)\n1. **Location** → States → Cities → Areas → Pincodes (`/api/mobile/states`, …)\n\n## Partner\n1. **Common → Location** → **Phone login** → **Verify OTP** (dev OTP: `123456`) — or **Login** (email/password) / Google / Apple → **Forgot password** (3-step OTP reset: forgot → verify OTP → reset password) → **Home** (assigned quotes + orders) → **Quotes** (accept/reject pending) → **Orders** (assigned jobs) → **Appointments** (calendar on partner orders) → Update → **Bank accounts (list)** → Catalog → My services → **Ratings** (per-service reviews)\n\n## Customer (User)\n1. **Login** → **Verify OTP** (dev OTP: `123456`) — or **Forgot password** (3-step email OTP reset when customer has email on file)\n2. **Pincodes (search)** or set `{{homeLocation}}` — e.g. `500032,Gachibowli,Hyderabad,Telangana`\n3. **Home** — nested **category → subcategories → services**, partners for franchise (Bearer + `location` query). Sets `{{subcategoryId}}`\n4. **Partners** — list → **Get partner profile** (catalog + professional summary) → **Get partner ratings** / **List partner service ratings** → **Create quote** with `partner_id`\n5. **Addresses** — create / get / update / delete\n6. **Quotes** — create / list / get / update / cancel / **convert-to-order** (`franchise_id` required on create)\n7. **Posts** — feed, liked/saved lists, like, save, share, report\n8. **Orders & payments** — **Create direct order** (skip quote; min deposit) or list orders → **Create order payment (Razorpay online)** or cash/offline → **Get order payment status**\n9. **Update** — multipart `profile_photo` + profile fields\n\n**Partner 403** (catalog/bank / my-services while not approved): account must be verified first.\n\n**Appointments:** `docs/APPOINTMENT_MODULE_FRONTEND.md`\n\n**Chat & disputes:** User → **Chat & Disputes** (support chat, raise/list disputes). See `docs/CHAT_MODULE_FRONTEND.md`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -3906,7 +3906,7 @@
     },
     {
       "name": "User",
-      "description": "Customer mobile — OTP, forgot password (email), home, addresses, orders, quotes, profile. Order: **Login** → **Verify OTP** → **Pincodes (search)** (sets `homeLocation`) → **Home** → **Orders** → **Addresses** → **Quotes** → **Update** (multipart). Address dropdowns: **Common → Location**.\n\n**Razorpay:** **Create order payment (Razorpay online)** + **Get order payment status**; quote **Convert (Razorpay deposit)**. Additional charges: pay via order payments after partner adds charge (no separate Razorpay endpoint).",
+      "description": "Customer mobile — OTP, forgot password (email), home, addresses, orders, quotes, profile. Order: **Login** → **Verify OTP** → **Pincodes (search)** (sets `homeLocation`) → **Home** → **Orders** → **Addresses** → **Quotes** → **Update** (multipart). Address dropdowns: **Common → Location**.\n\n**Razorpay:** **Create direct order (Razorpay deposit)** (order first, then pay) + **Create order payment (Razorpay online)** + **Get order payment status**; quote **Convert (Razorpay deposit)**. Additional charges: pay via order payments after partner adds charge (no separate Razorpay endpoint).",
       "item": [
         {
           "name": "Login",
@@ -4415,9 +4415,323 @@
                 }
               ]
             },
-            "description": "**GET /api/mobile/user/home?location=**\n\n- **Auth:** Bearer `{{token}}` (run **Verify OTP** first)\n- **Query `location`:** `pincode,area_name,city_name,state_name` — same line as **Pincodes (search)** e.g. `500032,Gachibowli,Hyderabad,Telangana`\n\n**200** `data`:\n- `services_available` (boolean; `false` when area has no active franchise — `franchise_id`/`franchise_name` null, `categories`/`partners` empty; `orders` still returned)\n- `franchise_id`, `franchise_name`\n- `location` (resolved ids)\n- `categories[]` with nested `subcategories[]` → `services[]` (`partner_count`, `price_range` from **subscribed** partners only; `price`, `payment_type`). Leftover services with no subcategory stay on category `services[]`.\n- `partners[]` (top **20** by `plan_priority` desc; active subscription; `subscription_plan_name`, `categories[]` → `subcategories[]` → `services[]`)\n- `orders.in_progress[]` (up to **10**) — sorted by schedule: today-overlap (`from_date`–`to_date` includes today UTC) first, then future dates ascending, then past; tie-break `updated_at` desc; excludes refunded payment rollups; not location-scoped\n- `orders.completed[]` (up to **10**) — sorted by `updated_at` desc; no schedule date filter; same refund/location rules as in-progress\n- Each order has hydrated `category_id`, `subcategory_id`, `service_id`, `partner_id`, `franchise_id` objects (same shape as **GET /api/mobile/user/orders** list) plus `category_name`, `subcategory_name`, `service_name`, `partner_name`, `partner_profile_url`\n\n**Auth:** customer only (`type` 4). **400** invalid location format | **404** location not found"
+            "description": "**GET /api/mobile/user/home?location=**\n\n- **Auth:** Bearer `{{token}}` (run **Verify OTP** first)\n- **Query `location`:** `pincode,area_name,city_name,state_name` — same line as **Pincodes (search)** e.g. `500032,Gachibowli,Hyderabad,Telangana`\n\n**200** `data`:\n- `services_available` (boolean; `false` when area has no active franchise — `franchise_id`/`franchise_name` null, `categories`/`partners` empty; `orders` still returned)\n- `franchise_id`, `franchise_name`\n- `location` (resolved ids)\n- `categories[]` with nested `subcategories[]` → `services[]` (`partner_count`, `price_range` from **subscribed** partners only; `price`, `payment_type`, **`direct_order`** boolean — missing field treated as `true`). Leftover services with no subcategory stay on category `services[]`.\n- `partners[]` (top **20** by `plan_priority` desc; active subscription; `subscription_plan_name`, **`direct_order`** on the partner, `categories[]` → `subcategories[]` → `services[]` each with **`direct_order`**)\n- `orders.in_progress[]` (up to **10**) — sorted by schedule: today-overlap (`from_date`–`to_date` includes today UTC) first, then future dates ascending, then past; tie-break `updated_at` desc; excludes refunded payment rollups; not location-scoped\n- `orders.completed[]` (up to **10**) — sorted by `updated_at` desc; no schedule date filter; same refund/location rules as in-progress\n- Each order has hydrated `category_id`, `subcategory_id`, `service_id`, `partner_id`, `franchise_id` objects (same shape as **GET /api/mobile/user/orders** list) plus `category_name`, `subcategory_name`, `service_name`, `partner_name`, `partner_profile_url`\n\n**Auth:** customer only (`type` 4). **400** invalid location format | **404** location not found\n\n**`direct_order` (response only, not a query):** Book now when **service.direct_order** and **partner.direct_order** are both `true`. Quote-only when either is `false`."
           },
-          "response": []
+          "response": [
+            {
+              "name": "200 — home with direct_order",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/mobile/user/home?location={{homeLocation}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "mobile",
+                    "user",
+                    "home"
+                  ],
+                  "query": [
+                    {
+                      "key": "location",
+                      "value": "{{homeLocation}}"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Home data fetched successfully.\",\n  \"data\": {\n    \"services_available\": true,\n    \"franchise_id\": \"64a700000000000000000010\",\n    \"franchise_name\": \"Hyderabad\",\n    \"location\": {\n      \"pincode\": \"500032\",\n      \"area_name\": \"Gachibowli\",\n      \"city_name\": \"Hyderabad\",\n      \"state_name\": \"Telangana\"\n    },\n    \"categories\": [\n      {\n        \"_id\": \"64a700000000000000000001\",\n        \"name\": \"Cleaning\",\n        \"desc\": \"Home cleaning\",\n        \"image_url\": \"https://example.com/cat.png\",\n        \"subcategories\": [\n          {\n            \"_id\": \"64a700000000000000000002\",\n            \"name\": \"Home\",\n            \"services\": [\n              {\n                \"_id\": \"64a700000000000000000101\",\n                \"name\": \"Home Cleaning\",\n                \"desc\": \"Standard home cleaning\",\n                \"tax\": 18,\n                \"image_url\": \"https://example.com/svc.png\",\n                \"category_id\": \"64a700000000000000000001\",\n                \"partner_count\": 3,\n                \"price_range\": {\n                  \"min\": 499,\n                  \"max\": 999\n                },\n                \"price\": 0,\n                \"payment_type\": \"per_hour\",\n                \"direct_order\": true\n              }\n            ]\n          }\n        ]\n      }\n    ],\n    \"partners\": [\n      {\n        \"_id\": \"64a700000000000000000201\",\n        \"name\": \"Test Partner\",\n        \"profile_url\": \"https://example.com/p.png\",\n        \"user_id\": \"P1001\",\n        \"experience\": \"3 years\",\n        \"direct_order\": true,\n        \"subscription_plan_name\": \"gold\",\n        \"plan_priority\": 3,\n        \"banner_image_url\": null,\n        \"average_rating\": 4.5,\n        \"rating_count\": 12,\n        \"categories\": [\n          {\n            \"_id\": \"64a700000000000000000001\",\n            \"name\": \"Cleaning\",\n            \"subcategories\": [\n              {\n                \"_id\": \"64a700000000000000000002\",\n                \"name\": \"Home\",\n                \"services\": [\n                  {\n                    \"_id\": \"64a700000000000000000101\",\n                    \"name\": \"Home Cleaning\",\n                    \"price\": 499,\n                    \"direct_order\": true\n                  }\n                ]\n              }\n            ]\n          }\n        ]\n      }\n    ],\n    \"banners\": [],\n    \"orders\": {\n      \"in_progress\": [],\n      \"completed\": []\n    },\n    \"home_counts\": {}\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Create direct order (deposit payment)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "try {",
+                  "  const j = pm.response.json();",
+                  "  pm.test('Direct order created', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(j.success).to.eql(true);",
+                  "    pm.expect(j.data?.order?._id).to.be.ok;",
+                  "  });",
+                  "  if (j?.data?.order?._id) pm.collectionVariables.set('orderId', String(j.data.order._id));",
+                  "  if (j?.data?.payment?._id) pm.collectionVariables.set('orderPaymentId', String(j.data.payment._id));",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"franchise_id\": \"{{franchiseId}}\",\n  \"category_id\": \"{{categoryId}}\",\n  \"subcategory_id\": \"{{subcategoryId}}\",\n  \"service_id\": \"{{serviceId}}\",\n  \"address_id\": \"{{addressId}}\",\n  \"partner_id\": \"{{quotePartnerId}}\",\n  \"total_service_charge\": {{quoteTotalServiceCharge}},\n  \"from_date\": \"{{quoteFromDate}}\",\n  \"to_date\": \"{{quoteToDate}}\",\n  \"work_hours_per_day\": {{quoteWorkHoursPerDay}},\n  \"total_work_hours\": {{quoteTotalWorkHours}},\n  \"work_start_time\": \"{{quoteWorkStartTime}}\",\n  \"work_end_time\": \"{{quoteWorkEndTime}}\",\n  \"quote_description\": \"{{quoteDescription}}\",\n  \"amount\": {{quoteDepositAmount}},\n  \"payment_method\": \"{{quotePaymentMethod}}\",\n  \"payment_status\": \"completed\",\n  \"transaction_reference\": \"{{quoteTransactionReference}}\",\n  \"notes\": \"{{quotePaymentNotes}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/mobile/user/orders/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "mobile",
+                "user",
+                "orders",
+                "create"
+              ]
+            },
+            "description": "**POST /api/mobile/user/orders/create**\n\nCreate an order **without a quote** and collect the **minimum deposit** in one call. Convert-to-order is unchanged.\n\n- **Auth:** Bearer customer\n- **Required:** `partner_id` (unlike quote create)\n- Service **and** partner must have `direct_order: true` (missing field = true)\n- `amount` >= computed `minimum_deposit_amount` and <= order total\n- Do **not** send server-computed pricing (`total_price`, `tax_amount`, `minimum_deposit_amount`, …)\n- Order is created immediately with `quote_id: null`\n\n**Prerequisites:** **Home** (`{{franchiseId}}`, `{{categoryId}}`, `{{subcategoryId}}`, `{{serviceId}}`), **Addresses → Create** (`{{addressId}}`), **Partners (list)** (`{{quotePartnerId}}`).\n\n**Offline** (`cash`, `upi`, `card`, `bank_transfer`, `other`): **200** — `data.order` + `data.payment` + `data.deposit`.\n\n**`payment_method: online`:** **202** — order already exists + pending Razorpay `data.payment.payment_url`. Pay, then poll **GET /api/mobile/user/orders/:orderId/payments/:paymentId/payment-status**.\n\n**409** if either flag is false: `Direct order is not allowed for this service and partner.`"
+          },
+          "response": [
+            {
+              "name": "200 — order + offline deposit",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"franchise_id\": \"{{franchiseId}}\",\n  \"category_id\": \"{{categoryId}}\",\n  \"subcategory_id\": \"{{subcategoryId}}\",\n  \"service_id\": \"{{serviceId}}\",\n  \"address_id\": \"{{addressId}}\",\n  \"partner_id\": \"{{quotePartnerId}}\",\n  \"total_service_charge\": {{quoteTotalServiceCharge}},\n  \"from_date\": \"{{quoteFromDate}}\",\n  \"to_date\": \"{{quoteToDate}}\",\n  \"work_hours_per_day\": {{quoteWorkHoursPerDay}},\n  \"total_work_hours\": {{quoteTotalWorkHours}},\n  \"work_start_time\": \"{{quoteWorkStartTime}}\",\n  \"work_end_time\": \"{{quoteWorkEndTime}}\",\n  \"quote_description\": \"{{quoteDescription}}\",\n  \"amount\": {{quoteDepositAmount}},\n  \"payment_method\": \"{{quotePaymentMethod}}\",\n  \"payment_status\": \"completed\",\n  \"transaction_reference\": \"{{quoteTransactionReference}}\",\n  \"notes\": \"{{quotePaymentNotes}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/mobile/user/orders/create",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "mobile",
+                    "user",
+                    "orders",
+                    "create"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Order created successfully.\",\n  \"data\": {\n    \"order\": {\n      \"_id\": \"64a700000000000000000301\",\n      \"unique_id\": \"ORD-1001\",\n      \"quote_id\": null,\n      \"partner_id\": \"64a700000000000000000201\",\n      \"service_id\": \"64a700000000000000000101\",\n      \"total_price\": 5000,\n      \"minimum_deposit_amount\": 1000,\n      \"customer_payment_method\": \"cash\"\n    },\n    \"payment\": {\n      \"_id\": \"64a700000000000000000401\",\n      \"order_id\": \"64a700000000000000000301\",\n      \"payer_type\": \"customer\",\n      \"amount\": 1000,\n      \"payment_method\": \"cash\",\n      \"status\": \"completed\",\n      \"transaction_reference\": \"\",\n      \"notes\": \"Customer paid minimum deposit\"\n    },\n    \"deposit\": {\n      \"minimum_deposit_amount\": 1000,\n      \"deposit_amount\": 1000,\n      \"paid_amount\": 1000,\n      \"remaining_deposit_due\": 0\n    }\n  }\n}"
+            },
+            {
+              "name": "409 — direct_order not allowed",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"franchise_id\": \"{{franchiseId}}\",\n  \"category_id\": \"{{categoryId}}\",\n  \"subcategory_id\": \"{{subcategoryId}}\",\n  \"service_id\": \"{{serviceId}}\",\n  \"address_id\": \"{{addressId}}\",\n  \"partner_id\": \"{{quotePartnerId}}\",\n  \"total_service_charge\": {{quoteTotalServiceCharge}},\n  \"from_date\": \"{{quoteFromDate}}\",\n  \"to_date\": \"{{quoteToDate}}\",\n  \"work_hours_per_day\": {{quoteWorkHoursPerDay}},\n  \"total_work_hours\": {{quoteTotalWorkHours}},\n  \"work_start_time\": \"{{quoteWorkStartTime}}\",\n  \"work_end_time\": \"{{quoteWorkEndTime}}\",\n  \"quote_description\": \"{{quoteDescription}}\",\n  \"amount\": {{quoteDepositAmount}},\n  \"payment_method\": \"{{quotePaymentMethod}}\",\n  \"payment_status\": \"completed\",\n  \"transaction_reference\": \"{{quoteTransactionReference}}\",\n  \"notes\": \"{{quotePaymentNotes}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/mobile/user/orders/create",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "mobile",
+                    "user",
+                    "orders",
+                    "create"
+                  ]
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"status\": 409,\n  \"message\": \"Direct order is not allowed for this service and partner.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Create direct order (Razorpay deposit)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "try {",
+                  "  const j = pm.response.json();",
+                  "  pm.test('Direct order online deposit initiated', function () {",
+                  "    pm.expect([200, 202]).to.include(pm.response.code);",
+                  "    pm.expect(j.success).to.eql(true);",
+                  "    pm.expect(j.data?.order?._id).to.be.ok;",
+                  "  });",
+                  "  if (j?.data?.order?._id) pm.collectionVariables.set('orderId', String(j.data.order._id));",
+                  "  if (j?.data?.payment?._id) {",
+                  "    pm.collectionVariables.set('orderPaymentId', String(j.data.payment._id));",
+                  "  }",
+                  "  if (j?.data?.payment?.payment_url) pm.collectionVariables.set('orderPaymentUrl', String(j.data.payment.payment_url));",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"franchise_id\": \"{{franchiseId}}\",\n  \"category_id\": \"{{categoryId}}\",\n  \"subcategory_id\": \"{{subcategoryId}}\",\n  \"service_id\": \"{{serviceId}}\",\n  \"address_id\": \"{{addressId}}\",\n  \"partner_id\": \"{{quotePartnerId}}\",\n  \"total_service_charge\": {{quoteTotalServiceCharge}},\n  \"from_date\": \"{{quoteFromDate}}\",\n  \"to_date\": \"{{quoteToDate}}\",\n  \"work_hours_per_day\": {{quoteWorkHoursPerDay}},\n  \"total_work_hours\": {{quoteTotalWorkHours}},\n  \"work_start_time\": \"{{quoteWorkStartTime}}\",\n  \"work_end_time\": \"{{quoteWorkEndTime}}\",\n  \"quote_description\": \"{{quoteDescription}}\",\n  \"amount\": {{quoteDepositAmount}},\n  \"payment_method\": \"online\",\n  \"notes\": \"Direct order deposit — Razorpay test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/mobile/user/orders/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "mobile",
+                "user",
+                "orders",
+                "create"
+              ]
+            },
+            "description": "Create order immediately + **online** min deposit. **202** + `data.payment.payment_url`. Poll **Get order payment status (Razorpay)** (not quote deposit-status). Both service and partner `direct_order` must be true."
+          },
+          "response": [
+            {
+              "name": "202 — order + Razorpay deposit link",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"franchise_id\": \"{{franchiseId}}\",\n  \"category_id\": \"{{categoryId}}\",\n  \"subcategory_id\": \"{{subcategoryId}}\",\n  \"service_id\": \"{{serviceId}}\",\n  \"address_id\": \"{{addressId}}\",\n  \"partner_id\": \"{{quotePartnerId}}\",\n  \"total_service_charge\": {{quoteTotalServiceCharge}},\n  \"from_date\": \"{{quoteFromDate}}\",\n  \"to_date\": \"{{quoteToDate}}\",\n  \"work_hours_per_day\": {{quoteWorkHoursPerDay}},\n  \"total_work_hours\": {{quoteTotalWorkHours}},\n  \"work_start_time\": \"{{quoteWorkStartTime}}\",\n  \"work_end_time\": \"{{quoteWorkEndTime}}\",\n  \"quote_description\": \"{{quoteDescription}}\",\n  \"amount\": {{quoteDepositAmount}},\n  \"payment_method\": \"online\",\n  \"notes\": \"Direct order deposit — Razorpay test\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/mobile/user/orders/create",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "mobile",
+                    "user",
+                    "orders",
+                    "create"
+                  ]
+                }
+              },
+              "status": "Accepted",
+              "code": 202,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"status\": 202,\n  \"message\": \"Order created. Complete payment to collect the deposit.\",\n  \"data\": {\n    \"order\": {\n      \"_id\": \"64a700000000000000000301\",\n      \"unique_id\": \"ORD-1001\",\n      \"quote_id\": null\n    },\n    \"payment\": {\n      \"_id\": \"64a700000000000000000401\",\n      \"order_id\": \"64a700000000000000000301\",\n      \"amount\": 1000,\n      \"payment_method\": \"online\",\n      \"status\": \"pending\",\n      \"transaction_reference\": \"plink_test\",\n      \"payment_url\": \"https://rzp.io/i/test\",\n      \"resumed\": false\n    },\n    \"deposit\": {\n      \"minimum_deposit_amount\": 1000,\n      \"deposit_amount\": 1000,\n      \"paid_amount\": 1000,\n      \"remaining_deposit_due\": 1000\n    }\n  }\n}"
+            }
+          ]
         },
         {
           "name": "List orders",
@@ -5288,9 +5602,93 @@
                 }
               ]
             },
-            "description": "**GET /api/mobile/user/partners**\n\nRun **Home** first (sets `{{franchiseId}}`). Optional filters are **disabled by default** in this request so you get all eligible partners for the franchise — enable `category_id` / `service_id` only when you want to narrow the list.\n\n| Query | Required | Notes |\n|-------|----------|--------|\n| `franchise_id` | Yes | Franchise ObjectId |\n| `page` | No | Default 1 (`{{partnersPage}}`) |\n| `limit` | No | Default 10, max 50 (`{{partnersLimit}}`) |\n| `search` or `q` | No | Partner name (`{{partnerSearch}}`) |\n| `plan_name` | No | basic \\| silver \\| gold \\| platinum (`{{partnerPlanName}}`) |\n| `category_id` | No | **Filters** to partners offering this category; also scopes `price_range` |\n| `service_id` | No | **Filters** to partners offering this service; sets single `price` per partner |\n| `min_price` / `max_price` | No | Price band (`{{partnerMinPrice}}`, `{{partnerMaxPrice}}`) |\n\n**Why only 1 partner?** If `category_id` or `service_id` is sent (e.g. from Home variables), only partners with that service **effectively enabled** (franchise + global + partner catalog chain) are returned. Check root `totalItems` vs `data.partners.length`.\n\n**Mobile eligibility** (stricter than admin subscription list): partner `verification_status` = 2, `is_active` true, not blocked; subscription `status` active, not expired; linked plan `is_active` true and not deleted.\n\n**Partner pricing in response:** `service_id` → `price` only; `category_id` (no service) → `price_range` for that category; else `price_range` for all services.\n\n**200:** `totalItems`, `totalPages`, `currentPage`, `limit`, `data.partners[]` (plan_priority desc)."
+            "description": "**GET /api/mobile/user/partners**\n\nRun **Home** first (sets `{{franchiseId}}`). Optional filters are **disabled by default** in this request so you get all eligible partners for the franchise — enable `category_id` / `service_id` only when you want to narrow the list.\n\n| Query | Required | Notes |\n|-------|----------|--------|\n| `franchise_id` | Yes | Franchise ObjectId |\n| `page` | No | Default 1 (`{{partnersPage}}`) |\n| `limit` | No | Default 10, max 50 (`{{partnersLimit}}`) |\n| `search` or `q` | No | Partner name (`{{partnerSearch}}`) |\n| `plan_name` | No | basic \\| silver \\| gold \\| platinum (`{{partnerPlanName}}`) |\n| `category_id` | No | **Filters** to partners offering this category; also scopes `price_range` |\n| `service_id` | No | **Filters** to partners offering this service; sets single `price` per partner |\n| `min_price` / `max_price` | No | Price band (`{{partnerMinPrice}}`, `{{partnerMaxPrice}}`) |\n\n**Why only 1 partner?** If `category_id` or `service_id` is sent (e.g. from Home variables), only partners with that service **effectively enabled** (franchise + global + partner catalog chain) are returned. Check root `totalItems` vs `data.partners.length`.\n\n**Mobile eligibility** (stricter than admin subscription list): partner `verification_status` = 2, `is_active` true, not blocked; subscription `status` active, not expired; linked plan `is_active` true and not deleted.\n\n**Partner pricing in response:** `service_id` → `price` only; `category_id` (no service) → `price_range` for that category; else `price_range` for all services.\n\n**200:** `totalItems`, `totalPages`, `currentPage`, `limit`, `data.partners[]` (plan_priority desc).\n\n**`direct_order` (response only, not a query):** each `data.partners[]` has partner **`direct_order`**; nested `categories[].subcategories[].services[]` (and leftover `categories[].services[]`) have service **`direct_order`**. Missing field = `true`. Book now only when both partner and service are `true`."
           },
-          "response": []
+          "response": [
+            {
+              "name": "200 — partners with direct_order",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/mobile/user/partners?franchise_id={{franchiseId}}&page={{partnersPage}}&limit={{partnersLimit}}&search={{partnerSearch}}&plan_name={{partnerPlanName}}&category_id={{categoryId}}&service_id={{serviceId}}&min_price={{partnerMinPrice}}&max_price={{partnerMaxPrice}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "mobile",
+                    "user",
+                    "partners"
+                  ],
+                  "query": [
+                    {
+                      "key": "franchise_id",
+                      "value": "{{franchiseId}}",
+                      "description": "Required. From Home → data.franchise_id"
+                    },
+                    {
+                      "key": "page",
+                      "value": "{{partnersPage}}",
+                      "description": "Page number (default 1)"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "{{partnersLimit}}",
+                      "description": "Page size (default 10, max 50)"
+                    },
+                    {
+                      "key": "search",
+                      "value": "{{partnerSearch}}",
+                      "description": "Partner name substring (alias: q)",
+                      "disabled": true
+                    },
+                    {
+                      "key": "plan_name",
+                      "value": "{{partnerPlanName}}",
+                      "description": "basic | silver | gold | platinum — leave empty to skip",
+                      "disabled": true
+                    },
+                    {
+                      "key": "category_id",
+                      "value": "{{categoryId}}",
+                      "description": "Filter partners offering this category; price_range scoped to category services. Disabled by default — enable only when filtering.",
+                      "disabled": true
+                    },
+                    {
+                      "key": "service_id",
+                      "value": "{{serviceId}}",
+                      "description": "Filter partners offering this service; each partner gets single price (no range). Disabled by default — enable only when filtering.",
+                      "disabled": true
+                    },
+                    {
+                      "key": "min_price",
+                      "value": "{{partnerMinPrice}}",
+                      "description": "Min partner_service.price — scoped with category_id / service_id when set",
+                      "disabled": true
+                    },
+                    {
+                      "key": "max_price",
+                      "value": "{{partnerMaxPrice}}",
+                      "description": "Max partner_service.price",
+                      "disabled": true
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Partners fetched successfully.\",\n  \"totalItems\": 1,\n  \"totalPages\": 1,\n  \"currentPage\": 1,\n  \"limit\": 10,\n  \"data\": {\n    \"franchise_id\": \"64a700000000000000000010\",\n    \"franchise_name\": \"Hyderabad\",\n    \"partners\": [\n      {\n        \"_id\": \"64a700000000000000000201\",\n        \"name\": \"Test Partner\",\n        \"profile_url\": \"https://example.com/p.png\",\n        \"user_id\": \"P1001\",\n        \"experience\": \"3 years\",\n        \"direct_order\": true,\n        \"subscription_plan_name\": \"gold\",\n        \"plan_priority\": 3,\n        \"banner_image_url\": null,\n        \"average_rating\": 4.5,\n        \"rating_count\": 12,\n        \"price\": null,\n        \"price_range\": {\n          \"min\": 499,\n          \"max\": 999\n        },\n        \"categories\": [\n          {\n            \"_id\": \"64a700000000000000000001\",\n            \"name\": \"Cleaning\",\n            \"subcategories\": [\n              {\n                \"_id\": \"64a700000000000000000002\",\n                \"name\": \"Home\",\n                \"services\": [\n                  {\n                    \"_id\": \"64a700000000000000000101\",\n                    \"name\": \"Home Cleaning\",\n                    \"price\": 499,\n                    \"direct_order\": true\n                  }\n                ]\n              }\n            ]\n          }\n        ]\n      }\n    ],\n    \"totalItems\": 1,\n    \"totalPages\": 1,\n    \"currentPage\": 1,\n    \"limit\": 10\n  }\n}"
+            }
+          ]
         },
         {
           "name": "Partners (saved list)",
@@ -5365,9 +5763,81 @@
                 }
               ]
             },
-            "description": "**GET /api/mobile/user/partners/saved**\n\nNo `franchise_id`. Same filters as **Partners (list)**. Each partner includes `franchise_id`, `franchise_name`, `saved_at`, `is_saved: true`. Sorted by most recently saved."
+            "description": "**GET /api/mobile/user/partners/saved**\n\nNo `franchise_id`. Same filters as **Partners (list)**. Each partner includes `franchise_id`, `franchise_name`, `saved_at`, `is_saved: true`. Sorted by most recently saved.\n\n**`direct_order` (response only, not a query):** same as **Partners (list)** — partner **`direct_order`** and nested service **`direct_order`**. Missing field = `true`."
           },
-          "response": []
+          "response": [
+            {
+              "name": "200 — saved partners with direct_order",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/mobile/user/partners/saved?page={{partnersPage}}&limit={{partnersLimit}}&search={{partnerSearch}}&plan_name={{partnerPlanName}}&category_id={{categoryId}}&service_id={{serviceId}}&min_price={{partnerMinPrice}}&max_price={{partnerMaxPrice}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "mobile",
+                    "user",
+                    "partners",
+                    "saved"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "{{partnersPage}}"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "{{partnersLimit}}"
+                    },
+                    {
+                      "key": "search",
+                      "value": "{{partnerSearch}}",
+                      "disabled": true
+                    },
+                    {
+                      "key": "plan_name",
+                      "value": "{{partnerPlanName}}",
+                      "disabled": true
+                    },
+                    {
+                      "key": "category_id",
+                      "value": "{{categoryId}}",
+                      "disabled": true
+                    },
+                    {
+                      "key": "service_id",
+                      "value": "{{serviceId}}",
+                      "disabled": true
+                    },
+                    {
+                      "key": "min_price",
+                      "value": "{{partnerMinPrice}}",
+                      "disabled": true
+                    },
+                    {
+                      "key": "max_price",
+                      "value": "{{partnerMaxPrice}}",
+                      "disabled": true
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Saved partners fetched successfully.\",\n  \"totalItems\": 1,\n  \"totalPages\": 1,\n  \"currentPage\": 1,\n  \"limit\": 10,\n  \"data\": {\n    \"franchise_id\": null,\n    \"franchise_name\": null,\n    \"partners\": [\n      {\n        \"_id\": \"64a700000000000000000201\",\n        \"name\": \"Test Partner\",\n        \"profile_url\": \"https://example.com/p.png\",\n        \"user_id\": \"P1001\",\n        \"experience\": \"3 years\",\n        \"direct_order\": true,\n        \"franchise_id\": \"64a700000000000000000010\",\n        \"franchise_name\": \"Hyderabad\",\n        \"saved_at\": \"2026-10-24T10:00:00.000Z\",\n        \"is_saved\": true,\n        \"subscription_plan_name\": \"gold\",\n        \"categories\": [\n          {\n            \"_id\": \"64a700000000000000000001\",\n            \"name\": \"Cleaning\",\n            \"subcategories\": [\n              {\n                \"_id\": \"64a700000000000000000002\",\n                \"name\": \"Home\",\n                \"services\": [\n                  {\n                    \"_id\": \"64a700000000000000000101\",\n                    \"name\": \"Home Cleaning\",\n                    \"price\": 499,\n                    \"direct_order\": false\n                  }\n                ]\n              }\n            ]\n          }\n        ]\n      }\n    ],\n    \"totalItems\": 1,\n    \"totalPages\": 1,\n    \"currentPage\": 1,\n    \"limit\": 10\n  }\n}"
+            }
+          ]
         },
         {
           "name": "Save partner",
@@ -5855,9 +6325,49 @@
                 }
               ]
             },
-            "description": "**GET /api/mobile/user/partners/:partnerId**\n\nCustomer partner detail + full catalog for requesting a quote.\n\n| Param / query | Required | Notes |\n|---------------|----------|--------|\n| `partnerId` | Yes | Partner Mongo `_id` (`{{quotePartnerId}}` from Home, Partners list, or Saved partners) |\n| `franchise_id` | No | Optional franchise scope. Omit when opening a saved partner (resolved from partner). Pass when browsing within a franchise (e.g. Home) |\n\n**200 `data.partner`:** name, profile, `experience` / `professional_summary`, subscription plan, optional `business_info`, `location`, `joined_at`, `completed_services_count`, `is_saved`, **`average_rating`**, **`rating_count`**, **`ratings`** `{ average_rating, rating_count }`\n\n**200 `data.categories[]`:** nested **`subcategories[]` → `services[]`** (leftover services with no subcategory stay on category `services[]`). Each service includes **`average_rating`** / **`rating_count`** and **`ratings`** (partner on that service), **`service_average_rating`** / **`service_rating_count`** (global service), `description`, `price`, `tax`, `payment_type`, `minimum_deposit`, `is_accept_request`.\n\nRatings roll up from completed order reviews (`POST /api/mobile/user/orders/:orderId/review`). Use **Get partner ratings** for `service_ratings[]` and `recent_reviews[]`. Use **List partner service ratings** for a paginated list of who rated a particular service.\n\n**Quote flow:** pick a service → `POST /quotes/create` with `partner_id`, `category_id`, `subcategory_id`, `service_id`, `total_service_charge` = service `price`."
+            "description": "**GET /api/mobile/user/partners/:partnerId**\n\nCustomer partner detail + full catalog for requesting a quote.\n\n| Param / query | Required | Notes |\n|---------------|----------|--------|\n| `partnerId` | Yes | Partner Mongo `_id` (`{{quotePartnerId}}` from Home, Partners list, or Saved partners) |\n| `franchise_id` | No | Optional franchise scope. Omit when opening a saved partner (resolved from partner). Pass when browsing within a franchise (e.g. Home) |\n\n**200 `data.partner`:** name, profile, `experience` / `professional_summary`, **`direct_order`** (boolean, missing = `true`), subscription plan, optional `business_info`, `location`, `joined_at`, `completed_services_count`, `is_saved`, **`average_rating`**, **`rating_count`**, **`ratings`** `{ average_rating, rating_count }`\n\n**200 `data.categories[]`:** nested **`subcategories[]` → `services[]`** (leftover services with no subcategory stay on category `services[]`). Each service includes **`average_rating`** / **`rating_count`** and **`ratings`** (partner on that service), **`service_average_rating`** / **`service_rating_count`** (global service), `description`, `price`, `tax`, `payment_type`, `minimum_deposit`, `is_accept_request`, **`direct_order`** (service flag). Book now when partner **and** service `direct_order` are both `true`.\n\nRatings roll up from completed order reviews (`POST /api/mobile/user/orders/:orderId/review`). Use **Get partner ratings** for `service_ratings[]` and `recent_reviews[]`. Use **List partner service ratings** for a paginated list of who rated a particular service.\n\n**Quote flow:** pick a service → `POST /quotes/create` with `partner_id`, `category_id`, `subcategory_id`, `service_id`, `total_service_charge` = service `price`.\n\n**`direct_order` is not a query param.** It is returned on `data.partner` and each catalog service."
           },
-          "response": []
+          "response": [
+            {
+              "name": "200 — partner profile with direct_order",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/mobile/user/partners/{{quotePartnerId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "mobile",
+                    "user",
+                    "partners",
+                    "{{quotePartnerId}}"
+                  ],
+                  "query": [
+                    {
+                      "key": "franchise_id",
+                      "value": "{{franchiseId}}",
+                      "description": "Optional. From Home or saved partner row; omitted → resolved from partner record",
+                      "disabled": true
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Partner profile fetched successfully.\",\n  \"data\": {\n    \"franchise_id\": \"64a700000000000000000010\",\n    \"franchise_name\": \"Hyderabad\",\n    \"partner\": {\n      \"_id\": \"64a700000000000000000201\",\n      \"name\": \"Test Partner\",\n      \"profile_url\": \"https://example.com/p.png\",\n      \"user_id\": \"P1001\",\n      \"experience\": \"3 years\",\n      \"professional_summary\": \"3 years\",\n      \"direct_order\": true,\n      \"subscription_plan_name\": \"gold\",\n      \"plan_priority\": 3,\n      \"is_business\": false,\n      \"business_info\": null,\n      \"location\": {},\n      \"joined_at\": \"2026-01-15T00:00:00.000Z\",\n      \"completed_services_count\": 12,\n      \"no_of_services_completed\": 12,\n      \"is_saved\": false,\n      \"average_rating\": 4.5,\n      \"rating_count\": 12,\n      \"ratings\": {\n        \"average_rating\": 4.5,\n        \"rating_count\": 12\n      }\n    },\n    \"categories\": [\n      {\n        \"category_id\": \"64a700000000000000000001\",\n        \"category_name\": \"Cleaning\",\n        \"category_desc\": \"Home cleaning\",\n        \"category_image_url\": \"https://example.com/cat.png\",\n        \"subcategories\": [\n          {\n            \"subcategory_id\": \"64a700000000000000000002\",\n            \"subcategory_name\": \"Home\",\n            \"subcategory_desc\": null,\n            \"subcategory_image_url\": null,\n            \"services\": [\n              {\n                \"partner_service_id\": \"64a700000000000000000501\",\n                \"service_id\": \"64a700000000000000000101\",\n                \"service_name\": \"Home Cleaning\",\n                \"service_desc\": \"Standard home cleaning\",\n                \"service_image_url\": \"https://example.com/svc.png\",\n                \"category_id\": \"64a700000000000000000001\",\n                \"description\": \"Offering under subcategory\",\n                \"price\": 499,\n                \"tax\": 0,\n                \"payment_type\": \"online\",\n                \"minimum_deposit\": 0,\n                \"is_accept_request\": true,\n                \"direct_order\": true,\n                \"average_rating\": 4.2,\n                \"rating_count\": 8,\n                \"ratings\": {\n                  \"average_rating\": 4.2,\n                  \"rating_count\": 8\n                },\n                \"service_average_rating\": 4.4,\n                \"service_rating_count\": 40\n              }\n            ]\n          }\n        ]\n      }\n    ]\n  }\n}"
+            }
+          ]
         },
         {
           "name": "Addresses",
@@ -6122,8 +6632,285 @@
         },
         {
           "name": "Orders & payments",
-          "description": "**Customer orders & Razorpay online pay.**\n\n1. **List orders** — sets `{{orderId}}`\n2. **Create order payment (Razorpay online)** — **202** + `{{orderPaymentUrl}}`\n3. Pay in browser (test card `4111…` / UPI `success@razorpay`)\n4. **Get order payment status** — poll until `data.status` is `completed`\n\n**Additional charges:** partner adds charge → customer pays increased due via step 2 (no separate Razorpay on charge API).\n\nSee `docs/RAZORPAY_ONLINE_PAYMENTS_AUDIT.md`.",
+          "description": "**Customer orders, direct-create deposit, and Razorpay online pay.**\n\n**Direct order (no quote):** service + partner `direct_order` must be true.\n1. **Create direct order (deposit payment)** — offline **200**\n2. **Create direct order (Razorpay deposit)** — **202** + `{{orderPaymentUrl}}` → pay in browser → **Get order payment status**\n\n**Pay an existing order:**\n1. **List orders** — sets `{{orderId}}`\n2. **Create order payment (Razorpay online)** — **202** + `{{orderPaymentUrl}}`\n3. Pay in browser (test card `4111…` / UPI `success@razorpay`)\n4. **Get order payment status** — poll until `data.status` is `completed`\n\n**Additional charges:** partner adds charge → customer pays increased due via step 2 (no separate Razorpay on charge API).\n\nSee `docs/RAZORPAY_ONLINE_PAYMENTS_AUDIT.md`.",
           "item": [
+            {
+              "name": "Create direct order (deposit payment)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "try {",
+                      "  const j = pm.response.json();",
+                      "  pm.test('Direct order created', function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(j.success).to.eql(true);",
+                      "    pm.expect(j.data?.order?._id).to.be.ok;",
+                      "  });",
+                      "  if (j?.data?.order?._id) pm.collectionVariables.set('orderId', String(j.data.order._id));",
+                      "  if (j?.data?.payment?._id) pm.collectionVariables.set('orderPaymentId', String(j.data.payment._id));",
+                      "} catch (e) {}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"franchise_id\": \"{{franchiseId}}\",\n  \"category_id\": \"{{categoryId}}\",\n  \"subcategory_id\": \"{{subcategoryId}}\",\n  \"service_id\": \"{{serviceId}}\",\n  \"address_id\": \"{{addressId}}\",\n  \"partner_id\": \"{{quotePartnerId}}\",\n  \"total_service_charge\": {{quoteTotalServiceCharge}},\n  \"from_date\": \"{{quoteFromDate}}\",\n  \"to_date\": \"{{quoteToDate}}\",\n  \"work_hours_per_day\": {{quoteWorkHoursPerDay}},\n  \"total_work_hours\": {{quoteTotalWorkHours}},\n  \"work_start_time\": \"{{quoteWorkStartTime}}\",\n  \"work_end_time\": \"{{quoteWorkEndTime}}\",\n  \"quote_description\": \"{{quoteDescription}}\",\n  \"amount\": {{quoteDepositAmount}},\n  \"payment_method\": \"{{quotePaymentMethod}}\",\n  \"payment_status\": \"completed\",\n  \"transaction_reference\": \"{{quoteTransactionReference}}\",\n  \"notes\": \"{{quotePaymentNotes}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/mobile/user/orders/create",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "mobile",
+                    "user",
+                    "orders",
+                    "create"
+                  ]
+                },
+                "description": "**POST /api/mobile/user/orders/create**\n\nCreate an order **without a quote** and collect the **minimum deposit** in one call. Convert-to-order is unchanged.\n\n- **Auth:** Bearer customer\n- **Required:** `partner_id` (unlike quote create)\n- Service **and** partner must have `direct_order: true` (missing field = true)\n- `amount` >= computed `minimum_deposit_amount` and <= order total\n- Do **not** send server-computed pricing (`total_price`, `tax_amount`, `minimum_deposit_amount`, …)\n- Order is created immediately with `quote_id: null`\n\n**Prerequisites:** **Home** (`{{franchiseId}}`, `{{categoryId}}`, `{{subcategoryId}}`, `{{serviceId}}`), **Addresses → Create** (`{{addressId}}`), **Partners (list)** (`{{quotePartnerId}}`).\n\n**Offline** (`cash`, `upi`, `card`, `bank_transfer`, `other`): **200** — `data.order` + `data.payment` + `data.deposit`.\n\n**`payment_method: online`:** **202** — order already exists + pending Razorpay `data.payment.payment_url`. Pay, then poll **GET /api/mobile/user/orders/:orderId/payments/:paymentId/payment-status**.\n\n**409** if either flag is false: `Direct order is not allowed for this service and partner.`"
+              },
+              "response": [
+                {
+                  "name": "200 — order + offline deposit",
+                  "originalRequest": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"franchise_id\": \"{{franchiseId}}\",\n  \"category_id\": \"{{categoryId}}\",\n  \"subcategory_id\": \"{{subcategoryId}}\",\n  \"service_id\": \"{{serviceId}}\",\n  \"address_id\": \"{{addressId}}\",\n  \"partner_id\": \"{{quotePartnerId}}\",\n  \"total_service_charge\": {{quoteTotalServiceCharge}},\n  \"from_date\": \"{{quoteFromDate}}\",\n  \"to_date\": \"{{quoteToDate}}\",\n  \"work_hours_per_day\": {{quoteWorkHoursPerDay}},\n  \"total_work_hours\": {{quoteTotalWorkHours}},\n  \"work_start_time\": \"{{quoteWorkStartTime}}\",\n  \"work_end_time\": \"{{quoteWorkEndTime}}\",\n  \"quote_description\": \"{{quoteDescription}}\",\n  \"amount\": {{quoteDepositAmount}},\n  \"payment_method\": \"{{quotePaymentMethod}}\",\n  \"payment_status\": \"completed\",\n  \"transaction_reference\": \"{{quoteTransactionReference}}\",\n  \"notes\": \"{{quotePaymentNotes}}\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/mobile/user/orders/create",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "mobile",
+                        "user",
+                        "orders",
+                        "create"
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": "json",
+                  "header": [],
+                  "cookie": [],
+                  "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Order created successfully.\",\n  \"data\": {\n    \"order\": {\n      \"_id\": \"64a700000000000000000301\",\n      \"unique_id\": \"ORD-1001\",\n      \"quote_id\": null,\n      \"partner_id\": \"64a700000000000000000201\",\n      \"service_id\": \"64a700000000000000000101\",\n      \"total_price\": 5000,\n      \"minimum_deposit_amount\": 1000,\n      \"customer_payment_method\": \"cash\"\n    },\n    \"payment\": {\n      \"_id\": \"64a700000000000000000401\",\n      \"order_id\": \"64a700000000000000000301\",\n      \"payer_type\": \"customer\",\n      \"amount\": 1000,\n      \"payment_method\": \"cash\",\n      \"status\": \"completed\",\n      \"transaction_reference\": \"\",\n      \"notes\": \"Customer paid minimum deposit\"\n    },\n    \"deposit\": {\n      \"minimum_deposit_amount\": 1000,\n      \"deposit_amount\": 1000,\n      \"paid_amount\": 1000,\n      \"remaining_deposit_due\": 0\n    }\n  }\n}"
+                },
+                {
+                  "name": "409 — direct_order not allowed",
+                  "originalRequest": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"franchise_id\": \"{{franchiseId}}\",\n  \"category_id\": \"{{categoryId}}\",\n  \"subcategory_id\": \"{{subcategoryId}}\",\n  \"service_id\": \"{{serviceId}}\",\n  \"address_id\": \"{{addressId}}\",\n  \"partner_id\": \"{{quotePartnerId}}\",\n  \"total_service_charge\": {{quoteTotalServiceCharge}},\n  \"from_date\": \"{{quoteFromDate}}\",\n  \"to_date\": \"{{quoteToDate}}\",\n  \"work_hours_per_day\": {{quoteWorkHoursPerDay}},\n  \"total_work_hours\": {{quoteTotalWorkHours}},\n  \"work_start_time\": \"{{quoteWorkStartTime}}\",\n  \"work_end_time\": \"{{quoteWorkEndTime}}\",\n  \"quote_description\": \"{{quoteDescription}}\",\n  \"amount\": {{quoteDepositAmount}},\n  \"payment_method\": \"{{quotePaymentMethod}}\",\n  \"payment_status\": \"completed\",\n  \"transaction_reference\": \"{{quoteTransactionReference}}\",\n  \"notes\": \"{{quotePaymentNotes}}\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/mobile/user/orders/create",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "mobile",
+                        "user",
+                        "orders",
+                        "create"
+                      ]
+                    }
+                  },
+                  "status": "Conflict",
+                  "code": 409,
+                  "_postman_previewlanguage": "json",
+                  "header": [],
+                  "cookie": [],
+                  "body": "{\n  \"success\": false,\n  \"status\": 409,\n  \"message\": \"Direct order is not allowed for this service and partner.\"\n}"
+                }
+              ]
+            },
+            {
+              "name": "Create direct order (Razorpay deposit)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "try {",
+                      "  const j = pm.response.json();",
+                      "  pm.test('Direct order online deposit initiated', function () {",
+                      "    pm.expect([200, 202]).to.include(pm.response.code);",
+                      "    pm.expect(j.success).to.eql(true);",
+                      "    pm.expect(j.data?.order?._id).to.be.ok;",
+                      "  });",
+                      "  if (j?.data?.order?._id) pm.collectionVariables.set('orderId', String(j.data.order._id));",
+                      "  if (j?.data?.payment?._id) {",
+                      "    pm.collectionVariables.set('orderPaymentId', String(j.data.payment._id));",
+                      "  }",
+                      "  if (j?.data?.payment?.payment_url) pm.collectionVariables.set('orderPaymentUrl', String(j.data.payment.payment_url));",
+                      "} catch (e) {}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"franchise_id\": \"{{franchiseId}}\",\n  \"category_id\": \"{{categoryId}}\",\n  \"subcategory_id\": \"{{subcategoryId}}\",\n  \"service_id\": \"{{serviceId}}\",\n  \"address_id\": \"{{addressId}}\",\n  \"partner_id\": \"{{quotePartnerId}}\",\n  \"total_service_charge\": {{quoteTotalServiceCharge}},\n  \"from_date\": \"{{quoteFromDate}}\",\n  \"to_date\": \"{{quoteToDate}}\",\n  \"work_hours_per_day\": {{quoteWorkHoursPerDay}},\n  \"total_work_hours\": {{quoteTotalWorkHours}},\n  \"work_start_time\": \"{{quoteWorkStartTime}}\",\n  \"work_end_time\": \"{{quoteWorkEndTime}}\",\n  \"quote_description\": \"{{quoteDescription}}\",\n  \"amount\": {{quoteDepositAmount}},\n  \"payment_method\": \"online\",\n  \"notes\": \"Direct order deposit — Razorpay test\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/mobile/user/orders/create",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "mobile",
+                    "user",
+                    "orders",
+                    "create"
+                  ]
+                },
+                "description": "Create order immediately + **online** min deposit. **202** + `data.payment.payment_url`. Poll **Get order payment status (Razorpay)** (not quote deposit-status). Both service and partner `direct_order` must be true."
+              },
+              "response": [
+                {
+                  "name": "202 — order + Razorpay deposit link",
+                  "originalRequest": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"franchise_id\": \"{{franchiseId}}\",\n  \"category_id\": \"{{categoryId}}\",\n  \"subcategory_id\": \"{{subcategoryId}}\",\n  \"service_id\": \"{{serviceId}}\",\n  \"address_id\": \"{{addressId}}\",\n  \"partner_id\": \"{{quotePartnerId}}\",\n  \"total_service_charge\": {{quoteTotalServiceCharge}},\n  \"from_date\": \"{{quoteFromDate}}\",\n  \"to_date\": \"{{quoteToDate}}\",\n  \"work_hours_per_day\": {{quoteWorkHoursPerDay}},\n  \"total_work_hours\": {{quoteTotalWorkHours}},\n  \"work_start_time\": \"{{quoteWorkStartTime}}\",\n  \"work_end_time\": \"{{quoteWorkEndTime}}\",\n  \"quote_description\": \"{{quoteDescription}}\",\n  \"amount\": {{quoteDepositAmount}},\n  \"payment_method\": \"online\",\n  \"notes\": \"Direct order deposit — Razorpay test\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/mobile/user/orders/create",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "mobile",
+                        "user",
+                        "orders",
+                        "create"
+                      ]
+                    }
+                  },
+                  "status": "Accepted",
+                  "code": 202,
+                  "_postman_previewlanguage": "json",
+                  "header": [],
+                  "cookie": [],
+                  "body": "{\n  \"success\": true,\n  \"status\": 202,\n  \"message\": \"Order created. Complete payment to collect the deposit.\",\n  \"data\": {\n    \"order\": {\n      \"_id\": \"64a700000000000000000301\",\n      \"unique_id\": \"ORD-1001\",\n      \"quote_id\": null\n    },\n    \"payment\": {\n      \"_id\": \"64a700000000000000000401\",\n      \"order_id\": \"64a700000000000000000301\",\n      \"amount\": 1000,\n      \"payment_method\": \"online\",\n      \"status\": \"pending\",\n      \"transaction_reference\": \"plink_test\",\n      \"payment_url\": \"https://rzp.io/i/test\",\n      \"resumed\": false\n    },\n    \"deposit\": {\n      \"minimum_deposit_amount\": 1000,\n      \"deposit_amount\": 1000,\n      \"paid_amount\": 1000,\n      \"remaining_deposit_due\": 1000\n    }\n  }\n}"
+                }
+              ]
+            },
             {
               "name": "List orders",
               "event": [
@@ -6142,14 +6929,44 @@
                 }
               ],
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
                 "method": "GET",
-                "header": [{ "key": "Accept", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
                 "url": {
                   "raw": "{{baseUrl}}/api/mobile/user/orders?page=1&limit=10",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "mobile", "user", "orders"],
-                  "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "10" }]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "mobile",
+                    "user",
+                    "orders"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
                 },
                 "description": "**GET /api/mobile/user/orders** — sets `orderId` from first order with due amount (or first row)."
               },
@@ -6173,21 +6990,49 @@
                 }
               ],
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
                 "method": "POST",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" },
-                  { "key": "Accept", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
                 ],
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"amount\": {{orderPaymentAmount}},\n  \"payment_method\": \"online\",\n  \"notes\": \"Mobile order payment — Razorpay test\"\n}",
-                  "options": { "raw": { "language": "json" } }
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
                 },
                 "url": {
                   "raw": "{{baseUrl}}/api/mobile/user/orders/{{orderId}}/payments",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "mobile", "user", "orders", "{{orderId}}", "payments"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "mobile",
+                    "user",
+                    "orders",
+                    "{{orderId}}",
+                    "payments"
+                  ]
                 },
                 "description": "**POST** `payment_method: online` → **202** + `record.payment_url`."
               },
@@ -6196,13 +7041,38 @@
             {
               "name": "Get order payment status (Razorpay)",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
                 "method": "GET",
-                "header": [{ "key": "Accept", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
                 "url": {
                   "raw": "{{baseUrl}}/api/mobile/user/orders/{{orderId}}/payments/{{orderPaymentId}}/payment-status",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "mobile", "user", "orders", "{{orderId}}", "payments", "{{orderPaymentId}}", "payment-status"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "mobile",
+                    "user",
+                    "orders",
+                    "{{orderId}}",
+                    "payments",
+                    "{{orderPaymentId}}",
+                    "payment-status"
+                  ]
                 },
                 "description": "**GET .../payment-status** — poll after Razorpay; `sync.synced: true` if webhook missed."
               },
@@ -6212,7 +7082,7 @@
         },
         {
           "name": "Quotes",
-          "description": "Customer quote requests (Phase 1). **Auth:** Bearer customer JWT (`type` 4) after **Verify OTP**.\n\n**Prerequisites:** **Home** (`{{franchiseId}}`, `{{categoryId}}`, `{{subcategoryId}}`, `{{serviceId}}`), **Addresses → Create** (`{{addressId}}`). For **with partner**, run **Partners (list)** first (`{{quotePartnerId}}`). Partner must **Accept** quote before convert.\n\n**Convert to order:** offline (`cash`, `upi`, …) → **200**; **`payment_method: online`** → **202** + `data.payment.payment_url` — use **Get order payment status** on the new order.\n\n**Two create types (same endpoint):**\n| Type | `partner_id` | Initial status |\n|------|----------------|----------------|\n| Without partner | omit or `\"\"` | **new** |\n| With partner | valid partner ObjectId | **pending** |",
+          "description": "Customer quote requests (Phase 1). **Auth:** Bearer customer JWT (`type` 4) after **Verify OTP**.\n\n**Prerequisites:** **Home** (`{{franchiseId}}`, `{{categoryId}}`, `{{subcategoryId}}`, `{{serviceId}}`), **Addresses → Create** (`{{addressId}}`). For **with partner**, run **Partners (list)** first (`{{quotePartnerId}}`). Partner must **Accept** quote before convert.\n\n**Convert to order:** offline (`cash`, `upi`, …) → **200**; **`payment_method: online`** → **202** + `data.payment.payment_url` — poll **Get quote deposit payment status**. To skip quotes entirely, use **Create direct order** (`POST /api/mobile/user/orders/create`).\n\n**Two create types (same endpoint):**\n| Type | `partner_id` | Initial status |\n|------|----------------|----------------|\n| Without partner | omit or `\"\"` | **new** |\n| With partner | valid partner ObjectId | **pending** |",
           "item": [
             {
               "name": "Create quote (without partner)",
@@ -8441,7 +9311,7 @@
       "key": "quoteDepositAmount",
       "value": "1000",
       "type": "string",
-      "description": "Deposit amount used for convert-to-order (must be >= minimum_deposit_amount)"
+      "description": "Deposit amount for convert-to-order and Create direct order (must be >= minimum_deposit_amount)"
     },
     {
       "key": "quoteDepositPaymentId",

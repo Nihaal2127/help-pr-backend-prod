@@ -437,7 +437,7 @@ const getPartnerProfileForCustomer = async (partnerId, franchiseId, userId = nul
 
     const partner = await User.findOne(partnerQuery)
       .select(
-        'name profile_url user_id experience is_business business_info_id state_id city_id area_id created_at average_rating rating_count'
+        'name profile_url user_id experience is_business business_info_id state_id city_id area_id created_at average_rating rating_count direct_order'
       )
       .populate([
         { path: 'state_id', select: 'name' },
@@ -496,6 +496,7 @@ const getPartnerProfileForCustomer = async (partnerId, franchiseId, userId = nul
           user_id: partner.user_id,
           experience: partner.experience,
           professional_summary: partner.experience,
+          direct_order: partner.direct_order !== false,
           subscription_plan_name: plan.plan_name,
           plan_priority: plan.priority,
           is_business: partner.is_business === true,

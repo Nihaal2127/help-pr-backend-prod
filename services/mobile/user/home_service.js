@@ -116,7 +116,7 @@ const buildFranchiseCategories = async (
           _id: { $in: [...serviceIdSet] },
           ...ACTIVE_SERVICE_FILTER,
         })
-          .select('name desc tax image_url category_id payment_type')
+          .select('name desc tax image_url category_id payment_type direct_order')
           .lean();
 
   const serviceById = new Map(serviceDocs.map((s) => [String(s._id), s]));
@@ -145,6 +145,7 @@ const buildFranchiseCategories = async (
       price_range: stats.price_range,
       price: servicePrice,
       payment_type: s.payment_type ?? '',
+      direct_order: s.direct_order !== false,
     };
   };
 

@@ -916,6 +916,7 @@ const getCustomerQuoteDepositPaymentStatus = async (customerId, quoteId, payment
 };
 
 module.exports = {
+  validateRefsForCreate,
   createCustomerQuote,
   listCustomerQuotes,
   getCustomerQuoteById,
