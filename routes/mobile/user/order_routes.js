@@ -4,6 +4,7 @@ const userAuthMiddleware = require('../../../middleware/mobile/user/user_auth_mi
 const {
   validateOrderIdParam,
   validateCreateDirectOrderBody,
+  validateCreateDirectOrderPreviewQuery,
 } = require('../../../middleware/mobile/user/order_middleware');
 const {
   validateListOrderPaymentsQuery,
@@ -13,6 +14,8 @@ const {
 } = require('../../../middleware/mobile/user/order_payment_middleware');
 const {
   createDirectOrderHandler,
+  previewDirectOrderHandler,
+  getDirectOrderDepositPaymentStatusHandler,
   listOrdersHandler,
   getOrderDetailsHandler,
   downloadOrderInvoiceHandler,
@@ -39,6 +42,19 @@ router.post(
   userAuthMiddleware,
   validateCreateDirectOrderBody,
   createDirectOrderHandler
+);
+router.get(
+  '/orders/create-preview',
+  userAuthMiddleware,
+  validateCreateDirectOrderPreviewQuery,
+  previewDirectOrderHandler
+);
+router.get(
+  '/orders/:orderId/deposit-payment/:paymentId/payment-status',
+  userAuthMiddleware,
+  validateOrderIdParam,
+  validatePaymentIdParam,
+  getDirectOrderDepositPaymentStatusHandler
 );
 router.get(
   '/orders/:orderId/payments',

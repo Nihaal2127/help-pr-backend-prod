@@ -9,7 +9,7 @@ const { buildOrderInvoiceHtml } = require('../../../utils/order_invoice_html');
 const { embedOrderDetailForeignKeys } = require('../../../utils/list_aggregation');
 const { stripAdminDescriptionForPublicApi } = require('../../../utils/admin_description_access');
 const { fail, ok } = require('../../../utils/mobile_service_result');
-const { assertValidCallerObjectId } = require('../shared/order_access_helpers');
+const { assertValidCallerObjectId, loadCustomerOrder } = require('../shared/order_access_helpers');
 const { fieldLabel } = require('../../../utils/field_labels');
 const { formatOrderForApi } = require('../../../utils/order_api_format');
 const { OrderCreationError } = require('../../../errors/order_creation_error');
@@ -26,8 +26,16 @@ const { syncAllPartnerOrderPaymentsForOrder } = require('../../partner_wallet_or
 const {
   loadCustomerProfile,
   initiateOnlineOrderPayment,
+  syncPendingOrderPayment,
+  RAZORPAY_LINK_RESUMABLE,
 } = require('../../../src/modules/payments/services/orderOnlinePayment.service');
 const { buildQuoteDepositSummary } = require('../../../src/modules/payments/services/quoteDepositPayment.service');
+const { fetchPaymentLink } = require('../../../src/modules/payments/razorpay.client');
+const GatewayPayment = require('../../../models/gateway_payment');
+const {
+  PAYMENT_PURPOSES,
+  GATEWAY_PAYMENT_METHOD,
+} = require('../../../src/modules/payments/constants/payment.constants');
 const {
   safeNotifyOrderInvoiceDownloaded,
   safeNotifyOrderPaymentReceived,
@@ -491,9 +499,228 @@ const createDirectCustomerOrder = async (customerId, body) => {
   }
 };
 
+const previewDirectCustomerOrder = async (customerId, query = {}) => {
+  try {
+    const refCheck = await validateRefsForCreate(customerId, query);
+    if (!refCheck.ok) return refCheck;
+
+    if (!query.partner_id || !mongoose.Types.ObjectId.isValid(String(query.partner_id))) {
+      return fail(400, `Valid ${fieldLabel('partner_id')} is required.`);
+    }
+
+    const [serviceDoc, partnerDoc] = await Promise.all([
+      Service.findOne({ _id: query.service_id, deleted_at: null })
+        .select('name service_id desc image_url payment_type direct_order')
+        .lean(),
+      User.findOne({ _id: query.partner_id, deleted_at: null })
+        .select('name user_id profile_url direct_order')
+        .lean(),
+    ]);
+
+    if (!serviceDoc) {
+      return fail(404, 'Service not found.');
+    }
+    if (!partnerDoc) {
+      return fail(404, 'Partner not found.');
+    }
+
+    if (!isDirectOrderEnabled(serviceDoc.direct_order) || !isDirectOrderEnabled(partnerDoc.direct_order)) {
+      return fail(409, 'Direct order is not allowed for this service and partner.');
+    }
+
+    let pricing;
+    try {
+      ({ pricing } = await resolveQuotePricing(query));
+    } catch (pricingErr) {
+      if (pricingErr instanceof OrderCreationError) {
+        return fail(pricingErr.status, pricingErr.message);
+      }
+      throw pricingErr;
+    }
+
+    const charge = Number(pricing.total_service_charge) || 0;
+    if (!(charge > 0)) {
+      return fail(409, 'Service charge must be greater than 0 to create an order.');
+    }
+
+    const addressDoc = await Address.findById(query.address_id)
+      .select('address landmark area city_id pincode contact_name contact_number')
+      .lean();
+    if (!addressDoc) {
+      return fail(400, 'Address not found.');
+    }
+
+    const minimumDeposit = Number(pricing.minimum_deposit_amount) || 0;
+    const franchise = refCheck.franchise;
+
+    return ok(200, {
+      message: 'Direct order preview fetched successfully.',
+      data: {
+        direct_order: true,
+        franchise_id: query.franchise_id,
+        category_id: query.category_id,
+        subcategory_id: query.subcategory_id || null,
+        service_id: query.service_id,
+        partner_id: query.partner_id,
+        address_id: query.address_id,
+        franchise: franchise
+          ? { _id: franchise._id, name: franchise.name }
+          : null,
+        service: {
+          _id: serviceDoc._id,
+          name: serviceDoc.name,
+          service_id: serviceDoc.service_id,
+          desc: serviceDoc.desc,
+          image_url: serviceDoc.image_url,
+          payment_type: serviceDoc.payment_type,
+          direct_order: isDirectOrderEnabled(serviceDoc.direct_order),
+        },
+        partner: {
+          _id: partnerDoc._id,
+          name: partnerDoc.name,
+          user_id: partnerDoc.user_id,
+          profile_url: partnerDoc.profile_url,
+          direct_order: isDirectOrderEnabled(partnerDoc.direct_order),
+        },
+        address: addressDoc,
+        pricing: {
+          total_service_charge: pricing.total_service_charge,
+          commission_percent: pricing.commission_percent,
+          commission_amount: pricing.commission_amount,
+          tax_percent: pricing.tax_percent,
+          tax_amount: pricing.tax_amount,
+          sub_total: pricing.sub_total,
+          total_price: pricing.total_price,
+          minimum_deposit_percent: pricing.minimum_deposit_percent,
+          minimum_deposit_amount: pricing.minimum_deposit_amount,
+        },
+        deposit: buildQuoteDepositSummary(minimumDeposit, 0, false),
+      },
+    });
+  } catch (err) {
+    console.error('mobile user preview direct order', err.message);
+    return fail(500, 'Technical issue. Please try again..');
+  }
+};
+
+const getDirectOrderDepositPaymentStatus = async (customerId, orderId, paymentId) => {
+  try {
+    if (!paymentId || !mongoose.Types.ObjectId.isValid(String(paymentId))) {
+      return fail(400, 'Invalid payment id.');
+    }
+
+    const access = await loadCustomerOrder(customerId, orderId);
+    if (!access.ok) return access;
+
+    const order = access.data.order;
+    if (order.quote_id) {
+      return fail(404, 'Direct order not found.');
+    }
+
+    const payment = await OrderPayment.findOne({
+      _id: paymentId,
+      order_id: order._id,
+      payer_type: 'customer',
+      deleted_at: null,
+      $or: [{ quote_id: null }, { quote_id: { $exists: false } }],
+    }).lean();
+
+    if (!payment) {
+      return fail(404, 'Direct order deposit payment not found.');
+    }
+
+    let syncResult = null;
+    if (
+      payment.status === 'pending' &&
+      payment.payment_method === GATEWAY_PAYMENT_METHOD &&
+      payment.transaction_reference
+    ) {
+      syncResult = await syncPendingOrderPayment(payment._id);
+    }
+
+    let latestPayment = payment;
+    if (syncResult?.synced) {
+      latestPayment = await OrderPayment.findById(payment._id).lean();
+    }
+
+    let paymentUrl = null;
+    if (latestPayment.status === 'pending' && latestPayment.transaction_reference) {
+      try {
+        const link = await fetchPaymentLink(latestPayment.transaction_reference);
+        if (RAZORPAY_LINK_RESUMABLE.has(link.status) && link.short_url) {
+          paymentUrl = link.short_url;
+        }
+      } catch (err) {
+        console.error(
+          'getDirectOrderDepositPaymentStatus fetchPaymentLink',
+          err?.response?.data || err.message
+        );
+      }
+    }
+
+    let gatewayPayment = null;
+    if (latestPayment.status === 'completed') {
+      gatewayPayment = await GatewayPayment.findOne({
+        purpose: PAYMENT_PURPOSES.ORDER,
+        reference_id: latestPayment._id,
+        deleted_at: null,
+      })
+        .select(
+          'amount currency status payment_method gateway_payment_link_id gateway_payment_id instrument_type paid_at created_at'
+        )
+        .lean();
+    }
+
+    let latestOrder = order;
+    if (syncResult?.synced) {
+      latestOrder = syncResult.syncResult?.order || (await Order.findById(order._id).lean());
+    } else if (typeof latestOrder.toObject === 'function') {
+      latestOrder = latestOrder.toObject();
+    }
+
+    const minimumDeposit = Number(latestOrder.minimum_deposit_amount) || 0;
+    const depositAmount = Number(latestPayment.amount) || 0;
+    const depositCollected = latestPayment.status === 'completed';
+
+    return ok(200, {
+      message: syncResult?.synced
+        ? 'Payment verified with Razorpay and order deposit applied.'
+        : 'Direct order deposit payment status fetched successfully.',
+      data: {
+        payment_id: latestPayment._id,
+        order_id: latestPayment.order_id,
+        status: latestPayment.status,
+        amount: latestPayment.amount,
+        payment_method: latestPayment.payment_method,
+        transaction_reference: latestPayment.transaction_reference,
+        payment_url: paymentUrl,
+        paid_at: latestPayment.paid_at,
+        gateway_payment: gatewayPayment,
+        order: formatMobileOrderForApi(latestOrder),
+        deposit: buildQuoteDepositSummary(minimumDeposit, depositAmount, depositCollected),
+        ...(syncResult
+          ? {
+              sync: {
+                attempted: payment.status === 'pending',
+                synced: syncResult.synced,
+                reason: syncResult.reason || null,
+                razorpay_status: syncResult.razorpay_status || null,
+              },
+            }
+          : {}),
+      },
+    });
+  } catch (err) {
+    console.error('mobile user get direct order deposit payment status', err.message);
+    return fail(500, 'Technical issue. Please try again..');
+  }
+};
+
 module.exports = {
   listCustomerOrders,
   getCustomerOrderById,
   getCustomerOrderInvoice,
   createDirectCustomerOrder,
+  previewDirectCustomerOrder,
+  getDirectOrderDepositPaymentStatus,
 };

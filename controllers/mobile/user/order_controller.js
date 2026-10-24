@@ -3,6 +3,8 @@ const {
   getCustomerOrderById,
   getCustomerOrderInvoice,
   createDirectCustomerOrder,
+  previewDirectCustomerOrder,
+  getDirectOrderDepositPaymentStatus,
 } = require('../../../services/mobile/user/order_service');
 const { submitOrderReview } = require('../../../services/mobile/user/order_review_service');
 const {
@@ -18,6 +20,26 @@ const createDirectOrderHandler = wrapMobileHandler(
   'mobile user direct order create handler',
   async (req, res) => {
     const result = await createDirectCustomerOrder(getCallerId(req), req.body || {});
+    return sendServiceResult(res, result);
+  }
+);
+
+const previewDirectOrderHandler = wrapMobileHandler(
+  'mobile user direct order preview handler',
+  async (req, res) => {
+    const result = await previewDirectCustomerOrder(getCallerId(req), req.query || {});
+    return sendServiceResult(res, result);
+  }
+);
+
+const getDirectOrderDepositPaymentStatusHandler = wrapMobileHandler(
+  'mobile user direct order deposit payment status handler',
+  async (req, res) => {
+    const result = await getDirectOrderDepositPaymentStatus(
+      getCallerId(req),
+      req.params.orderId,
+      req.params.paymentId
+    );
     return sendServiceResult(res, result);
   }
 );
@@ -53,6 +75,8 @@ const submitOrderReviewHandler = wrapMobileHandler('mobile user submit order rev
 
 module.exports = {
   createDirectOrderHandler,
+  previewDirectOrderHandler,
+  getDirectOrderDepositPaymentStatusHandler,
   listOrdersHandler,
   getOrderDetailsHandler,
   downloadOrderInvoiceHandler,
