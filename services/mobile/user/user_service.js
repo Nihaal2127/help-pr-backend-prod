@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const User = require('../../../models/user');
 const Area = require('../../../models/area');
 const City = require('../../../models/city');
+const State = require('../../../models/state');
 const Otp = require('../../../models/otp');
 const notificationSetting = require('../../../models/notification_settings');
 const { getNewId } = require('../../../helper/id_generator');
@@ -478,7 +479,18 @@ const listAllPincodes = async ({ search } = {}) => {
     const normalizedSearch =
       search !== undefined && search !== null ? String(search).trim().toLowerCase() : '';
 
-    const areas = await Area.find({ deleted_at: null })
+    const activeStates = await State.find({
+      deleted_at: null,
+      is_active: true,
+    })
+      .select('_id')
+      .lean();
+    const activeStateIds = activeStates.map((state) => state._id);
+
+    const areas = await Area.find({
+      deleted_at: null,
+      state_id: { $in: activeStateIds },
+    })
       .select('name pincodes city_id state_name')
       .lean();
 
