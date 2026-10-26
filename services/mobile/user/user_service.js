@@ -489,6 +489,7 @@ const listAllPincodes = async ({ search } = {}) => {
 
     const areas = await Area.find({
       deleted_at: null,
+      is_active: true,
       state_id: { $in: activeStateIds },
     })
       .select('name pincodes city_id state_name')
@@ -502,15 +503,21 @@ const listAllPincodes = async ({ search } = {}) => {
       ),
     ].map((id) => new mongoose.Types.ObjectId(id));
 
-    const cities = await City.find({ _id: { $in: cityIds }, deleted_at: null })
+    const cities = await City.find({
+      _id: { $in: cityIds },
+      deleted_at: null,
+      is_active: true,
+    })
       .select('name')
       .lean();
     const cityNameById = new Map(cities.map((city) => [city._id.toString(), city.name]));
 
     const records = [];
     for (const area of areas) {
+      const resolvedCityName = cityNameById.get(String(area.city_id));
+      if (!resolvedCityName) continue;
       const areaName = sanitizeCsvField(area.name);
-      const cityName = sanitizeCsvField(cityNameById.get(String(area.city_id)) || '');
+      const cityName = sanitizeCsvField(resolvedCityName);
       const stateName = sanitizeCsvField(area.state_name);
       for (const pincode of normalizeAreaPincodes(area.pincodes)) {
         records.push({
