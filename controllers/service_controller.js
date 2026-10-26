@@ -419,6 +419,31 @@ const getAll = async (req, res) => {
         filter.category_id = selectedCategoryId;
       }
     }
+    if (req.query.subcategory_id) {
+      const subcategoryResult = await checkObjectIdExists(
+        Subcategory,
+        req.query.subcategory_id,
+        'subcategory'
+      );
+      if (subcategoryResult.exists === false) {
+        return res.status(409).json({
+          success: false,
+          status: 409,
+          message: subcategoryResult.message,
+        });
+      }
+      const subcategory = await Subcategory.findOne({
+        _id: req.query.subcategory_id,
+        deleted_at: null,
+      })
+        .select('services')
+        .lean();
+      const subcategoryServiceIds = (Array.isArray(subcategory?.services) ? subcategory.services : [])
+        .filter((id) => id && mongoose.Types.ObjectId.isValid(String(id)))
+        .map((id) => new mongoose.Types.ObjectId(String(id)));
+      filter._id =
+        subcategoryServiceIds.length > 0 ? { $in: subcategoryServiceIds } : { $in: [] };
+    }
     if (req.query.city_id) {
       const cityResult = await checkObjectIdExists(City, req.query.city_id, 'city');
       if (cityResult.exists === false) {

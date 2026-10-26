@@ -10,6 +10,7 @@ const { normalizeReportReason } = require('../../../enum/post_report_reason_enum
 const { REPORT_STATUS_PENDING } = require('../../../enum/post_report_reason_enum');
 const {
   resolveFranchiseById,
+  loadCustomerSelectedCityId,
   loadSubscribedFranchisePartners,
 } = require('./franchise_partner_scope');
 const {
@@ -26,14 +27,24 @@ const {
   findPublishedPostById,
 } = require('../../../services/partner_post_common_service');
 const { safeNotifyPartnerPostLiked } = require('../../../src/modules/notifications/services/domainHooks');
+const {
+  safeNotifyBackofficePartnerPostReported,
+} = require('../../../src/modules/notifications/services/backofficeHooks');
+const { applyCustomerActiveServicePartnerRatings } = require('./partner_rating_service');
+const { fieldLabel } = require('../../../utils/field_labels');
 
-const getVisiblePartnerIds = async (franchiseId) => {
+const withCustomerPartnerRatings = (records) =>
+  applyCustomerActiveServicePartnerRatings(records, { partnerField: 'partner' });
+
+const getVisiblePartnerIds = async (franchiseId, options = {}) => {
   const franchiseResult = await resolveFranchiseById(franchiseId);
   if (!franchiseResult.ok) {
     return franchiseResult;
   }
 
-  const { partnerIds } = await loadSubscribedFranchisePartners(franchiseResult.franchise._id);
+  const { partnerIds } = await loadSubscribedFranchisePartners(franchiseResult.franchise._id, {
+    cityId: options.cityId,
+  });
   return ok(200, {
     franchise: franchiseResult.franchise,
     partnerIds: partnerIds.map((id) => new mongoose.Types.ObjectId(String(id))),
@@ -62,46 +73,66 @@ const assertPartnerVisibleToCustomer = async (partnerId, franchiseId) => {
 };
 
 const listPostsFeed = async (userId, query) => {
-  const visible = await getVisiblePartnerIds(query.franchise_id);
-  if (!visible.ok) return visible;
-
-  if (visible.data.partnerIds.length === 0) {
-    return ok(200, {
-      message: 'Feed retrieved successfully.',
-      data: {
-        franchise_id: visible.data.franchise._id,
-        franchise_name: visible.data.franchise.name,
-        records: [],
-        totalItems: 0,
-        totalPages: 0,
-        currentPage: 1,
-        limit: DEFAULT_LIMIT,
-      },
-    });
+  const scopeRaw = query.scope != null ? String(query.scope).trim().toLowerCase() : 'city';
+  if (scopeRaw && !['city', 'all'].includes(scopeRaw)) {
+    return fail(400, `${fieldLabel('scope')} must be one of: city, all.`);
   }
+  const scope = scopeRaw || 'city';
 
   const page = parsePositiveInt(query.page, DEFAULT_PAGE);
   const limit = Math.min(parsePositiveInt(query.limit, DEFAULT_LIMIT), MAX_LIMIT);
   const skip = (page - 1) * limit;
 
-  const filter = publishedPostFilter({
-    franchise_id: visible.data.franchise._id,
-    partner_id: { $in: visible.data.partnerIds },
-  });
+  let franchiseId = null;
+  let franchiseName = null;
+  let filter;
+
+  if (scope === 'all') {
+    filter = publishedPostFilter();
+  } else {
+    const cityId = await loadCustomerSelectedCityId(userId);
+    const visible = await getVisiblePartnerIds(query.franchise_id, { cityId });
+    if (!visible.ok) return visible;
+
+    franchiseId = visible.data.franchise._id;
+    franchiseName = visible.data.franchise.name;
+
+    if (visible.data.partnerIds.length === 0) {
+      return ok(200, {
+        message: 'Feed retrieved successfully.',
+        data: {
+          franchise_id: franchiseId,
+          franchise_name: franchiseName,
+          records: [],
+          totalItems: 0,
+          totalPages: 0,
+          currentPage: 1,
+          limit: DEFAULT_LIMIT,
+        },
+      });
+    }
+
+    filter = publishedPostFilter({
+      franchise_id: visible.data.franchise._id,
+      partner_id: { $in: visible.data.partnerIds },
+    });
+  }
 
   const [totalItems, posts] = await Promise.all([
     PartnerPost.countDocuments(filter),
     PartnerPost.find(filter).sort({ created_at: -1 }).skip(skip).limit(limit).lean(),
   ]);
 
-  const records = await mapPostRecords(posts, { userId, includePartner: true });
+  const records = await withCustomerPartnerRatings(
+    await mapPostRecords(posts, { userId, includePartner: true })
+  );
   const totalPages = Math.ceil(totalItems / limit) || 0;
 
   return ok(200, {
     message: 'Feed retrieved successfully.',
     data: {
-      franchise_id: visible.data.franchise._id,
-      franchise_name: visible.data.franchise.name,
+      franchise_id: franchiseId,
+      franchise_name: franchiseName,
       records,
       totalItems,
       totalPages,
@@ -171,7 +202,9 @@ const getPostDetail = async (userId, postId, franchiseId) => {
     }
   }
 
-  const mapped = await mapPostRecords([post], { userId, includePartner: true });
+  const mapped = await withCustomerPartnerRatings(
+    await mapPostRecords([post], { userId, includePartner: true })
+  );
   return ok(200, { message: 'Post retrieved successfully.', post: mapped[0] });
 };
 
@@ -201,7 +234,9 @@ const resolvePostByShareToken = async (shareToken) => {
     return fail(404, 'Post not found.');
   }
 
-  const mapped = await mapPostRecords([post], { includePartner: true });
+  const mapped = await withCustomerPartnerRatings(
+    await mapPostRecords([post], { includePartner: true })
+  );
   return ok(200, {
     message: 'Post retrieved successfully.',
     post: mapped[0],
@@ -330,9 +365,11 @@ const paginateUserPostBookmarks = async (
   const totalItems = ordered.length;
   const totalPages = Math.ceil(totalItems / limit) || 0;
   const slice = ordered.slice(skip, skip + limit);
-  const records = await mapPostRecords(
-    slice.map((entry) => entry.post),
-    { userId, includePartner: true }
+  const records = await withCustomerPartnerRatings(
+    await mapPostRecords(
+      slice.map((entry) => entry.post),
+      { userId, includePartner: true }
+    )
   );
 
   records.forEach((record, index) => {
@@ -488,7 +525,7 @@ const reportPost = async (userId, postId, body) => {
   }
 
   const now = new Date();
-  await PartnerPostReport.create({
+  const report = await PartnerPostReport.create({
     post_id: postOid,
     user_id: userOid,
     reason,
@@ -499,6 +536,15 @@ const reportPost = async (userId, postId, body) => {
   });
 
   await PartnerPost.updateOne({ _id: postOid }, { $inc: { reports_count: 1 } });
+
+  const { post } = postResult.data;
+  const reporter = await User.findById(userOid).select('name').lean();
+  void safeNotifyBackofficePartnerPostReported({
+    post,
+    report,
+    actorUserId: userId,
+    customerName: reporter?.name || '',
+  });
 
   return ok(200, { message: 'Post reported successfully.' });
 };

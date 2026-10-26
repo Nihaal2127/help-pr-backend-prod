@@ -24,7 +24,16 @@ const {
 
 router.get('/posts/share/:shareToken', validateShareTokenParam, resolveShareTokenHandler);
 
-router.get('/posts/feed', userAuthMiddleware, validateFranchiseIdQuery, listFeedHandler);
+router.get(
+  '/posts/feed',
+  userAuthMiddleware,
+  (req, res, next) => {
+    const scope = String(req.query.scope ?? 'city').trim().toLowerCase();
+    if (scope === 'all') return next();
+    return validateFranchiseIdQuery(req, res, next);
+  },
+  listFeedHandler
+);
 router.get('/posts/liked', userAuthMiddleware, listLikedPostsHandler);
 router.get('/posts/saved', userAuthMiddleware, listSavedPostsHandler);
 router.get(
