@@ -11,6 +11,7 @@ const serviceSchema = new mongoose.Schema(
         minimum_deposit: { type: Number, required: false, default: 0 },
         direct_order: { type: Boolean, default: true },
         category_id: { type: mongoose.Schema.Types.ObjectId, default: null, ref: 'category' },
+        subcategory_id: { type: mongoose.Schema.Types.ObjectId, default: null, ref: 'subcategory' },
         image_url: { type: String, required: true, default: "" },
         is_active: { type: Boolean, default: true },
         is_request: { type: Boolean, default: false },
@@ -35,6 +36,7 @@ const serviceSchema = new mongoose.Schema(
     serviceSchema.index({ name: 1 });
     serviceSchema.index({ is_active: 1 });
     serviceSchema.index({ category_id: 1 });
+    serviceSchema.index({ subcategory_id: 1 });
     serviceSchema.index({ service_id: 1 });
     serviceSchema.index({ is_request: 1 });
     serviceSchema.index({ requested_by: 1 });

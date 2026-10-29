@@ -221,67 +221,154 @@ const attachRequestedByUser = async (records) => {
   });
 };
 
-/** Resolve subcategory from subcategory.services[] for each service (like category_name). */
+const normalizeSubcategoryIdInput = (value) => {
+  if (value === undefined) return { provided: false };
+  if (value === null || value === "" || value === "null") {
+    return { provided: true, oid: null };
+  }
+  const raw = String(value).trim();
+  if (!raw) return { provided: true, oid: null };
+  if (!mongoose.Types.ObjectId.isValid(raw)) {
+    return {
+      provided: true,
+      error: { status: 400, message: "Invalid subcategory id format." },
+    };
+  }
+  return { provided: true, oid: new mongoose.Types.ObjectId(raw) };
+};
+
+const assertSubcategoryForService = async (subcategoryOid, categoryId) => {
+  const subcategory = await Subcategory.findOne({
+    _id: subcategoryOid,
+    deleted_at: null,
+  })
+    .select("_id category_id")
+    .lean();
+  if (!subcategory) {
+    return {
+      ok: false,
+      status: 404,
+      message: "Sub Category not found.",
+    };
+  }
+  if (
+    categoryId &&
+    subcategory.category_id &&
+    String(subcategory.category_id) !== String(categoryId)
+  ) {
+    return {
+      ok: false,
+      status: 400,
+      message: "Sub Category does not belong to the selected category.",
+    };
+  }
+  return { ok: true };
+};
+
+const syncServiceOnSubcategory = async (serviceId, fromSubcategoryId, toSubcategoryId) => {
+  const serviceOid = new mongoose.Types.ObjectId(String(serviceId));
+  const fromKey = fromSubcategoryId ? String(fromSubcategoryId) : "";
+  const toKey = toSubcategoryId ? String(toSubcategoryId) : "";
+
+  if (fromKey && fromKey !== toKey) {
+    await Subcategory.updateOne(
+      { _id: fromSubcategoryId },
+      { $pull: { services: serviceOid }, $set: { updated_at: new Date() } }
+    );
+  }
+  if (toKey) {
+    await Subcategory.updateOne(
+      { _id: toSubcategoryId },
+      { $addToSet: { services: serviceOid }, $set: { updated_at: new Date() } }
+    );
+  }
+};
+
+/** Resolve subcategory from service.subcategory_id, then subcategory.services[]. */
 const attachSubcategoryInfo = async (records) => {
   if (!Array.isArray(records) || records.length === 0) return records;
 
+  const plainRecords = records.map((record) =>
+    record && typeof record.toObject === "function"
+      ? record.toObject()
+      : record
+  );
+
   const serviceIds = [
     ...new Set(
-      records
+      plainRecords
         .map((record) => record?._id)
         .filter((id) => mongoose.Types.ObjectId.isValid(String(id)))
         .map((id) => String(id))
     ),
   ];
 
-  if (serviceIds.length === 0) {
-    return records.map((record) => {
-      const plainRecord =
-        record && typeof record.toObject === "function"
-          ? record.toObject()
-          : record;
-      return {
-        ...plainRecord,
-        subcategory_id: null,
-        subcategory_name: null,
-      };
-    });
-  }
-
-  const objectIds = serviceIds.map((id) => new mongoose.Types.ObjectId(id));
-  const subcategories = await Subcategory.find({
-    deleted_at: null,
-    services: { $in: objectIds },
-  })
-    .select("_id name services")
-    .lean();
-
   const serviceToSubcategory = new Map();
-  for (const sub of subcategories) {
-    for (const sid of Array.isArray(sub.services) ? sub.services : []) {
-      const key = String(sid);
-      if (!serviceToSubcategory.has(key)) {
-        serviceToSubcategory.set(key, {
-          subcategory_id: sub._id,
-          subcategory_name: sub.name || null,
-        });
+  if (serviceIds.length > 0) {
+    const objectIds = serviceIds.map((id) => new mongoose.Types.ObjectId(id));
+    const subcategories = await Subcategory.find({
+      deleted_at: null,
+      services: { $in: objectIds },
+    })
+      .select("_id name services")
+      .lean();
+
+    for (const sub of subcategories) {
+      for (const sid of Array.isArray(sub.services) ? sub.services : []) {
+        const key = String(sid);
+        if (!serviceToSubcategory.has(key)) {
+          serviceToSubcategory.set(key, {
+            subcategory_id: sub._id,
+            subcategory_name: sub.name || null,
+          });
+        }
       }
     }
   }
 
-  return records.map((record) => {
-    const plainRecord =
-      record && typeof record.toObject === "function"
-        ? record.toObject()
-        : record;
-    const info = serviceToSubcategory.get(String(plainRecord._id)) || {
-      subcategory_id: null,
-      subcategory_name: null,
-    };
+  const subcategoryIdsToName = new Set();
+  for (const record of plainRecords) {
+    if (
+      record?.subcategory_id &&
+      mongoose.Types.ObjectId.isValid(String(record.subcategory_id))
+    ) {
+      subcategoryIdsToName.add(String(record.subcategory_id));
+    }
+  }
+  for (const info of serviceToSubcategory.values()) {
+    if (info.subcategory_id) subcategoryIdsToName.add(String(info.subcategory_id));
+  }
+
+  const nameById = new Map();
+  if (subcategoryIdsToName.size > 0) {
+    const docs = await Subcategory.find({
+      _id: {
+        $in: [...subcategoryIdsToName].map((id) => new mongoose.Types.ObjectId(id)),
+      },
+      deleted_at: null,
+    })
+      .select("_id name")
+      .lean();
+    for (const doc of docs) {
+      nameById.set(String(doc._id), doc.name || null);
+    }
+  }
+
+  return plainRecords.map((plainRecord) => {
+    const reverse = serviceToSubcategory.get(String(plainRecord._id));
+    const storedRaw = plainRecord.subcategory_id;
+    const storedId =
+      storedRaw && mongoose.Types.ObjectId.isValid(String(storedRaw))
+        ? storedRaw
+        : null;
+    const subcategory_id = storedId || reverse?.subcategory_id || null;
+    const subcategoryKey = subcategory_id ? String(subcategory_id) : null;
     return {
       ...plainRecord,
-      subcategory_id: info.subcategory_id,
-      subcategory_name: info.subcategory_name,
+      subcategory_id: subcategory_id || null,
+      subcategory_name: subcategoryKey
+        ? nameById.get(subcategoryKey) ?? reverse?.subcategory_name ?? null
+        : null,
     };
   });
 };
@@ -678,6 +765,7 @@ const create = async (req, res) => {
       payment_type,
       minimum_deposit,
       category_id,
+      subcategory_id,
       city_ids = [],
       state_ids = [],
       image_url,
@@ -720,6 +808,29 @@ const create = async (req, res) => {
       }
     }
 
+    const parsedSubcategory = normalizeSubcategoryIdInput(subcategory_id);
+    if (parsedSubcategory.error) {
+      return res.status(parsedSubcategory.error.status).json({
+        success: false,
+        status: parsedSubcategory.error.status,
+        message: parsedSubcategory.error.message,
+      });
+    }
+    let nextSubcategoryId = parsedSubcategory.provided ? parsedSubcategory.oid : null;
+    if (nextSubcategoryId) {
+      const subcategoryCheck = await assertSubcategoryForService(
+        nextSubcategoryId,
+        category_id
+      );
+      if (!subcategoryCheck.ok) {
+        return res.status(subcategoryCheck.status).json({
+          success: false,
+          status: subcategoryCheck.status,
+          message: subcategoryCheck.message,
+        });
+      }
+    }
+
     const service_id = await getServiceId();
     const isRequest = Boolean(
       (typeof req.path === "string" && req.path.includes("/create-request")) ||
@@ -753,6 +864,7 @@ const create = async (req, res) => {
         ? {}
         : { direct_order: asBodyBool(req.body.direct_order, true) !== false }),
       category_id,
+      subcategory_id: nextSubcategoryId,
       service_id,
       city_ids,
       state_ids,
@@ -781,6 +893,10 @@ const create = async (req, res) => {
       }
       category.services.push(savedService._id);
       await category.save();
+    }
+
+    if (nextSubcategoryId) {
+      await syncServiceOnSubcategory(savedService._id, null, nextSubcategoryId);
     }
 
     const createdRecord = stripServiceLocationFields(savedService);
@@ -978,6 +1094,39 @@ const update = async (req, res) => {
       ? updateData.category_id
       : service.category_id;
 
+    const parsedSubcategory = normalizeSubcategoryIdInput(
+      Object.prototype.hasOwnProperty.call(updateData, "subcategory_id")
+        ? updateData.subcategory_id
+        : undefined
+    );
+    delete updateData.subcategory_id;
+    if (parsedSubcategory.error) {
+      return res.status(parsedSubcategory.error.status).json({
+        success: false,
+        status: parsedSubcategory.error.status,
+        message: parsedSubcategory.error.message,
+      });
+    }
+    const prevSubcategoryId = service.subcategory_id || null;
+    let nextSubcategoryId = prevSubcategoryId;
+    if (parsedSubcategory.provided) {
+      nextSubcategoryId = parsedSubcategory.oid;
+      if (nextSubcategoryId) {
+        const subcategoryCheck = await assertSubcategoryForService(
+          nextSubcategoryId,
+          nextCategoryId
+        );
+        if (!subcategoryCheck.ok) {
+          return res.status(subcategoryCheck.status).json({
+            success: false,
+            status: subcategoryCheck.status,
+            message: subcategoryCheck.message,
+          });
+        }
+      }
+      updateData.subcategory_id = nextSubcategoryId;
+    }
+
     const activationCheck = await validateGlobalServiceActivation({
       categoryId: nextCategoryId,
       isActive: nextIsActive,
@@ -1054,6 +1203,12 @@ const update = async (req, res) => {
         }
       }
     }
+
+    await syncServiceOnSubcategory(
+      updatedService._id,
+      prevSubcategoryId,
+      updatedService.subcategory_id || nextSubcategoryId
+    );
 
     const updatedRecord = stripServiceLocationFields(updatedService);
     if (typeof req.path === "string" && req.path.includes("/update-request")) {
