@@ -452,6 +452,17 @@ const getDropDown = async (req, res) => {
       filter.state_id = { $in: validStateIds };
     }
 
+    const excludeCityRaw = req.query.exclude_city_id ?? req.query.city_id ?? req.query.cityId;
+    if (excludeCityRaw !== undefined && excludeCityRaw !== null && String(excludeCityRaw).trim() !== '') {
+      const excludeIds = (Array.isArray(excludeCityRaw) ? excludeCityRaw : String(excludeCityRaw).split(','))
+        .map((id) => String(id).trim())
+        .filter((id) => mongoose.Types.ObjectId.isValid(id))
+        .map((id) => new mongoose.Types.ObjectId(id));
+      if (excludeIds.length > 0) {
+        filter._id = { $nin: excludeIds };
+      }
+    }
+
     const { data: cities } = await applyDropDownFilter(City, filter, sort);
 
     res.status(200).json({

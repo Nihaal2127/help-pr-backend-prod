@@ -722,6 +722,19 @@ const parseBooleanInput = (value) => {
   return false;
 };
 
+const excludeHomeCityFromServiceCities = (serviceCities, cityId) => {
+  if (!Array.isArray(serviceCities)) return [];
+  const homeKey =
+    cityId !== undefined && cityId !== null && String(cityId).trim() !== ''
+      ? String(cityId && typeof cityId === 'object' ? cityId._id ?? cityId : cityId)
+      : '';
+  return serviceCities.filter((city) => {
+    const id = city && typeof city === 'object' ? city._id ?? city.id : city;
+    if (!id || !mongoose.Types.ObjectId.isValid(String(id))) return false;
+    return !homeKey || String(id) !== homeKey;
+  });
+};
+
 const findPartnerAddressForUpdate = async (userId, addressId) => {
   if (
     addressId !== undefined &&
@@ -1976,7 +1989,9 @@ const create = async (req, res) => {
       address,
       state_id,
       city_id,
-      ...(userType === 2 ? { service_cities: Array.isArray(service_cities) ? service_cities : [] } : {}),
+      ...(userType === 2
+        ? { service_cities: excludeHomeCityFromServiceCities(service_cities, city_id) }
+        : {}),
       ...(area_id != null &&
       String(area_id).trim() !== '' &&
       mongoose.Types.ObjectId.isValid(String(area_id))
@@ -2503,6 +2518,22 @@ const update = async (req, res) => {
       'experience',
     ]);
 
+    if (Number(user.type) === 2 || Number(updateData.type) === 2) {
+      const nextCityId =
+        updateData.city_id !== undefined ? updateData.city_id : user.city_id;
+      if (updateData.service_cities !== undefined) {
+        updateData.service_cities = excludeHomeCityFromServiceCities(
+          updateData.service_cities,
+          nextCityId
+        );
+      } else if (updateData.city_id !== undefined && Array.isArray(user.service_cities)) {
+        updateData.service_cities = excludeHomeCityFromServiceCities(
+          user.service_cities,
+          nextCityId
+        );
+      }
+    }
+
     Object.keys(updateData).forEach((key) => {
       if (ALLOWED_UPDATE_FIELDS.has(key)) {
         user[key] = updateData[key];
@@ -2915,9 +2946,11 @@ const getById = async (req, res) => {
       response.franchise_email = franchiseEmail;
       response.franchise_cities = franchiseCities;
 
+      const homeCityKey = userCityId ? String(userCityId) : '';
       const serviceCityIds = (Array.isArray(response.service_cities) ? response.service_cities : [])
         .map((city) => (city && typeof city === 'object' ? city._id : city))
-        .filter((id) => id && mongoose.Types.ObjectId.isValid(String(id)));
+        .filter((id) => id && mongoose.Types.ObjectId.isValid(String(id)))
+        .filter((id) => !homeCityKey || String(id) !== homeCityKey);
       const serviceCityRows = serviceCityIds.length
         ? await City.find({ _id: { $in: serviceCityIds } }).select('name').lean()
         : [];
