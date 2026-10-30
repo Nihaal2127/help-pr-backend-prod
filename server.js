@@ -53,6 +53,7 @@ const refundRoutes = require('./routes/refund_routes');
 const partnerPostRoutes = require('./routes/partner_post_routes');
 const partnersRoutes = require('./routes/partners_routes');
 const appointmentRoutes = require('./routes/appointment_routes');
+const auditLogRoutes = require('./routes/audit_log_routes');
 const { notificationRoutes } = require('./src/modules/notifications');
 const mobileRoutes = require('./routes/mobile');
 const postShareRedirectRoutes = require('./routes/post_share_redirect_routes');
@@ -61,6 +62,7 @@ const {
   appleAppSiteAssociationHandler,
 } = require('./routes/well_known_routes');
 const { publicImageUrlsResponseMiddleware } = require('./middleware/public_image_urls_response_middleware');
+const auditLogMiddleware = require('./middleware/audit_log_middleware');
 const { logPublicImageUrlConfig } = require('./helper/publicImageUrl');
 
 // Load environment variables
@@ -123,6 +125,7 @@ app.post(
 // }));
 app.use(express.json({ limit: '10mb' })); // Limit request body size for security
 app.use(publicImageUrlsResponseMiddleware);
+app.use(auditLogMiddleware);
 // app.use(compression()); // Compress response bodies for better performance
 
 // Serve static files from the "uploads" directory
@@ -192,6 +195,7 @@ app.use('/api/refund', refundRoutes);
 app.use('/api/partner-post', partnerPostRoutes);
 app.use('/api/partners', partnersRoutes);
 app.use('/api/appointment', appointmentRoutes);
+app.use('/api/audit-log', auditLogRoutes);
 
 // Chat REST and Socket.IO run on the separate Chat Service (VPS). Lambda provisions via HTTP only.
 
