@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "help-pr-all-apis-merged",
     "name": "Help PR — All APIs (single collection)",
-    "description": "**Single Postman collection** for `help-pr-backend-staging`. Import only this file.\n\n**Generated:** 2026-05-20 via `node postman/merge-all-collections.mjs`\n\n**Sources merged (8) from `postman/archive/`:**\n- `archive/Help-PR-Orders-Module.postman_collection.json`\n- `archive/Help-PR-Order-Charges-Payments.postman_collection.json`\n- `archive/Help-PR-Partner-Franchise-Dropdowns.postman_collection.json`\n- `archive/content-expense-expense-category-management.postman_collection (1).json`\n- `archive/Area-Management.postman_collection.json`\n- `archive/Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json`\n- `archive/Help-PR-Area-Franchise-Subscription.postman_collection.json`\n- `archive/Help-PR-Admin-Dashboard.postman_collection.json`\n- Built-in: Partner payout (4 requests)\n- Built-in: Order refunds (4 requests)\n- Built-in: Partners browse — admin `GET /api/partners` (2 requests)\n- Built-in: Partner post management — admin `/api/partner-post` (4 requests)\n- Built-in: Appointment calendar — admin `/api/appointment` (6 requests)\n\n**Dedup:** Same HTTP method + path template (+ getCount `type` in body) → one request; higher-priority source wins.\n\n**Setup:** Set `baseUrl`. Run **00 — Auth → Admin / Staff → Login** to set `accessToken` / `token`.\n\n**Docs:** `docs/ORDER_MODULE_FRONTEND.md`, `docs/RAZORPAY_ONLINE_PAYMENTS_AUDIT.md`, `docs/SUBSCRIPTION_CHANGE_FRONTEND.md`, `docs/ORDER_GETALL_API_CHANGES.md`, `docs/APPOINTMENT_MODULE_FRONTEND.md`, `docs/PARTNER_PAYOUT_FRONTEND.md`, `docs/PARTNER_POST_FRONTEND.md`, `docs/REFUND_API.md`, `docs/REFUND_FRONTEND.md`, `postman/Help-PR-Refunds.postman_collection.json`\n\n**Mobile:** folder **Mobile → Partner** / **Mobile → User** — run `node postman/build-mobile-folder.mjs` to refresh.\n\n*** Subcategory patch 2026-10-17: added folder **10b — Subcategory (catalog)** (`/api/subcategory`). ***\n\n*** Franchise subcategories patch 2026-10-19: create/update/get bodies include `subcategories` on franchise document. ***\n\n*** Direct order patch 2026-10-24: `direct_order` (boolean, default true) on Service create/update/get/getAll and Partner user create/update/get/getAll. Not on service create-request / update-request. ***",
+    "description": "**Single Postman collection** for `help-pr-backend-staging`. Import only this file.\n\n**Generated:** 2026-05-20 via `node postman/merge-all-collections.mjs`\n\n**Sources merged (8) from `postman/archive/`:**\n- `archive/Help-PR-Orders-Module.postman_collection.json`\n- `archive/Help-PR-Order-Charges-Payments.postman_collection.json`\n- `archive/Help-PR-Partner-Franchise-Dropdowns.postman_collection.json`\n- `archive/content-expense-expense-category-management.postman_collection (1).json`\n- `archive/Area-Management.postman_collection.json`\n- `archive/Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json`\n- `archive/Help-PR-Area-Franchise-Subscription.postman_collection.json`\n- `archive/Help-PR-Admin-Dashboard.postman_collection.json`\n- Built-in: Partner payout (4 requests)\n- Built-in: Order refunds (4 requests)\n- Built-in: Partners browse — admin `GET /api/partners` (2 requests)\n- Built-in: Partner post management — admin `/api/partner-post` (4 requests)\n- Built-in: Appointment calendar — admin `/api/appointment` (6 requests)\n\n**Dedup:** Same HTTP method + path template (+ getCount `type` in body) → one request; higher-priority source wins.\n\n**Setup:** Set `baseUrl`. Run **00 — Auth → Admin / Staff → Login** to set `accessToken` / `token`.\n\n**Docs:** `docs/ORDER_MODULE_FRONTEND.md`, `docs/RAZORPAY_ONLINE_PAYMENTS_AUDIT.md`, `docs/SUBSCRIPTION_CHANGE_FRONTEND.md`, `docs/ORDER_GETALL_API_CHANGES.md`, `docs/APPOINTMENT_MODULE_FRONTEND.md`, `docs/PARTNER_PAYOUT_FRONTEND.md`, `docs/PARTNER_POST_FRONTEND.md`, `docs/REFUND_API.md`, `docs/REFUND_FRONTEND.md`, `postman/Help-PR-Refunds.postman_collection.json`\n\n**Mobile:** folder **Mobile → Partner** / **Mobile → User** — run `node postman/build-mobile-folder.mjs` to refresh.\n\n*** Subcategory patch 2026-10-17: added folder **10b — Subcategory (catalog)** (`/api/subcategory`). ***\n\n*** Franchise subcategories patch 2026-10-19: create/update/get bodies include `subcategories` on franchise document. ***\n\n*** Direct order patch 2026-10-24: `direct_order` (boolean, default true) on Service create/update/get/getAll and Partner user create/update/get/getAll. Not on service create-request / update-request. ***\n\n*** Audit log patch 2026-10-30: folder **46 — Audit log** (`GET /api/audit-log/getAll`) — Super Admin/Staff. Auto-written by mutating /api middleware. ***",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -34,8 +34,8 @@
                   }
                 }
               ],
-          "request": {
-            "method": "POST",
+              "request": {
+                "method": "POST",
                 "header": [
                   {
                     "key": "Content-Type",
@@ -51,85 +51,85 @@
                     }
                   }
                 },
-            "url": {
+                "url": {
                   "raw": "{{baseUrl}}/api/auth/login",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "auth",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
                     "login"
-              ]
-          },
+                  ]
+                },
                 "description": "**POST /api/auth/login** — email + password.\n\nSaves JWT to **`token`** and **`accessToken`**."
               },
               "response": []
-        },
-        {
+            },
+            {
               "name": "Logout",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
                   },
                   {
                     "key": "Content-Type",
                     "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/auth/logout",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "auth",
-                "logout"
-              ]
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/logout",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "logout"
+                  ]
                 },
                 "description": "**POST /api/auth/logout** — requires Bearer JWT."
               },
               "response": []
-        },
-        {
-          "name": "Forgot password",
-          "request": {
-            "auth": {
-              "type": "noauth"
             },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
+            {
+              "name": "Forgot password",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
                   "raw": "{\n  \"email\": \"{{email}}\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
                   "raw": "{{baseUrl}}/api/auth/forgotPassword",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "auth",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
                     "forgotPassword"
                   ]
                 },
@@ -145,30 +145,30 @@
           "item": [
             {
               "name": "User login",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
                   "raw": "{\n  \"phone_number\": \"{{phoneNumber}}\",\n  \"device_token\": \"{{deviceToken}}\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
                 "url": {
                   "raw": "{{baseUrl}}/api/auth/userLogin",
                   "host": [
@@ -186,40 +186,40 @@
             },
             {
               "name": "Send OTP",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
                   "raw": "{\n  \"phone_number\": \"{{phoneNumber}}\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/otp/send_otp",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "otp",
-                "send_otp"
-              ]
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/otp/send_otp",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "otp",
+                    "send_otp"
+                  ]
                 },
                 "description": "**POST /api/otp/send_otp**"
               },
@@ -227,30 +227,30 @@
             },
             {
               "name": "Verify OTP",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
                   "raw": "{\n  \"phone_number\": \"{{phoneNumber}}\",\n  \"otp\": \"{{otp}}\",\n  \"device_token\": \"{{deviceToken}}\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
                 "url": {
                   "raw": "{{baseUrl}}/api/otp/verify_otp",
                   "host": [
@@ -2218,7 +2218,7 @@
               "name": "200 — category request created",
               "originalRequest": {
                 "method": "POST",
-            "header": [],
+                "header": [],
                 "body": {
                   "mode": "raw",
                   "raw": ""
@@ -2238,7 +2238,7 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-            "header": [],
+              "header": [],
               "cookie": [],
               "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Category created successfully.\",\n  \"record\": {\n    \"_id\": \"64a700000000000000000001\",\n    \"name\": \"Requested Category\",\n    \"desc\": \"Description for approvers\",\n    \"category_id\": \"CAT-00001\",\n    \"image_url\": \"https://example.com/cat.png\",\n    \"services\": [\"64a700000000000000000010\"],\n    \"city_ids\": [],\n    \"state_ids\": [],\n    \"is_active\": false,\n    \"is_request\": true,\n    \"approval_status\": \"pending\",\n    \"rejection_reason\": null,\n    \"requested_by\": \"64a700000000000000000099\"\n  }\n}"
             }
@@ -3237,14 +3237,14 @@
                   "mode": "raw",
                   "raw": ""
                 },
-            "url": {
+                "url": {
                   "raw": "{{baseUrl}}/api/service/create-request",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "service",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "service",
                     "create-request"
                   ]
                 }
@@ -4088,7 +4088,7 @@
               ]
             },
             "description": "Public mobile signup — **no JWT**. Different from Create partner."
-            }
+          }
         },
         {
           "name": "Get all partners",
@@ -4324,7 +4324,7 @@
               ]
             },
             "description": "Partner password (`type` 2)."
-            }
+          }
         },
         {
           "name": "Get partner dropdown",
@@ -5114,7 +5114,7 @@
                 "partner_service",
                 "franchiseCategoryServices"
               ]
-          },
+            },
             "description": "POST /api/partner_service/franchiseCategoryServices — body franchise_id + category_id. requireBackoffice JWT."
           },
           "response": [],
@@ -7695,7 +7695,7 @@
               ]
             },
             "description": "**POST /api/quote/create**\n\nInclude **`subcategory_id`** (Category → Subcategory → Service). Optional if omitted.\n\nPricing: `total_service_charge` (or `service_price`). Saves `quoteId`."
-            }
+          }
         },
         {
           "name": "Get all",
@@ -7782,7 +7782,7 @@
               ]
             },
             "description": "View quote. Response includes populated **`subcategory_id`** (`_id`, `name`, `subcategory_id` code)."
-            }
+          }
         },
         {
           "name": "Update",
@@ -7822,7 +7822,7 @@
               ]
             },
             "description": "**PUT /api/quote/update/:id** — while status is **new** or **pending**.\n\nCan change **`category_id` / `subcategory_id` / `service_id`**. Subcategory must belong to category; service must belong to subcategory."
-            }
+          }
         },
         {
           "name": "Delete",
@@ -7848,7 +7848,7 @@
               ]
             },
             "description": "Soft delete quote."
-            }
+          }
         },
         {
           "name": "Get customer quotes",
@@ -7913,7 +7913,7 @@
               ]
             },
             "description": "Approve / release quote to partner."
-            }
+          }
         },
         {
           "name": "Cancel",
@@ -7953,7 +7953,7 @@
               ]
             },
             "description": "Cancel quote."
-            }
+          }
         },
         {
           "name": "Reject",
@@ -13398,6 +13398,276 @@
             }
           },
           "description": "**PUT /api/dispute/update/:id**\n\n`status`: `open` | `in_review` | `resolved` | `closed`\n\nResolving/closing also closes linked chat.",
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "46 — Audit log",
+      "description": "**/api/audit-log** — Append-only audit trail for mutating admin/mobile API calls (POST/PUT/PATCH/DELETE).\n\n**Access:** Super Admin (5) & Staff (6) only.\n\n**Auth:** `Bearer {{accessToken}}` — run **00 — Auth → Admin / Staff → Login** first.\n\n**UI columns:** Create Date (`created_at`), Module, Action, Reference, Description, Performed By (`performed_by_name`), Franchise (`franchise_name`), Status.\n\n**Notes:** Rows are written automatically by `auditLogMiddleware`. GET list does not create audit rows. OTP/dashboard/export/audit-log itself are skipped.",
+      "item": [
+        {
+          "name": "1. Audit log — getAll",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/audit-log/getAll?page=1&limit=10&from_date={{auditFromDate}}&to_date={{auditToDate}}&search={{auditSearch}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "audit-log",
+                "getAll"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "default 1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "default 10, max 100"
+                },
+                {
+                  "key": "from_date",
+                  "value": "{{auditFromDate}}",
+                  "description": "Optional. Aliases: fromDate, from"
+                },
+                {
+                  "key": "to_date",
+                  "value": "{{auditToDate}}",
+                  "description": "Optional. Aliases: toDate, to. Date-only includes end of day."
+                },
+                {
+                  "key": "search",
+                  "value": "{{auditSearch}}",
+                  "description": "Optional. Searches module, action, reference, description, performed_by_name, franchise_name. Aliases: q, keyword"
+                },
+                {
+                  "key": "module",
+                  "value": "Franchise Management",
+                  "disabled": true,
+                  "description": "Exact module label filter"
+                },
+                {
+                  "key": "action",
+                  "value": "update",
+                  "disabled": true,
+                  "description": "Exact action filter (create|update|delete|login|...)"
+                },
+                {
+                  "key": "status",
+                  "value": "success",
+                  "disabled": true,
+                  "description": "success | failed"
+                },
+                {
+                  "key": "franchise_id",
+                  "value": "{{franchiseId}}",
+                  "disabled": true,
+                  "description": "Filter by franchise ObjectId"
+                },
+                {
+                  "key": "performed_by",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filter by user ObjectId"
+                }
+              ]
+            },
+            "description": "**GET /api/audit-log/getAll**\n\nPaginated audit logs for the Admin **Audit Logs** screen.\n\n**200 fields per record:** `s_no`, `created_at`, `module`, `action`, `reference`, `description`, `performed_by` / `performed_by_name`, `franchise_id` / `franchise_name`, `status`, plus `source`, `method`, `path`, `http_status`, `ip`, `error_message`."
+          },
+          "response": [
+            {
+              "name": "200 — list with records",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/audit-log/getAll?page=1&limit=10&from_date=2026-10-01&to_date=2026-10-30&search=franchise",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "audit-log",
+                    "getAll"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "from_date",
+                      "value": "2026-10-01"
+                    },
+                    {
+                      "key": "to_date",
+                      "value": "2026-10-30"
+                    },
+                    {
+                      "key": "search",
+                      "value": "franchise"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Audit log list fetched successfully.\",\n  \"totalItems\": 2,\n  \"totalPages\": 1,\n  \"currentPage\": 1,\n  \"records\": [\n    {\n      \"s_no\": 1,\n      \"_id\": \"671234abcd5678ef90123456\",\n      \"created_at\": \"2026-10-30T08:42:11.234Z\",\n      \"module\": \"Franchise Management\",\n      \"action\": \"update\",\n      \"reference\": \"6a71aa6df7a0024b52cf551b\",\n      \"reference_type\": \"Franchise Management\",\n      \"reference_id\": \"6a71aa6df7a0024b52cf551b\",\n      \"description\": \"PUT /api/franchise/update/6a71aa6df7a0024b52cf551b | Franchise updated successfully\",\n      \"performed_by\": \"64f1a2b3c4d5e6f708901234\",\n      \"performed_by_name\": \"Nihaal FA\",\n      \"franchise_id\": \"6a71aa6df7a0024b52cf551b\",\n      \"franchise_name\": \"TG Franchise\",\n      \"status\": \"success\",\n      \"source\": \"admin\",\n      \"method\": \"PUT\",\n      \"path\": \"/api/franchise/update/6a71aa6df7a0024b52cf551b\",\n      \"http_status\": 200,\n      \"ip\": \"203.0.113.10\",\n      \"error_message\": null\n    },\n    {\n      \"s_no\": 2,\n      \"_id\": \"671234abcd5678ef90123457\",\n      \"created_at\": \"2026-10-30T07:15:02.100Z\",\n      \"module\": \"Order Management\",\n      \"action\": \"create\",\n      \"reference\": \"671111aaaabbbbccccddddee\",\n      \"reference_type\": \"Order Management\",\n      \"reference_id\": \"671111aaaabbbbccccddddee\",\n      \"description\": \"POST /api/order/create | Order created successfully\",\n      \"performed_by\": \"64f1a2b3c4d5e6f708901234\",\n      \"performed_by_name\": \"Nihaal FA\",\n      \"franchise_id\": \"6a71aa6df7a0024b52cf551b\",\n      \"franchise_name\": \"TG Franchise\",\n      \"status\": \"success\",\n      \"source\": \"admin\",\n      \"method\": \"POST\",\n      \"path\": \"/api/order/create\",\n      \"http_status\": 200,\n      \"ip\": \"203.0.113.10\",\n      \"error_message\": null\n    }\n  ]\n}"
+            },
+            {
+              "name": "200 — empty",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Audit log list fetched successfully.\",\n  \"totalItems\": 0,\n  \"totalPages\": 1,\n  \"currentPage\": 1,\n  \"records\": []\n}"
+            },
+            {
+              "name": "403 — not Super Admin/Staff",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Super admin or staff access required.\"\n}"
+            }
+          ],
+          "description": "List audit logs with date range + search (matches Admin Audit Logs filters)."
+        },
+        {
+          "name": "2. Audit log — getAll (failed only)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/audit-log/getAll?page=1&limit=20&status=failed",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "audit-log",
+                "getAll"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "status",
+                  "value": "failed"
+                }
+              ]
+            },
+            "description": "**GET /api/audit-log/getAll?status=failed** — failed mutating API calls only."
+          },
+          "response": []
+        },
+        {
+          "name": "3. Audit log — getAll (by franchise)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/audit-log/getAll?page=1&limit=20&franchise_id={{franchiseId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "audit-log",
+                "getAll"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "franchise_id",
+                  "value": "{{franchiseId}}",
+                  "description": "Set from Franchise APIs"
+                }
+              ]
+            },
+            "description": "**GET /api/audit-log/getAll?franchise_id=** — logs for one franchise. Set `{{franchiseId}}` first."
+          },
           "response": []
         }
       ]
@@ -25007,6 +25277,24 @@
       "key": "otp",
       "value": "",
       "description": "OTP code for Verify OTP"
+    },
+    {
+      "key": "auditFromDate",
+      "value": "2026-10-01",
+      "type": "string",
+      "description": "Audit Logs From Date filter"
+    },
+    {
+      "key": "auditToDate",
+      "value": "2026-10-30",
+      "type": "string",
+      "description": "Audit Logs To Date filter"
+    },
+    {
+      "key": "auditSearch",
+      "value": "",
+      "type": "string",
+      "description": "Audit Logs search (module, reference, action, user, franchise name)"
     }
   ]
 }

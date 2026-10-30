@@ -17,7 +17,7 @@ const sendServiceResult = (res, result) => {
 };
 
 const getAll = async (req, res) => {
-    const result = await auditLogService.listAuditLogs(req.query);
+    const result = await auditLogService.listAuditLogs(req.query, req.user);
     return sendServiceResult(res, result);
 };
 

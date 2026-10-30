@@ -7,26 +7,15 @@ const SKIP_PATH_PREFIXES = [
     '/.well-known',
     '/api/audit-log',
     '/api/otp',
+    '/api/auth',
     '/api/dashboard',
     '/api/export',
     '/api/count',
     '/api/user_home_counts',
+    '/api/notification',
+    '/api/notifications',
+    '/api/notification_settings',
 ];
-
-const SENSITIVE_KEYS = new Set([
-    'password',
-    'new_password',
-    'old_password',
-    'confirm_password',
-    'token',
-    'access_token',
-    'refresh_token',
-    'otp',
-    'authorization',
-    'secret',
-    'card_number',
-    'cvv',
-]);
 
 const MODULE_LABELS = {
     auth: 'Auth',
@@ -72,6 +61,19 @@ const MODULE_LABELS = {
     partners: 'Partner Management',
     appointment: 'Calendar',
     mobile: 'Mobile',
+};
+
+const ACTION_LABELS = {
+    login: 'Login',
+    logout: 'Logout',
+    import: 'Import',
+    create_request: 'Create request',
+    update_request: 'Update request',
+    approve: 'Approve',
+    reject: 'Reject',
+    create: 'Create',
+    update: 'Update',
+    delete: 'Delete',
 };
 
 const titleCaseSegment = (segment) =>
@@ -126,6 +128,11 @@ const shouldSkip = (req) => {
     if (!MUTATING_METHODS.has(method)) return true;
     const pathName = String(req.originalUrl || req.url || '').split('?')[0];
     if (!pathName.startsWith('/api')) return true;
+
+    const lower = pathName.toLowerCase();
+    if (lower.includes('/login') || lower.includes('/logout')) return true;
+    if (lower.includes('/notification')) return true;
+
     return SKIP_PATH_PREFIXES.some(
         (prefix) => pathName === prefix || pathName.startsWith(`${prefix}/`)
     );
@@ -152,52 +159,29 @@ const extractReferenceId = (req, body) => {
     return null;
 };
 
-const redactValue = (key, value) => {
-    if (SENSITIVE_KEYS.has(String(key).toLowerCase())) return '[REDACTED]';
-    if (Array.isArray(value)) {
-        if (value.length > 20) return `[array:${value.length}]`;
-        return value.map((item, i) =>
-            item && typeof item === 'object' ? redactObject(item) : item
-        );
-    }
-    if (value && typeof value === 'object') return redactObject(value);
-    return value;
-};
-
-const redactObject = (obj) => {
-    if (!obj || typeof obj !== 'object') return obj;
-    const out = {};
-    const keys = Object.keys(obj).slice(0, 40);
-    for (const key of keys) {
-        out[key] = redactValue(key, obj[key]);
-    }
-    if (Object.keys(obj).length > 40) out._truncated = true;
-    return out;
-};
-
+/** Clear, short description — no full API path or request/response dump. */
 const buildDescription = (req, statusCode, responseBody) => {
-    const method = String(req.method || '').toUpperCase();
     const pathName = String(req.originalUrl || req.url || '').split('?')[0];
-    const message =
-        responseBody && typeof responseBody === 'object'
-            ? responseBody.message || null
-            : null;
-    const parts = [`${method} ${pathName}`];
-    if (message) parts.push(String(message));
-    if (statusCode >= 400 && responseBody && typeof responseBody === 'object') {
-        const err =
-            responseBody.error ||
-            responseBody.message ||
-            `HTTP ${statusCode}`;
-        parts.push(`Error: ${err}`);
-    } else if (req.body && typeof req.body === 'object' && Object.keys(req.body).length > 0) {
-        try {
-            parts.push(`Payload: ${JSON.stringify(redactObject(req.body))}`);
-        } catch (_) {
-            /* ignore */
-        }
+    const moduleName = resolveModule(pathName);
+    const action = resolveAction(req.method, pathName);
+    const actionLabel = ACTION_LABELS[action] || titleCaseSegment(action);
+
+    const apiMessage =
+        responseBody && typeof responseBody === 'object' && responseBody.message
+            ? String(responseBody.message).trim()
+            : '';
+
+    if (statusCode >= 400) {
+        if (apiMessage) return apiMessage.slice(0, 500);
+        return `${actionLabel} failed for ${moduleName}.`;
     }
-    return parts.join(' | ').slice(0, 2000);
+
+    if (apiMessage) {
+        // Prefer short business message; strip trailing period noise only for display length
+        return apiMessage.slice(0, 500);
+    }
+
+    return `${actionLabel} — ${moduleName}.`.slice(0, 500);
 };
 
 const auditLogMiddleware = (req, res, next) => {

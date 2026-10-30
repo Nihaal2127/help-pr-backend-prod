@@ -3,12 +3,21 @@ const AuditLog = require('../models/audit_log');
 const User = require('../models/user');
 const Franchise = require('../models/franchise');
 const { sanitizeInput } = require('../validator/search_keyword_validator');
+const {
+    loadFranchiseCallerScope,
+    resolveReqUserId,
+} = require('../utils/franchise_user_scope');
 
 const fail = (status, message, extra = {}) => ({ ok: false, status, message, ...extra });
 const ok = (status, data) => ({ ok: true, status, data });
 
 const MAX_PAGE_SIZE = 100;
-const MAX_DESCRIPTION_LEN = 2000;
+const MAX_DESCRIPTION_LEN = 500;
+
+const USER_TYPE_ADMIN = 1;
+const USER_TYPE_EMPLOYEE = 3;
+const USER_TYPE_SUPER_ADMIN = 5;
+const USER_TYPE_STAFF = 6;
 
 const toObjectIdOrNull = (raw) => {
     if (!raw) return null;
@@ -112,7 +121,7 @@ const writeAuditLog = async (payload = {}) => {
                     : null,
             ip: payload.ip ? String(payload.ip).trim() : null,
             error_message: payload.error_message
-                ? truncate(payload.error_message, 1000)
+                ? truncate(payload.error_message, 500)
                 : null,
             created_at: payload.created_at ? new Date(payload.created_at) : new Date(),
         });
@@ -134,7 +143,88 @@ const parseOptionalDate = (raw, fieldName) => {
     return { ok: true, value: d };
 };
 
-const listAuditLogs = async (query = {}) => {
+/**
+ * Role scope for audit list:
+ * - Super admin (5): all logs
+ * - Staff (6): logs by franchise admin, franchise employee, and staff
+ * - Franchise admin (1): logs by users of the same franchise (admin + employees)
+ * - Franchise employee (3): own logs only
+ */
+const resolveAuditListScopeFilter = async (callerUserId) => {
+    const callerId = resolveReqUserId(
+        typeof callerUserId === 'object' && callerUserId !== null
+            ? callerUserId
+            : { id: callerUserId }
+    );
+    if (!callerId) {
+        return { ok: false, status: 401, message: 'Unauthorized' };
+    }
+
+    const scope = await loadFranchiseCallerScope(callerId);
+    if (!scope) {
+        return { ok: false, status: 403, message: 'Access denied.' };
+    }
+
+    const type = Number(scope.user.type);
+
+    if (type === USER_TYPE_SUPER_ADMIN) {
+        return { ok: true, filter: {} };
+    }
+
+    if (type === USER_TYPE_STAFF) {
+        const actors = await User.find({
+            deleted_at: null,
+            type: { $in: [USER_TYPE_ADMIN, USER_TYPE_EMPLOYEE, USER_TYPE_STAFF] },
+        })
+            .select('_id')
+            .lean();
+        const ids = actors.map((u) => u._id);
+        if (ids.length === 0) {
+            return { ok: true, filter: { performed_by: { $in: [] } } };
+        }
+        return { ok: true, filter: { performed_by: { $in: ids } } };
+    }
+
+    if (type === USER_TYPE_ADMIN) {
+        if (!scope.franchiseOid) {
+            return {
+                ok: false,
+                status: 403,
+                message: 'Your account is not linked to a franchise.',
+            };
+        }
+        const actors = await User.find({
+            deleted_at: null,
+            franchise_id: scope.franchiseOid,
+            type: { $in: [USER_TYPE_ADMIN, USER_TYPE_EMPLOYEE] },
+        })
+            .select('_id')
+            .lean();
+        const ids = actors.map((u) => u._id);
+        // Include franchise admin even if franchise_id lookup missed admin row
+        const selfOid = new mongoose.Types.ObjectId(callerId);
+        if (!ids.some((id) => String(id) === callerId)) {
+            ids.push(selfOid);
+        }
+        return {
+            ok: true,
+            filter: { performed_by: { $in: ids } },
+            franchiseOid: scope.franchiseOid,
+        };
+    }
+
+    if (type === USER_TYPE_EMPLOYEE) {
+        return {
+            ok: true,
+            filter: { performed_by: new mongoose.Types.ObjectId(callerId) },
+            franchiseOid: scope.franchiseOid || null,
+        };
+    }
+
+    return { ok: false, status: 403, message: 'Access denied.' };
+};
+
+const listAuditLogs = async (query = {}, callerUserId = null) => {
     try {
         let page = parseInt(query.page, 10);
         let limit = parseInt(query.limit, 10);
@@ -142,15 +232,22 @@ const listAuditLogs = async (query = {}) => {
         if (!Number.isFinite(limit) || limit < 1) limit = 10;
         if (limit > MAX_PAGE_SIZE) limit = MAX_PAGE_SIZE;
 
-        const filter = {};
+        const scopeRes = await resolveAuditListScopeFilter(callerUserId);
+        if (!scopeRes.ok) return fail(scopeRes.status, scopeRes.message);
 
         const from = parseOptionalDate(query.from_date ?? query.fromDate ?? query.from, 'from_date');
         if (!from.ok) return fail(400, from.message);
         const to = parseOptionalDate(query.to_date ?? query.toDate ?? query.to, 'to_date');
         if (!to.ok) return fail(400, to.message);
+
+        const andParts = [];
+        if (scopeRes.filter && Object.keys(scopeRes.filter).length > 0) {
+            andParts.push(scopeRes.filter);
+        }
+
+        const dateFilter = {};
         if (from.value || to.value) {
-            filter.created_at = {};
-            if (from.value) filter.created_at.$gte = from.value;
+            if (from.value) dateFilter.$gte = from.value;
             if (to.value) {
                 const end = new Date(to.value);
                 if (
@@ -161,48 +258,62 @@ const listAuditLogs = async (query = {}) => {
                 ) {
                     end.setHours(23, 59, 59, 999);
                 }
-                filter.created_at.$lte = end;
+                dateFilter.$lte = end;
             }
+            andParts.push({ created_at: dateFilter });
         }
 
         if (query.module) {
-            filter.module = String(query.module).trim();
+            andParts.push({ module: String(query.module).trim() });
         }
         if (query.action) {
-            filter.action = String(query.action).trim();
+            andParts.push({ action: String(query.action).trim() });
         }
         if (query.status) {
             const s = String(query.status).trim().toLowerCase();
-            if (s === 'success' || s === 'failed') filter.status = s;
+            if (s === 'success' || s === 'failed') andParts.push({ status: s });
         }
+
         if (query.franchise_id) {
             const fid = toObjectIdOrNull(query.franchise_id);
             if (!fid) return fail(400, 'Franchise must be a valid MongoDB ObjectId.');
-            filter.franchise_id = fid;
+            // Franchise admin/employee cannot query outside their franchise
+            if (
+                scopeRes.franchiseOid &&
+                String(scopeRes.franchiseOid) !== String(fid)
+            ) {
+                return fail(403, 'Access denied for this franchise.');
+            }
+            andParts.push({ franchise_id: fid });
         }
+
         if (query.performed_by) {
             const uid = toObjectIdOrNull(query.performed_by);
             if (!uid) return fail(400, 'Performed by must be a valid MongoDB ObjectId.');
-            filter.performed_by = uid;
+            andParts.push({ performed_by: uid });
         }
 
         const searchRaw = query.search ?? query.q ?? query.keyword;
         if (searchRaw !== undefined && searchRaw !== null && String(searchRaw).trim() !== '') {
             const pattern = new RegExp(sanitizeInput(String(searchRaw).trim()), 'i');
-            filter.$or = [
-                { module: { $regex: pattern } },
-                { action: { $regex: pattern } },
-                { reference: { $regex: pattern } },
-                { description: { $regex: pattern } },
-                { performed_by_name: { $regex: pattern } },
-                { franchise_name: { $regex: pattern } },
-            ];
+            andParts.push({
+                $or: [
+                    { module: { $regex: pattern } },
+                    { action: { $regex: pattern } },
+                    { reference: { $regex: pattern } },
+                    { description: { $regex: pattern } },
+                    { performed_by_name: { $regex: pattern } },
+                    { franchise_name: { $regex: pattern } },
+                ],
+            });
         }
+
+        const finalFilter = andParts.length === 0 ? {} : andParts.length === 1 ? andParts[0] : { $and: andParts };
 
         const skip = (page - 1) * limit;
         const [totalItems, rows] = await Promise.all([
-            AuditLog.countDocuments(filter),
-            AuditLog.find(filter).sort({ created_at: -1 }).skip(skip).limit(limit).lean(),
+            AuditLog.countDocuments(finalFilter),
+            AuditLog.find(finalFilter).sort({ created_at: -1 }).skip(skip).limit(limit).lean(),
         ]);
 
         const totalPages = Math.max(1, Math.ceil(totalItems / limit) || 1);
