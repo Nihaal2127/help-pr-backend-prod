@@ -3,12 +3,12 @@ const Category = require('../../../models/category');
 const Service = require('../../../models/service');
 const City = require('../../../models/city');
 const User = require('../../../models/user');
-const { resolveFranchiseEffectiveCatalog } = require('../../../utils/catalog_availability_resolver');
+const { fieldLabel } = require('../../../utils/field_labels');
 const {
   resolveFranchiseFromLocation,
-  loadSubscribedFranchisePartners,
+  loadSubscribedCityPartners,
   loadRandomPlatinumPartnerBanners,
-  collectEffectivePartnerOfferings,
+  resolveCityEffectiveCatalog,
   mapFranchisePartnerRecords,
   loadActiveSubcategoriesForCategories,
   nestMappedServicesUnderSubcategories,
@@ -74,19 +74,26 @@ const buildServiceOfferingStats = (effectiveRows) => {
   return statsByServiceId;
 };
 
-const buildFranchiseCategories = async (
-  franchiseId,
-  servicePrice = 0,
-  subscribedPartnerIds = []
-) => {
-  const resolved = await resolveFranchiseEffectiveCatalog(franchiseId);
+const parseOptionalCityId = (raw) => {
+  if (raw === undefined || raw === null || String(raw).trim() === '') {
+    return { ok: true, value: null };
+  }
+  const cityId = String(raw).trim();
+  if (!mongoose.Types.ObjectId.isValid(cityId)) {
+    return { ok: false, status: 400, message: `${fieldLabel('city_id')} must be a valid ObjectId.` };
+  }
+  return { ok: true, value: cityId };
+};
+
+const buildCityCategories = async (cityId, servicePrice = 0, subscribedPartners = []) => {
+  const resolved = await resolveCityEffectiveCatalog(cityId, subscribedPartners);
   if (!resolved.ok) {
     return fail(resolved.status, resolved.message);
   }
 
   const ids = resolved.effectiveCategoryIds || [];
   if (ids.length === 0) {
-    return { ok: true, categories: [], effectiveOfferings: [] };
+    return { ok: true, categories: [], effectiveOfferings: resolved.effectiveOfferings || [] };
   }
 
   const effectiveSvcSet = new Set((resolved.effectiveServiceIds || []).map((x) => String(x)));
@@ -122,11 +129,7 @@ const buildFranchiseCategories = async (
   const serviceById = new Map(serviceDocs.map((s) => [String(s._id), s]));
   const subcategories = await loadActiveSubcategoriesForCategories(categories.map((c) => c._id));
 
-  const effectiveOfferings = await collectEffectivePartnerOfferings(
-    franchiseId,
-    [...effectiveSvcSet],
-    subscribedPartnerIds
-  );
+  const effectiveOfferings = resolved.effectiveOfferings || [];
   const offeringStatsByServiceId = buildServiceOfferingStats(effectiveOfferings);
 
   const mapServiceRecord = (s) => {
@@ -201,14 +204,17 @@ const persistCustomerSelectedLocation = async (userId, franchiseCtx) => {
   await User.updateOne({ _id: userId, deleted_at: null }, { $set: setFields });
 };
 
-const getHomeForLocation = async ({ location, userId }) => {
+const getHomeForLocation = async ({ location, userId, cityId }) => {
   try {
     if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) {
       return fail(401, 'Invalid token.');
     }
 
+    const parsedCityId = parseOptionalCityId(cityId);
+    if (!parsedCityId.ok) return fail(parsedCityId.status, parsedCityId.message);
+
     const [franchiseCtx, orders, home_counts] = await Promise.all([
-      resolveFranchiseFromLocation(location, { requireFranchise: false, byCity: true }),
+      resolveFranchiseFromLocation(location, { requireFranchise: false, byCity: false }),
       loadCustomerHomeOrders(userId),
       loadHomeCounts(),
     ]);
@@ -216,13 +222,31 @@ const getHomeForLocation = async ({ location, userId }) => {
 
     await persistCustomerSelectedLocation(userId, franchiseCtx);
 
-    if (!franchiseCtx.franchise) {
+    let catalogCityId = parsedCityId.value;
+    let servicePrice = 0;
+    if (catalogCityId) {
+      const city = await City.findOne({ _id: catalogCityId, deleted_at: null })
+        .select('city_service_price')
+        .lean();
+      if (!city) {
+        return fail(404, 'City not found.');
+      }
+      servicePrice = city.city_service_price ?? 0;
+    } else {
+      catalogCityId = franchiseCtx.area?.city_id ?? null;
+      if (catalogCityId) {
+        const city = await City.findById(catalogCityId).select('city_service_price').lean();
+        servicePrice = city?.city_service_price ?? 0;
+      }
+    }
+
+    if (!catalogCityId) {
       return ok(200, {
         message: 'Home data fetched successfully.',
         data: {
           services_available: false,
-          franchise_id: null,
-          franchise_name: null,
+          franchise_id: franchiseCtx.franchise?._id ?? null,
+          franchise_name: franchiseCtx.franchise?.name ?? null,
           location: buildResolvedLocation(franchiseCtx),
           categories: [],
           partners: [],
@@ -233,27 +257,20 @@ const getHomeForLocation = async ({ location, userId }) => {
       });
     }
 
-    const city = await City.findById(franchiseCtx.area.city_id)
-      .select('city_service_price')
-      .lean();
-    const servicePrice = city?.city_service_price ?? 0;
-
-    const locationCityId = franchiseCtx.area.city_id;
-
     const [subscribed, banners] = await Promise.all([
-      loadSubscribedFranchisePartners(franchiseCtx.franchise._id, {
+      loadSubscribedCityPartners(catalogCityId, {
         limit: HOME_PARTNERS_LIMIT,
-        cityId: locationCityId,
       }),
-      loadRandomPlatinumPartnerBanners(franchiseCtx.franchise._id, HOME_BANNERS_LIMIT, {
-        cityId: locationCityId,
+      loadRandomPlatinumPartnerBanners(null, HOME_BANNERS_LIMIT, {
+        cityOnly: true,
+        cityId: catalogCityId,
       }),
     ]);
 
-    const catalogResult = await buildFranchiseCategories(
-      franchiseCtx.franchise._id,
+    const catalogResult = await buildCityCategories(
+      catalogCityId,
       servicePrice,
-      subscribed.partnerIds
+      subscribed.partners
     );
     if (!catalogResult.ok) return catalogResult;
 
@@ -263,13 +280,15 @@ const getHomeForLocation = async ({ location, userId }) => {
       catalogResult.effectiveOfferings || []
     );
     const partnersWithRatings = await enrichPartnerListRecordsWithServiceRatings(partners);
+    const hasCatalog =
+      catalogResult.categories.length > 0 || partnersWithRatings.length > 0;
 
     return ok(200, {
       message: 'Home data fetched successfully.',
       data: {
-        services_available: true,
-        franchise_id: franchiseCtx.franchise._id,
-        franchise_name: franchiseCtx.franchise.name,
+        services_available: hasCatalog,
+        franchise_id: franchiseCtx.franchise?._id ?? null,
+        franchise_name: franchiseCtx.franchise?.name ?? null,
         location: buildResolvedLocation(franchiseCtx),
         categories: catalogResult.categories,
         partners: partnersWithRatings,

@@ -1,5 +1,5 @@
 const {
-  listFranchisePartnersPaginated,
+  listMobilePartnersPaginated,
   getPartnerProfileForCustomer,
 } = require('../../../services/mobile/user/partners_service');
 const {
@@ -20,7 +20,7 @@ const {
 } = require('../../../utils/mobile_controller_helpers');
 
 const listPartnersHandler = wrapMobileHandler('mobile user partners list', async (req, res) => {
-  const result = await listFranchisePartnersPaginated(req.query);
+  const result = await listMobilePartnersPaginated(req.query);
   return sendPaginatedListWithNestedData(res, result, (listData) => ({
     franchise_id: listData.franchise_id,
     franchise_name: listData.franchise_name,

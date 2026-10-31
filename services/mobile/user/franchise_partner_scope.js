@@ -22,6 +22,17 @@ const { attachPartnerRatingFields } = require('../../../utils/rating_format');
 
 const { fail } = require('../../../utils/mobile_service_result');
 
+const ACTIVE_PARTNER_USER_FILTER = {
+  type: USER_TYPE_PARTNER,
+  verification_status: 2,
+  is_active: true,
+  is_blocked: { $ne: true },
+  deleted_at: null,
+};
+
+const SUBSCRIBED_PARTNER_SELECT =
+  'name profile_url user_id experience average_rating rating_count direct_order franchise_id';
+
 const ACTIVE_SUBCATEGORY_FILTER = {
   deleted_at: null,
   is_active: true,
@@ -322,29 +333,22 @@ const buildPartnerServesCityFilter = (cityId) => {
   };
 };
 
-/**
- * Franchise partners with a non-expired active subscription on an active plan.
- * Sorted highest plan priority first, then name. Optional `limit` caps results.
- * Optional `cityId` keeps partners whose home city or service_cities include that city.
- */
-const loadSubscribedFranchisePartners = async (franchiseId, options = {}) => {
-  const { limit, cityId } = options;
-
-  const partnerFilter = {
-    franchise_id: franchiseId,
-    type: USER_TYPE_PARTNER,
-    verification_status: 2,
-    is_active: true,
-    is_blocked: { $ne: true },
-    deleted_at: null,
-  };
-  const cityFilter = buildPartnerServesCityFilter(cityId);
-  if (cityFilter) {
-    Object.assign(partnerFilter, cityFilter);
+/** Partners whose home city or service_cities include this city (no franchise scope). */
+const buildPartnerInCityFilter = (cityId) => {
+  if (cityId == null || !mongoose.Types.ObjectId.isValid(String(cityId))) {
+    return null;
   }
+  const cityOid = new mongoose.Types.ObjectId(String(cityId));
+  return {
+    $or: [{ city_id: cityOid }, { service_cities: cityOid }],
+  };
+};
+
+const loadSubscribedPartnersByFilter = async (partnerFilter, options = {}) => {
+  const { limit } = options;
 
   const partnerRows = await User.find(partnerFilter)
-    .select('name profile_url user_id experience average_rating rating_count direct_order')
+    .select(SUBSCRIBED_PARTNER_SELECT)
     .lean();
 
   if (partnerRows.length === 0) {
@@ -405,6 +409,42 @@ const loadSubscribedFranchisePartners = async (franchiseId, options = {}) => {
   };
 };
 
+/**
+ * Franchise partners with a non-expired active subscription on an active plan.
+ * Sorted highest plan priority first, then name. Optional `limit` caps results.
+ * Optional `cityId` keeps partners whose home city or service_cities include that city.
+ */
+const loadSubscribedFranchisePartners = async (franchiseId, options = {}) => {
+  const { limit, cityId } = options;
+
+  const partnerFilter = {
+    ...ACTIVE_PARTNER_USER_FILTER,
+    franchise_id: franchiseId,
+  };
+  const cityFilter = buildPartnerServesCityFilter(cityId);
+  if (cityFilter) {
+    Object.assign(partnerFilter, cityFilter);
+  }
+
+  return loadSubscribedPartnersByFilter(partnerFilter, { limit });
+};
+
+/**
+ * Subscribed partners who serve a city, across franchises.
+ * Match is home city_id or service_cities — not franchise membership.
+ */
+const loadSubscribedCityPartners = async (cityId, options = {}) => {
+  const cityFilter = buildPartnerInCityFilter(cityId);
+  if (!cityFilter) {
+    return { partnerIds: [], partners: [], planByPartnerId: new Map() };
+  }
+
+  return loadSubscribedPartnersByFilter(
+    { ...ACTIVE_PARTNER_USER_FILTER, ...cityFilter },
+    { limit: options.limit }
+  );
+};
+
 const HOME_PLATINUM_BANNERS_LIMIT = 5;
 
 const pickRandomItems = (items, count) => {
@@ -420,8 +460,9 @@ const pickRandomItems = (items, count) => {
 };
 
 /**
- * Up to `limit` random banner URLs from active platinum partners in the franchise.
- * Franchise-scoped; one banner per partner; empty when none qualify.
+ * Up to `limit` random banner URLs from active platinum partners.
+ * Franchise-scoped unless `options.cityOnly` (then city-wide, ignores franchise_id).
+ * One banner per partner; empty when none qualify.
  * Optional `options.cityId` keeps partners whose home city or service_cities include that city.
  */
 const loadRandomPlatinumPartnerBanners = async (
@@ -429,17 +470,19 @@ const loadRandomPlatinumPartnerBanners = async (
   limit = HOME_PLATINUM_BANNERS_LIMIT,
   options = {}
 ) => {
-  const partnerFilter = {
-    franchise_id: franchiseId,
-    type: USER_TYPE_PARTNER,
-    verification_status: 2,
-    is_active: true,
-    is_blocked: { $ne: true },
-    deleted_at: null,
-  };
-  const cityFilter = buildPartnerServesCityFilter(options.cityId);
-  if (cityFilter) {
+  const partnerFilter = { ...ACTIVE_PARTNER_USER_FILTER };
+  if (options.cityOnly) {
+    const cityFilter = buildPartnerInCityFilter(options.cityId);
+    if (!cityFilter) {
+      return [];
+    }
     Object.assign(partnerFilter, cityFilter);
+  } else {
+    partnerFilter.franchise_id = franchiseId;
+    const cityFilter = buildPartnerServesCityFilter(options.cityId);
+    if (cityFilter) {
+      Object.assign(partnerFilter, cityFilter);
+    }
   }
 
   const partnerRows = await User.find(partnerFilter)
@@ -600,6 +643,101 @@ const collectEffectivePartnerOfferings = async (
   }
 
   return effectiveRows;
+};
+
+const collectEffectiveOfferingsForPartners = async (partners) => {
+  const partnerIdsByFranchise = new Map();
+  for (const partner of partners || []) {
+    if (!partner?.franchise_id) continue;
+    const franchiseKey = String(partner.franchise_id);
+    if (!partnerIdsByFranchise.has(franchiseKey)) {
+      partnerIdsByFranchise.set(franchiseKey, []);
+    }
+    partnerIdsByFranchise.get(franchiseKey).push(partner._id);
+  }
+
+  const effectiveOfferings = [];
+  for (const [franchiseId, partnerIds] of partnerIdsByFranchise) {
+    const catalogResolved = await resolveFranchiseEffectiveCatalog(franchiseId);
+    if (!catalogResolved.ok) continue;
+    const effectiveServiceIds = (catalogResolved.effectiveServiceIds || []).map((id) => String(id));
+    const offerings = await collectEffectivePartnerOfferings(
+      franchiseId,
+      effectiveServiceIds,
+      partnerIds
+    );
+    effectiveOfferings.push(...offerings);
+  }
+  return effectiveOfferings;
+};
+
+/**
+ * City catalog = union of effective catalogs for franchises covering the city
+ * plus franchises of partners who serve the city. Offerings are per-partner franchise.
+ */
+const resolveCityEffectiveCatalog = async (cityId, partners = []) => {
+  const cityFranchises =
+    cityId && mongoose.Types.ObjectId.isValid(String(cityId))
+      ? await Franchise.find({
+          deleted_at: null,
+          is_active: true,
+          city_id: cityId,
+        })
+          .select('_id')
+          .lean()
+      : [];
+
+  const franchiseIds = new Set(cityFranchises.map((row) => String(row._id)));
+  const partnerIdsByFranchise = new Map();
+  for (const partner of partners || []) {
+    if (!partner?.franchise_id) continue;
+    const franchiseKey = String(partner.franchise_id);
+    franchiseIds.add(franchiseKey);
+    if (!partnerIdsByFranchise.has(franchiseKey)) {
+      partnerIdsByFranchise.set(franchiseKey, []);
+    }
+    partnerIdsByFranchise.get(franchiseKey).push(partner._id);
+  }
+
+  const effectiveCategoryIds = [];
+  const effectiveServiceIds = [];
+  const seenCategories = new Set();
+  const seenServices = new Set();
+  const effectiveOfferings = [];
+
+  for (const franchiseId of franchiseIds) {
+    const resolved = await resolveFranchiseEffectiveCatalog(franchiseId);
+    if (!resolved.ok) continue;
+
+    for (const id of resolved.effectiveCategoryIds || []) {
+      const key = String(id);
+      if (seenCategories.has(key)) continue;
+      seenCategories.add(key);
+      effectiveCategoryIds.push(id);
+    }
+    for (const id of resolved.effectiveServiceIds || []) {
+      const key = String(id);
+      if (seenServices.has(key)) continue;
+      seenServices.add(key);
+      effectiveServiceIds.push(id);
+    }
+
+    const partnerIds = partnerIdsByFranchise.get(franchiseId) || [];
+    if (partnerIds.length === 0) continue;
+    const offerings = await collectEffectivePartnerOfferings(
+      franchiseId,
+      (resolved.effectiveServiceIds || []).map((id) => String(id)),
+      partnerIds
+    );
+    effectiveOfferings.push(...offerings);
+  }
+
+  return {
+    ok: true,
+    effectiveCategoryIds,
+    effectiveServiceIds,
+    effectiveOfferings,
+  };
 };
 
 const groupOfferingsByPartner = (effectiveRows) => {
@@ -976,8 +1114,11 @@ module.exports = {
   resolveFranchiseForArea,
   resolveFranchiseById,
   loadSubscribedFranchisePartners,
+  loadSubscribedCityPartners,
   loadRandomPlatinumPartnerBanners,
   collectEffectivePartnerOfferings,
+  collectEffectiveOfferingsForPartners,
+  resolveCityEffectiveCatalog,
   loadActiveSubcategoriesForCategories,
   nestMappedServicesUnderSubcategories,
   mapFranchisePartnerRecords,

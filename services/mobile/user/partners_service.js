@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const { resolveFranchiseEffectiveCatalog } = require('../../../utils/catalog_availability_resolver');
 const { PLAN_NAMES } = require('../../../models/subscription_plan');
 const CustomerSavedPartner = require('../../../models/customer_saved_partner');
+const City = require('../../../models/city');
 const User = require('../../../models/user');
 const OrderService = require('../../../models/order_services');
 const { USER_TYPE_PARTNER } = require('../../../constants/user_types');
@@ -10,7 +11,9 @@ const { fieldLabel } = require('../../../utils/field_labels');
 const {
   resolveFranchiseById,
   loadSubscribedFranchisePartners,
+  loadSubscribedCityPartners,
   collectEffectivePartnerOfferings,
+  collectEffectiveOfferingsForPartners,
   mapFranchisePartnerRecords,
   buildPartnerDetailCatalog,
 } = require('./franchise_partner_scope');
@@ -309,6 +312,51 @@ const buildFranchisePartnerListRecords = async (franchiseId, options = {}) => {
   });
 };
 
+const buildCityPartnerListRecords = async (cityId, options = {}) => {
+  const publishedOnly = options.publishedOnly !== false;
+  const subscribed = await loadSubscribedCityPartners(cityId);
+
+  if (subscribed.partners.length === 0) {
+    return ok(200, {
+      franchise_id: null,
+      franchise_name: null,
+      records: [],
+    });
+  }
+
+  const [effectiveOfferings, engagementByPartnerId] = await Promise.all([
+    collectEffectiveOfferingsForPartners(subscribed.partners),
+    getPartnersEngagementCountsByPartnerIds(
+      subscribed.partners.map((p) => p._id),
+      { publishedOnly }
+    ),
+  ]);
+
+  const records = mapFranchisePartnerRecords(
+    subscribed.partners,
+    subscribed.planByPartnerId,
+    effectiveOfferings
+  ).map((record) => ({
+    ...record,
+    ...(engagementByPartnerId.get(String(record._id)) || {
+      posts_count: 0,
+      images_count: 0,
+      video_count: 0,
+      likes_count: 0,
+      shares_count: 0,
+      saves_count: 0,
+    }),
+  }));
+
+  const recordsWithRatings = await enrichPartnerListRecordsWithServiceRatings(records);
+
+  return ok(200, {
+    franchise_id: null,
+    franchise_name: null,
+    records: recordsWithRatings,
+  });
+};
+
 const isPartnerSavedByUser = async (userId, partnerId) => {
   if (!userId || !partnerId) return false;
   const row = await CustomerSavedPartner.findOne({
@@ -318,6 +366,67 @@ const isPartnerSavedByUser = async (userId, partnerId) => {
     .select('_id')
     .lean();
   return Boolean(row);
+};
+
+const listCityPartnersPaginated = async (query, options = {}) => {
+  try {
+    const cityKey = query.city_id != null ? String(query.city_id).trim() : '';
+    if (!cityKey || !mongoose.Types.ObjectId.isValid(cityKey)) {
+      return fail(400, `${fieldLabel('city_id')} must be a valid ObjectId.`);
+    }
+
+    const city = await City.findOne({ _id: cityKey, deleted_at: null }).select('_id').lean();
+    if (!city) {
+      return fail(404, 'City not found.');
+    }
+
+    const parsed = parsePartnersListQuery(query);
+    if (!parsed.ok) return fail(parsed.status, parsed.message);
+
+    const publishedOnly = options.publishedOnly !== false;
+    const built = await buildCityPartnerListRecords(city._id, { publishedOnly });
+    if (!built.ok) return built;
+    const builtData = built.data || {};
+    if (!Array.isArray(builtData.records)) {
+      console.error('listCityPartnersPaginated invalid records shape', {
+        city_id: String(city._id),
+        records_type: typeof builtData.records,
+      });
+      return fail(500, 'Technical issue. Please try again..');
+    }
+
+    const paginated = paginatePartnerRecords(builtData.records, {
+      filters: parsed.filters,
+      serviceId: parsed.serviceId,
+      categoryId: parsed.categoryId,
+      page: parsed.page,
+      limit: parsed.limit,
+    });
+
+    return ok(200, {
+      message: 'Partners fetched successfully.',
+      data: {
+        franchise_id: null,
+        franchise_name: null,
+        ...paginated,
+      },
+    });
+  } catch (err) {
+    console.error('listCityPartnersPaginated', {
+      message: err?.message,
+      stack: err?.stack,
+      query,
+    });
+    return fail(500, 'Technical issue. Please try again..');
+  }
+};
+
+const listMobilePartnersPaginated = async (query, options = {}) => {
+  const cityId = query?.city_id != null ? String(query.city_id).trim() : '';
+  if (cityId) {
+    return listCityPartnersPaginated(query, options);
+  }
+  return listFranchisePartnersPaginated(query, options);
 };
 
 const listFranchisePartnersPaginated = async (query, options = {}) => {
@@ -519,6 +628,7 @@ const getPartnerProfileForCustomer = async (partnerId, franchiseId, userId = nul
 };
 
 module.exports = {
+  listMobilePartnersPaginated,
   listFranchisePartnersPaginated,
   getPartnerProfileForCustomer,
   parsePartnersListQuery,

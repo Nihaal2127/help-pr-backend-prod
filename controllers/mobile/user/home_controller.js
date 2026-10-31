@@ -5,6 +5,7 @@ const getHomeHandler = wrapMobileHandler('mobile user home', async (req, res) =>
   const result = await getHomeForLocation({
     location: req.query.location,
     userId: req.user?.id,
+    cityId: req.query.city_id,
   });
 
   if (!result.ok) {
