@@ -318,9 +318,16 @@ const buildFranchiseRequestServices = async (franchiseOid) => {
         requested_by: { $in: franchiseUserIds },
     })
         .select(
-            'name desc image_url category_id is_active is_request service_id tax commission payment_type minimum_deposit approval_status rejection_reason requested_by created_at updated_at'
+            'name desc image_url category_id subcategory_id is_active is_request service_id tax commission payment_type minimum_deposit approval_status rejection_reason requested_by created_at updated_at'
         )
-        .populate({ path: 'category_id', select: categoryPopulateSelect, match: { deleted_at: null } })
+        .populate([
+            { path: 'category_id', select: categoryPopulateSelect, match: { deleted_at: null } },
+            {
+                path: 'subcategory_id',
+                select: 'name subcategory_id category_id is_active is_request approval_status rejection_reason',
+                match: { deleted_at: null },
+            },
+        ])
         .sort({ name: 1 })
         .lean();
 

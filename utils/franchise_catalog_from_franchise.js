@@ -85,10 +85,13 @@ const loadGloballyActiveServiceRows = async () =>
     Service.find(GLOBAL_ACTIVE_SERVICE_LIST_FILTER).select('_id category_id').lean();
 
 const GLOBAL_ACTIVE_SERVICE_LIST_SELECT =
-    'name desc image_url category_id is_active is_request approval_status rejection_reason';
+    'name desc image_url category_id subcategory_id is_active is_request approval_status rejection_reason';
+
+const GLOBAL_ACTIVE_SUBCATEGORY_POPULATE_SELECT =
+    'name subcategory_id category_id is_active is_request approval_status rejection_reason';
 
 /**
- * Globally active services with category_id populated (batched $in for large catalogs).
+ * Globally active services with category_id / subcategory_id populated (batched $in for large catalogs).
  */
 const loadGloballyActiveServicesPopulated = async (
     categorySelect = 'name desc image_url is_active is_request category_id approval_status rejection_reason'
@@ -102,6 +105,11 @@ const loadGloballyActiveServicesPopulated = async (
         select: categorySelect,
         match: { deleted_at: null },
     };
+    const subcategoryPopulate = {
+        path: 'subcategory_id',
+        select: GLOBAL_ACTIVE_SUBCATEGORY_POPULATE_SELECT,
+        match: { deleted_at: null },
+    };
 
     const BATCH = 500;
     const out = [];
@@ -109,7 +117,7 @@ const loadGloballyActiveServicesPopulated = async (
         const batch = ids.slice(i, i + BATCH);
         const rows = await Service.find({ _id: { $in: batch } })
             .select(GLOBAL_ACTIVE_SERVICE_LIST_SELECT)
-            .populate(categoryPopulate)
+            .populate([categoryPopulate, subcategoryPopulate])
             .lean();
         for (const svc of rows) {
             if (svc.category_id) out.push(svc);
