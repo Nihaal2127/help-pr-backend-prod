@@ -21,6 +21,12 @@ const getAll = async (req, res) => {
     return sendServiceResult(res, result);
 };
 
+const update = async (req, res) => {
+    const result = await franchiseSubcategoryService.update(req.params.id, req.body, req.user?.id);
+    return sendServiceResult(res, result);
+};
+
 module.exports = {
     getAll,
+    update,
 };

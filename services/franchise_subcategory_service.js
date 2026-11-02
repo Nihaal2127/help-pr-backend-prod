@@ -8,7 +8,11 @@ const {
     annotateCatalogRowWithAvailability,
     isGlobalCatalogRowActive,
 } = require('../utils/catalog_availability_resolver');
-const { resolveFranchiseCatalogListScope } = require('../utils/franchise_user_scope');
+const {
+    resolveFranchiseCatalogListScope,
+    loadFranchiseCallerScope,
+} = require('../utils/franchise_user_scope');
+const { parseObjectId } = require('../utils/franchise_catalog_lists');
 const {
     buildEnabledMapFromFranchiseIds,
     GLOBAL_ACTIVE_CATEGORY_FILTER,
@@ -357,6 +361,93 @@ const list = async (query, userId) => {
     }
 };
 
+const update = async (id, body, userId) => {
+    try {
+        const parsedSub = parseObjectId(id, 'id');
+        if (!parsedSub.ok) return fail(400, parsedSub.message);
+
+        const parsedFranchise = parseObjectId(body.franchise_id, 'franchise_id');
+        if (!parsedFranchise.ok) return fail(400, parsedFranchise.message);
+
+        const parsedCategory = parseObjectId(body.category_id, 'category_id');
+        if (!parsedCategory.ok) return fail(400, parsedCategory.message);
+
+        const activeParsed = parseOptionalQueryBool(body.is_active, 'is_active');
+        if (!activeParsed.ok) return fail(400, activeParsed.message);
+        if (!activeParsed.present) {
+            return fail(400, `${fieldLabel('is_active')} is required.`);
+        }
+
+        const scope = await loadFranchiseCallerScope(userId);
+        if (!scope) return fail(403, 'Access denied.');
+        if (scope.isFranchiseAdmin || scope.isEmployee) {
+            if (!scope.franchiseOid || String(scope.franchiseOid) !== String(parsedFranchise.oid)) {
+                return fail(403, 'Access denied.');
+            }
+            if (scope.isEmployee) {
+                return fail(403, 'Franchise employees cannot update subcategory mapping.');
+            }
+        } else if (!scope.isSuper) {
+            return fail(403, 'Access denied.');
+        }
+
+        const franchise = await Franchise.findOne({
+            _id: parsedFranchise.oid,
+            deleted_at: null,
+        }).select(FRANCHISE_LIST_SELECT);
+        if (!franchise) return fail(404, 'Franchise not found.');
+
+        const subcategory = await Subcategory.findOne({
+            _id: parsedSub.oid,
+            deleted_at: null,
+        }).lean();
+        if (!subcategory) return fail(404, 'Subcategory not found.');
+        if (
+            !subcategory.category_id ||
+            String(subcategory.category_id) !== String(parsedCategory.oid)
+        ) {
+            return fail(400, 'Subcategory does not belong to the selected category.');
+        }
+
+        if (activeParsed.value) {
+            await Franchise.updateOne(
+                { _id: franchise._id, deleted_at: null },
+                {
+                    $addToSet: { subcategories: parsedSub.oid },
+                    $set: { updated_at: new Date() },
+                }
+            );
+        } else {
+            await Franchise.updateOne(
+                { _id: franchise._id, deleted_at: null },
+                {
+                    $pull: { subcategories: parsedSub.oid },
+                    $set: { updated_at: new Date() },
+                }
+            );
+        }
+
+        const updatedFranchise = await Franchise.findOne({
+            _id: franchise._id,
+            deleted_at: null,
+        })
+            .select(FRANCHISE_LIST_SELECT)
+            .lean();
+
+        const [record] = await annotateSubcategoryRows([subcategory], updatedFranchise._id);
+
+        return ok(200, {
+            message: 'Franchise subcategory updated successfully.',
+            franchise: franchiseMetaFromDoc(updatedFranchise),
+            record,
+        });
+    } catch (error) {
+        console.error('franchiseSubcategory.update', error.message);
+        return fail(500, 'Technical issue. Please try again..');
+    }
+};
+
 module.exports = {
     list,
+    update,
 };
