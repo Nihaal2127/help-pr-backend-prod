@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const { fieldLabel } = require('../utils/field_labels');
 const Franchise = require('../models/franchise');
+const Category = require('../models/category');
 const Subcategory = require('../models/subcategory');
 const Service = require('../models/service');
 const User = require('../models/user');
@@ -64,6 +65,28 @@ const resolveFranchiseMappingListQuery = (query) => {
 };
 
 const toIdStr = (id) => (id ? id.toString() : '');
+
+const loadCategoryNameMap = async (rows) => {
+    const map = new Map();
+    if (!Array.isArray(rows) || rows.length === 0) return map;
+
+    const uniqueIds = [
+        ...new Set(rows.map((row) => toIdStr(row.category_id)).filter(Boolean)),
+    ];
+    if (uniqueIds.length === 0) return map;
+
+    const categories = await Category.find({
+        _id: { $in: uniqueIds.map((id) => new mongoose.Types.ObjectId(id)) },
+        deleted_at: null,
+    })
+        .select('name')
+        .lean();
+
+    for (const category of categories) {
+        map.set(toIdStr(category._id), category.name ?? null);
+    }
+    return map;
+};
 
 const loadServicesGroupedBySubcategoryId = async (subcategories) => {
     const map = new Map();
@@ -187,16 +210,21 @@ const annotateSubcategoryRows = async (rows, franchiseOid) => {
         .select('subcategories')
         .lean();
     const franchiseEnabledMap = buildEnabledMapFromFranchiseIds(franchise?.subcategories || []);
-    const svcMap = await loadServicesGroupedBySubcategoryId(rows);
+    const [svcMap, categoryNameMap] = await Promise.all([
+        loadServicesGroupedBySubcategoryId(rows),
+        loadCategoryNameMap(rows),
+    ]);
 
     return rows.map((sub) => {
         const key = sub._id.toString();
+        const categoryKey = toIdStr(sub.category_id);
         const globalActive = isGlobalCatalogRowActive(sub);
         const franchiseEnabled = franchiseEnabledMap.get(key) === true;
         return annotateCatalogRowWithAvailability(
             {
                 ...sub,
                 is_active: franchiseEnabled,
+                category_name: categoryKey ? categoryNameMap.get(categoryKey) ?? null : null,
                 related_services: svcMap.get(key) || [],
             },
             { kind: 'category', globalActive, franchiseEnabled }
