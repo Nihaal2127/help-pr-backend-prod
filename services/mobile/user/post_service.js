@@ -11,7 +11,6 @@ const { normalizeReportReason } = require('../../../enum/post_report_reason_enum
 const { REPORT_STATUS_PENDING } = require('../../../enum/post_report_reason_enum');
 const {
   resolveFranchiseById,
-  loadCustomerSelectedCityId,
   loadSubscribedFranchisePartners,
   loadSubscribedCityPartners,
 } = require('./franchise_partner_scope');
@@ -129,14 +128,11 @@ const listPostsFeed = async (userId, query) => {
     return fail(400, `${fieldLabel('city_id')} must be a valid ObjectId.`);
   }
 
-  let cityKey = queryCityRaw;
-  if (!cityKey && scope !== 'all') {
-    const savedCityId = await loadCustomerSelectedCityId(userId);
-    cityKey = savedCityId ? String(savedCityId) : '';
-  }
-
-  if (cityKey) {
-    const cityFilter = await buildCityPartnerPostFilter(cityKey);
+  // city_id is primary: ignore franchise_id. Partner posts only if home city
+  // or service_cities includes this city. scope=all is nationwide only when
+  // city_id is omitted.
+  if (queryCityRaw) {
+    const cityFilter = await buildCityPartnerPostFilter(queryCityRaw);
     if (!cityFilter.ok) return cityFilter;
     if (cityFilter.empty) return emptyCityFeed(page, limit);
     filter = cityFilter.filter;

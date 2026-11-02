@@ -24,8 +24,6 @@ const validateFranchiseIdQuery = (req, res, next) => {
 
 const validateFeedListQuery = (req, res, next) => {
   const scope = String(req.query.scope ?? 'city').trim().toLowerCase();
-  if (scope === 'all') return next();
-
   const cityId = req.query.city_id;
   const franchiseId = req.query.franchise_id;
   const hasCityId = cityId !== undefined && cityId !== null && String(cityId).trim() !== '';
@@ -38,6 +36,8 @@ const validateFeedListQuery = (req, res, next) => {
     }
     return next();
   }
+
+  if (scope === 'all') return next();
 
   if (!hasFranchiseId) {
     return sendError(
