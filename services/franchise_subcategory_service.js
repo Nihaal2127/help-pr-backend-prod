@@ -196,6 +196,7 @@ const annotateSubcategoryRows = async (rows, franchiseOid) => {
         return annotateCatalogRowWithAvailability(
             {
                 ...sub,
+                is_active: franchiseEnabled,
                 related_services: svcMap.get(key) || [],
             },
             { kind: 'category', globalActive, franchiseEnabled }
@@ -288,6 +289,25 @@ const sortAllSubcategoriesRows = (rows, sortBy, sortOrder) => {
         return mult * na.localeCompare(nb);
     });
     return copy;
+};
+
+const applyFranchiseSubcategoryEnabled = (current, subOid, enabled) => {
+    const key = toIdStr(subOid);
+    const next = [];
+    const seen = new Set();
+    for (const raw of current || []) {
+        const idStr = toIdStr(raw);
+        if (!idStr || seen.has(idStr)) continue;
+        if (!enabled && idStr === key) continue;
+        seen.add(idStr);
+        next.push(
+            mongoose.Types.ObjectId.isValid(idStr) ? new mongoose.Types.ObjectId(idStr) : raw
+        );
+    }
+    if (enabled && !seen.has(key)) {
+        next.push(subOid);
+    }
+    return next;
 };
 
 const franchiseMetaFromDoc = (franchise) =>
@@ -409,23 +429,13 @@ const update = async (id, body, userId) => {
             return fail(400, 'Subcategory does not belong to the selected category.');
         }
 
-        if (activeParsed.value) {
-            await Franchise.updateOne(
-                { _id: franchise._id, deleted_at: null },
-                {
-                    $addToSet: { subcategories: parsedSub.oid },
-                    $set: { updated_at: new Date() },
-                }
-            );
-        } else {
-            await Franchise.updateOne(
-                { _id: franchise._id, deleted_at: null },
-                {
-                    $pull: { subcategories: parsedSub.oid },
-                    $set: { updated_at: new Date() },
-                }
-            );
-        }
+        franchise.subcategories = applyFranchiseSubcategoryEnabled(
+            franchise.subcategories,
+            parsedSub.oid,
+            activeParsed.value
+        );
+        franchise.updated_at = new Date();
+        await franchise.save();
 
         const updatedFranchise = await Franchise.findOne({
             _id: franchise._id,
