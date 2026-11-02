@@ -5,13 +5,14 @@ const PartnerPostSave = require('../../../models/partner_post_save');
 const PartnerPostShare = require('../../../models/partner_post_share');
 const PartnerPostReport = require('../../../models/partner_post_report');
 const User = require('../../../models/user');
+const City = require('../../../models/city');
 const { USER_TYPE_PARTNER } = require('../../../constants/user_types');
 const { normalizeReportReason } = require('../../../enum/post_report_reason_enum');
 const { REPORT_STATUS_PENDING } = require('../../../enum/post_report_reason_enum');
 const {
   resolveFranchiseById,
-  loadCustomerSelectedCityId,
   loadSubscribedFranchisePartners,
+  loadSubscribedCityPartners,
 } = require('./franchise_partner_scope');
 const {
   fail,
@@ -90,32 +91,63 @@ const listPostsFeed = async (userId, query) => {
   if (scope === 'all') {
     filter = publishedPostFilter();
   } else {
-    const cityId = await loadCustomerSelectedCityId(userId);
-    const visible = await getVisiblePartnerIds(query.franchise_id, { cityId });
-    if (!visible.ok) return visible;
+    const cityKey = query.city_id != null ? String(query.city_id).trim() : '';
+    if (cityKey) {
+      if (!mongoose.Types.ObjectId.isValid(cityKey)) {
+        return fail(400, `${fieldLabel('city_id')} must be a valid ObjectId.`);
+      }
+      const city = await City.findOne({ _id: cityKey, deleted_at: null }).select('_id').lean();
+      if (!city) {
+        return fail(404, 'City not found.');
+      }
 
-    franchiseId = visible.data.franchise._id;
-    franchiseName = visible.data.franchise.name;
+      const subscribed = await loadSubscribedCityPartners(city._id);
+      const partnerIds = subscribed.partnerIds.map((id) => new mongoose.Types.ObjectId(String(id)));
+      if (partnerIds.length === 0) {
+        return ok(200, {
+          message: 'Feed retrieved successfully.',
+          data: {
+            franchise_id: null,
+            franchise_name: null,
+            records: [],
+            totalItems: 0,
+            totalPages: 0,
+            currentPage: page,
+            limit,
+          },
+        });
+      }
 
-    if (visible.data.partnerIds.length === 0) {
-      return ok(200, {
-        message: 'Feed retrieved successfully.',
-        data: {
-          franchise_id: franchiseId,
-          franchise_name: franchiseName,
-          records: [],
-          totalItems: 0,
-          totalPages: 0,
-          currentPage: 1,
-          limit: DEFAULT_LIMIT,
-        },
+      filter = publishedPostFilter({
+        partner_id: { $in: partnerIds },
+      });
+    } else {
+      const visible = await getVisiblePartnerIds(query.franchise_id);
+      if (!visible.ok) return visible;
+
+      franchiseId = visible.data.franchise._id;
+      franchiseName = visible.data.franchise.name;
+
+      if (visible.data.partnerIds.length === 0) {
+        return ok(200, {
+          message: 'Feed retrieved successfully.',
+          data: {
+            franchise_id: franchiseId,
+            franchise_name: franchiseName,
+            records: [],
+            totalItems: 0,
+            totalPages: 0,
+            currentPage: 1,
+            limit: DEFAULT_LIMIT,
+          },
+        });
+      }
+
+      filter = publishedPostFilter({
+        franchise_id: visible.data.franchise._id,
+        partner_id: { $in: visible.data.partnerIds },
       });
     }
-
-    filter = publishedPostFilter({
-      franchise_id: visible.data.franchise._id,
-      partner_id: { $in: visible.data.partnerIds },
-    });
   }
 
   const [totalItems, posts] = await Promise.all([

@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "help-pr-all-apis-merged",
     "name": "Help PR — All APIs (single collection)",
-    "description": "**Single Postman collection** for `help-pr-backend-staging`. Import only this file.\n\n**Generated:** 2026-05-20 via `node postman/merge-all-collections.mjs`\n\n**Sources merged (8) from `postman/archive/`:**\n- `archive/Help-PR-Orders-Module.postman_collection.json`\n- `archive/Help-PR-Order-Charges-Payments.postman_collection.json`\n- `archive/Help-PR-Partner-Franchise-Dropdowns.postman_collection.json`\n- `archive/content-expense-expense-category-management.postman_collection (1).json`\n- `archive/Area-Management.postman_collection.json`\n- `archive/Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json`\n- `archive/Help-PR-Area-Franchise-Subscription.postman_collection.json`\n- `archive/Help-PR-Admin-Dashboard.postman_collection.json`\n- Built-in: Partner payout (4 requests)\n- Built-in: Order refunds (4 requests)\n- Built-in: Partners browse — admin `GET /api/partners` (2 requests)\n- Built-in: Partner post management — admin `/api/partner-post` (4 requests)\n- Built-in: Appointment calendar — admin `/api/appointment` (6 requests)\n\n**Dedup:** Same HTTP method + path template (+ getCount `type` in body) → one request; higher-priority source wins.\n\n**Setup:** Set `baseUrl`. Run **00 — Auth → Admin / Staff → Login** to set `accessToken` / `token`.\n\n**Docs:** `docs/ORDER_MODULE_FRONTEND.md`, `docs/RAZORPAY_ONLINE_PAYMENTS_AUDIT.md`, `docs/SUBSCRIPTION_CHANGE_FRONTEND.md`, `docs/ORDER_GETALL_API_CHANGES.md`, `docs/APPOINTMENT_MODULE_FRONTEND.md`, `docs/PARTNER_PAYOUT_FRONTEND.md`, `docs/PARTNER_POST_FRONTEND.md`, `docs/REFUND_API.md`, `docs/REFUND_FRONTEND.md`, `postman/Help-PR-Refunds.postman_collection.json`\n\n**Mobile:** folder **Mobile → Partner** / **Mobile → User** — run `node postman/build-mobile-folder.mjs` to refresh.\n\n*** Subcategory patch 2026-10-17: added folder **10b — Subcategory (catalog)** (`/api/subcategory`). ***\n\n*** Franchise subcategories patch 2026-10-19: create/update/get bodies include `subcategories` on franchise document. ***\n\n*** Direct order patch 2026-10-24: `direct_order` (boolean, default true) on Service create/update/get/getAll and Partner user create/update/get/getAll. Not on service create-request / update-request. ***\n\n*** Audit log patch 2026-10-30: folder **46 — Audit log** (`GET /api/audit-log/getAll`) — Super Admin/Staff. Auto-written by mutating /api middleware. ***",
+    "description": "**Single Postman collection** for `help-pr-backend-staging`. Import only this file.\n\n**Generated:** 2026-05-20 via `node postman/merge-all-collections.mjs`\n\n**Sources merged (8) from `postman/archive/`:**\n- `archive/Help-PR-Orders-Module.postman_collection.json`\n- `archive/Help-PR-Order-Charges-Payments.postman_collection.json`\n- `archive/Help-PR-Partner-Franchise-Dropdowns.postman_collection.json`\n- `archive/content-expense-expense-category-management.postman_collection (1).json`\n- `archive/Area-Management.postman_collection.json`\n- `archive/Help-PR-Area-Franchise-Subscription-UserTypes.postman_collection.json`\n- `archive/Help-PR-Area-Franchise-Subscription.postman_collection.json`\n- `archive/Help-PR-Admin-Dashboard.postman_collection.json`\n- Built-in: Partner payout (4 requests)\n- Built-in: Order refunds (4 requests)\n- Built-in: Partners browse — admin `GET /api/partners` (2 requests)\n- Built-in: Partner post management — admin `/api/partner-post` (4 requests)\n- Built-in: Appointment calendar — admin `/api/appointment` (6 requests)\n\n**Dedup:** Same HTTP method + path template (+ getCount `type` in body) → one request; higher-priority source wins.\n\n**Setup:** Set `baseUrl`. Run **00 — Auth → Admin / Staff → Login** to set `accessToken` / `token`.\n\n**Docs:** `docs/ORDER_MODULE_FRONTEND.md`, `docs/RAZORPAY_ONLINE_PAYMENTS_AUDIT.md`, `docs/SUBSCRIPTION_CHANGE_FRONTEND.md`, `docs/ORDER_GETALL_API_CHANGES.md`, `docs/APPOINTMENT_MODULE_FRONTEND.md`, `docs/PARTNER_PAYOUT_FRONTEND.md`, `docs/PARTNER_POST_FRONTEND.md`, `docs/REFUND_API.md`, `docs/REFUND_FRONTEND.md`, `postman/Help-PR-Refunds.postman_collection.json`\n\n**Mobile:** folder **Mobile → Partner** / **Mobile → User** — run `node postman/build-mobile-folder.mjs` to refresh.\n\n*** Subcategory patch 2026-10-17: added folder **10b — Subcategory (catalog)** (`/api/subcategory`). ***\n\n*** Franchise subcategories patch 2026-10-19: create/update/get bodies include `subcategories` on franchise document. ***\n\n*** Direct order patch 2026-10-24: `direct_order` (boolean, default true) on Service create/update/get/getAll and Partner user create/update/get/getAll. Not on service create-request / update-request. ***\n\n*** Audit log patch 2026-10-30: folder **46 — Audit log** (`GET /api/audit-log/getAll`) — Super Admin/Staff. Auto-written by mutating /api middleware. ***\n\n*** Franchise subcategory patch 2026-11-02: folder **08b — Franchise subcategory** (`GET /api/franchise-subcategory/getAll`) — same scope, flags, and pagination as franchise-category getAll. ***",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -2035,6 +2035,185 @@
             }
           },
           "description": "\n\n_Source: Help-PR-Admin-Dashboard.postman_collection.json → Franchises → Franchise category_"
+        }
+      ]
+    },
+    {
+      "name": "08b — Franchise subcategory",
+      "description": "**/api/franchise-subcategory** — virtual franchise catalog list (same behaviour as **08 — Franchise category**).\n\n**GET /getAll** — Super Admin / Staff / Franchise Admin / Employee.\n- Super Admin / Staff: `franchise_id` is required.\n- Franchise Admin / Employee: scoped to their franchise (`franchise_id` optional, must match if sent).\n\nEach row: subcategory fields + `franchise_enabled` (from `franchise.subcategories[]`) + `related_services` + availability flags (`global_active`, `franchise_active`, `effective_active`).",
+      "item": [
+        {
+          "name": "Franchise subcategory — getAll",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/franchise-subcategory/getAll?page=1&limit=50&franchise_id={{franchiseId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "franchise-subcategory",
+                "getAll"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "franchise_id",
+                  "value": "{{franchiseId}}",
+                  "description": "Required for Super Admin / Staff. Franchise Admin / Employee may omit (own franchise)."
+                },
+                {
+                  "key": "is_active",
+                  "value": "true",
+                  "disabled": true,
+                  "description": "Filter by franchise mapping on/off (`franchise_enabled`). true | false. Omit = both."
+                },
+                {
+                  "key": "is_request",
+                  "value": "false",
+                  "disabled": true,
+                  "description": "true = pending subcategory requests from this franchise. false/omit = globally active approved subcategories."
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Substring on subcategory name; if none match, falls back to related service names. Alias: q."
+                },
+                {
+                  "key": "sort_by",
+                  "value": "name",
+                  "disabled": true,
+                  "description": "name | id"
+                },
+                {
+                  "key": "sort_order",
+                  "value": "asc",
+                  "disabled": true,
+                  "description": "asc | desc. Alias: order."
+                }
+              ]
+            },
+            "description": "**GET /api/franchise-subcategory/getAll**\n\nAuth: Bearer `{{accessToken}}` (run **00 — Auth → Admin / Staff → Login** first).\nSet `{{franchiseId}}` (or collection `franchise_id`).\n\nResponse: `franchise`, `subcategories[]`, `totalItems`, `totalPages`, `currentPage`.\nToggle optional query params in Postman (`is_active`, `is_request`, `search`, `sort_by`, `sort_order`)."
+          }
+        },
+        {
+          "name": "Franchise subcategory — getAll (enabled only)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/franchise-subcategory/getAll?page=1&limit=50&franchise_id={{franchiseId}}&is_active=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "franchise-subcategory",
+                "getAll"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "franchise_id",
+                  "value": "{{franchiseId}}"
+                },
+                {
+                  "key": "is_active",
+                  "value": "true",
+                  "description": "Only rows with franchise_enabled=true (id in franchise.subcategories[])."
+                }
+              ]
+            },
+            "description": "Same as getAll with `is_active=true` — only subcategories enabled on the franchise."
+          }
+        },
+        {
+          "name": "Franchise subcategory — getAll (pending requests)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/franchise-subcategory/getAll?page=1&limit=50&franchise_id={{franchiseId}}&is_request=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "franchise-subcategory",
+                "getAll"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "franchise_id",
+                  "value": "{{franchiseId}}"
+                },
+                {
+                  "key": "is_request",
+                  "value": "true",
+                  "description": "Pending subcategory requests raised by users under this franchise."
+                }
+              ]
+            },
+            "description": "Same as getAll with `is_request=true` — pending franchise subcategory requests (`requested_by` hydrated)."
+          }
         }
       ]
     },

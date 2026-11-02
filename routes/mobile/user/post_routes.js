@@ -3,6 +3,7 @@ const router = express.Router();
 const userAuthMiddleware = require('../../../middleware/mobile/user/user_auth_middleware');
 const {
   validateFranchiseIdQuery,
+  validateFeedListQuery,
   validatePostIdParam,
   validatePartnerIdParam,
   validateShareTokenParam,
@@ -27,11 +28,7 @@ router.get('/posts/share/:shareToken', validateShareTokenParam, resolveShareToke
 router.get(
   '/posts/feed',
   userAuthMiddleware,
-  (req, res, next) => {
-    const scope = String(req.query.scope ?? 'city').trim().toLowerCase();
-    if (scope === 'all') return next();
-    return validateFranchiseIdQuery(req, res, next);
-  },
+  validateFeedListQuery,
   listFeedHandler
 );
 router.get('/posts/liked', userAuthMiddleware, listLikedPostsHandler);
