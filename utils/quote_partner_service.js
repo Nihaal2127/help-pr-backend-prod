@@ -4,10 +4,19 @@ const PartnerService = require("../models/partner_service");
 const GLOBAL_SERVICE_SELECT =
   "name service_id desc image_url approval_status is_request is_active rejection_reason payment_type";
 
-const partnerServicePopulate = {
-  path: "service_id",
-  select: GLOBAL_SERVICE_SELECT,
-};
+const SUBCATEGORY_SELECT =
+  "name subcategory_id desc image_url category_id approval_status is_request is_active rejection_reason";
+
+const partnerServicePopulate = [
+  {
+    path: "service_id",
+    select: GLOBAL_SERVICE_SELECT,
+  },
+  {
+    path: "subcategory_id",
+    select: SUBCATEGORY_SELECT,
+  },
+];
 
 const toObjectId = (value) => {
   if (!value) return null;
@@ -37,6 +46,15 @@ const buildPartnerServiceLookupFilter = (quote) => {
 const partnerServiceMapKey = (partnerId, globalServiceId, categoryId) =>
   `${partnerId.toString()}-${globalServiceId.toString()}-${categoryId ? categoryId.toString() : ""}`;
 
+const hydrateQuoteSubcategoryFromPartnerService = (quote) => {
+  if (!quote || quote.subcategory_id) return quote;
+  const fromPartner = quote.service_id?.subcategory_id;
+  if (fromPartner) {
+    quote.subcategory_id = fromPartner;
+  }
+  return quote;
+};
+
 const attachPartnerServiceToQuote = async (quote) => {
   const filter = buildPartnerServiceLookupFilter(quote);
   if (!filter) {
@@ -47,7 +65,7 @@ const attachPartnerServiceToQuote = async (quote) => {
     .populate(partnerServicePopulate)
     .lean();
 
-  return quote;
+  return hydrateQuoteSubcategoryFromPartnerService(quote);
 };
 
 const attachPartnerServiceToQuotes = async (quotes) => {
@@ -102,6 +120,7 @@ const attachPartnerServiceToQuotes = async (quotes) => {
       filter.category_id
     );
     quote.service_id = partnerServiceByKey.get(key) || null;
+    hydrateQuoteSubcategoryFromPartnerService(quote);
   }
 
   return quotes;
