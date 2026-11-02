@@ -1109,10 +1109,17 @@ const listPartnersOfferingServiceAcrossFranchises = async (serviceId) => {
   return { ok: true, partners };
 };
 
+const loadCustomerSelectedCityId = async (userId) => {
+  if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) return null;
+  const user = await User.findOne({ _id: userId, deleted_at: null }).select('city_id').lean();
+  return user?.city_id ?? null;
+};
+
 module.exports = {
   resolveFranchiseFromLocation,
   resolveFranchiseForArea,
   resolveFranchiseById,
+  loadCustomerSelectedCityId,
   loadSubscribedFranchisePartners,
   loadSubscribedCityPartners,
   loadRandomPlatinumPartnerBanners,

@@ -11,6 +11,7 @@ const { normalizeReportReason } = require('../../../enum/post_report_reason_enum
 const { REPORT_STATUS_PENDING } = require('../../../enum/post_report_reason_enum');
 const {
   resolveFranchiseById,
+  loadCustomerSelectedCityId,
   loadSubscribedFranchisePartners,
   loadSubscribedCityPartners,
 } = require('./franchise_partner_scope');
@@ -73,6 +74,41 @@ const assertPartnerVisibleToCustomer = async (partnerId, franchiseId) => {
   });
 };
 
+const emptyCityFeed = (page, limit) =>
+  ok(200, {
+    message: 'Feed retrieved successfully.',
+    data: {
+      franchise_id: null,
+      franchise_name: null,
+      records: [],
+      totalItems: 0,
+      totalPages: 0,
+      currentPage: page,
+      limit,
+    },
+  });
+
+const buildCityPartnerPostFilter = async (cityId) => {
+  const city = await City.findOne({ _id: cityId, deleted_at: null }).select('_id').lean();
+  if (!city) {
+    return fail(404, 'City not found.');
+  }
+
+  const subscribed = await loadSubscribedCityPartners(city._id);
+  const partnerIds = subscribed.partnerIds.map((id) => new mongoose.Types.ObjectId(String(id)));
+  if (partnerIds.length === 0) {
+    return { ok: true, empty: true };
+  }
+
+  return {
+    ok: true,
+    empty: false,
+    filter: publishedPostFilter({
+      partner_id: { $in: partnerIds },
+    }),
+  };
+};
+
 const listPostsFeed = async (userId, query) => {
   const scopeRaw = query.scope != null ? String(query.scope).trim().toLowerCase() : 'city';
   if (scopeRaw && !['city', 'all'].includes(scopeRaw)) {
@@ -88,66 +124,49 @@ const listPostsFeed = async (userId, query) => {
   let franchiseName = null;
   let filter;
 
-  if (scope === 'all') {
+  const queryCityRaw = query.city_id != null ? String(query.city_id).trim() : '';
+  if (queryCityRaw && !mongoose.Types.ObjectId.isValid(queryCityRaw)) {
+    return fail(400, `${fieldLabel('city_id')} must be a valid ObjectId.`);
+  }
+
+  let cityKey = queryCityRaw;
+  if (!cityKey && scope !== 'all') {
+    const savedCityId = await loadCustomerSelectedCityId(userId);
+    cityKey = savedCityId ? String(savedCityId) : '';
+  }
+
+  if (cityKey) {
+    const cityFilter = await buildCityPartnerPostFilter(cityKey);
+    if (!cityFilter.ok) return cityFilter;
+    if (cityFilter.empty) return emptyCityFeed(page, limit);
+    filter = cityFilter.filter;
+  } else if (scope === 'all') {
     filter = publishedPostFilter();
   } else {
-    const cityKey = query.city_id != null ? String(query.city_id).trim() : '';
-    if (cityKey) {
-      if (!mongoose.Types.ObjectId.isValid(cityKey)) {
-        return fail(400, `${fieldLabel('city_id')} must be a valid ObjectId.`);
-      }
-      const city = await City.findOne({ _id: cityKey, deleted_at: null }).select('_id').lean();
-      if (!city) {
-        return fail(404, 'City not found.');
-      }
+    const visible = await getVisiblePartnerIds(query.franchise_id);
+    if (!visible.ok) return visible;
 
-      const subscribed = await loadSubscribedCityPartners(city._id);
-      const partnerIds = subscribed.partnerIds.map((id) => new mongoose.Types.ObjectId(String(id)));
-      if (partnerIds.length === 0) {
-        return ok(200, {
-          message: 'Feed retrieved successfully.',
-          data: {
-            franchise_id: null,
-            franchise_name: null,
-            records: [],
-            totalItems: 0,
-            totalPages: 0,
-            currentPage: page,
-            limit,
-          },
-        });
-      }
+    franchiseId = visible.data.franchise._id;
+    franchiseName = visible.data.franchise.name;
 
-      filter = publishedPostFilter({
-        partner_id: { $in: partnerIds },
-      });
-    } else {
-      const visible = await getVisiblePartnerIds(query.franchise_id);
-      if (!visible.ok) return visible;
-
-      franchiseId = visible.data.franchise._id;
-      franchiseName = visible.data.franchise.name;
-
-      if (visible.data.partnerIds.length === 0) {
-        return ok(200, {
-          message: 'Feed retrieved successfully.',
-          data: {
-            franchise_id: franchiseId,
-            franchise_name: franchiseName,
-            records: [],
-            totalItems: 0,
-            totalPages: 0,
-            currentPage: 1,
-            limit: DEFAULT_LIMIT,
-          },
-        });
-      }
-
-      filter = publishedPostFilter({
-        franchise_id: visible.data.franchise._id,
-        partner_id: { $in: visible.data.partnerIds },
+    if (visible.data.partnerIds.length === 0) {
+      return ok(200, {
+        message: 'Feed retrieved successfully.',
+        data: {
+          franchise_id: franchiseId,
+          franchise_name: franchiseName,
+          records: [],
+          totalItems: 0,
+          totalPages: 0,
+          currentPage: page,
+          limit,
+        },
       });
     }
+
+    filter = publishedPostFilter({
+      partner_id: { $in: visible.data.partnerIds },
+    });
   }
 
   const [totalItems, posts] = await Promise.all([
