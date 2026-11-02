@@ -156,8 +156,14 @@ const validateRefsForCreate = async (customerId, body) => {
     }
   }
 
-  const svc = await checkObjectIdExists(Service, body.service_id, 'service');
-  if (!svc.exists) return fail(400, svc.message);
+  if (
+    body.service_id !== undefined &&
+    body.service_id !== null &&
+    String(body.service_id).trim() !== ''
+  ) {
+    const svc = await checkObjectIdExists(Service, body.service_id, 'service');
+    if (!svc.exists) return fail(400, svc.message);
+  }
 
   if (
     body.partner_id !== undefined &&
@@ -224,9 +230,29 @@ const createCustomerQuote = async (customerId, body) => {
     const refCheck = await validateRefsForCreate(customerId, body);
     if (!refCheck.ok) return refCheck;
 
+    const hasService =
+      body.service_id !== undefined &&
+      body.service_id !== null &&
+      String(body.service_id).trim() !== '';
+
     let pricing;
     try {
-      ({ pricing } = await resolveQuotePricing(body));
+      if (hasService) {
+        ({ pricing } = await resolveQuotePricing(body));
+      } else {
+        pricing = {
+          total_service_charge: 0,
+          service_price: 0,
+          commission_percent: 0,
+          commission_amount: 0,
+          tax_percent: 0,
+          tax_amount: 0,
+          sub_total: 0,
+          total_price: 0,
+          minimum_deposit_percent: 0,
+          minimum_deposit_amount: 0,
+        };
+      }
     } catch (pricingErr) {
       if (pricingErr instanceof OrderCreationError) {
         return fail(pricingErr.status, pricingErr.message);
@@ -253,7 +279,7 @@ const createCustomerQuote = async (customerId, body) => {
         String(body.subcategory_id).trim() !== ''
           ? body.subcategory_id
           : null,
-      service_id: body.service_id,
+      service_id: hasService ? body.service_id : null,
       franchise_id: body.franchise_id,
       address_id: body.address_id,
       status: 'new',
