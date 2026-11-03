@@ -21,9 +21,33 @@ const applyCalendarDateFields = (target, keys) => {
   return target;
 };
 
+/** True when category→subcategory→service parent ref is present (id or populated doc). */
+const hasHierarchyRef = (ref) => {
+  if (ref == null || ref === '') return false;
+  if (typeof ref === 'object') {
+    return ref._id != null && String(ref._id).trim() !== '';
+  }
+  return String(ref).trim() !== '';
+};
+
+const hasOrderSubcategory = (order) =>
+  hasHierarchyRef(order?.subcategory_id) || hasHierarchyRef(order?.subcategory_info);
+
+/** No subcategory → do not expose service fields (same cascade as quotes). */
+const stripServiceWithoutSubcategory = (record) => {
+  if (!record || typeof record !== 'object') return record;
+  if (hasOrderSubcategory(record)) return record;
+  record.service_id = null;
+  if ('service_info' in record) {
+    record.service_info = null;
+  }
+  return record;
+};
+
 const formatQuoteEmbedForApi = (quote) => {
   if (!quote || typeof quote !== 'object') return quote;
-  return applyCalendarDateFields({ ...quote }, QUOTE_EMBED_CALENDAR_DATE_KEYS);
+  const plain = applyCalendarDateFields({ ...quote }, QUOTE_EMBED_CALENDAR_DATE_KEYS);
+  return stripServiceWithoutSubcategory(plain);
 };
 
 const objectIdBytesToHex = (bytes) => Buffer.from(bytes).toString('hex');
@@ -72,6 +96,7 @@ const formatOrderForApi = (order) => {
   if (plain._id != null) plain._id = serializeObjectId(plain._id);
   if (plain.chat_id != null) plain.chat_id = serializeObjectId(plain.chat_id);
   applyCalendarDateFields(plain, ORDER_CALENDAR_DATE_KEYS);
+  stripServiceWithoutSubcategory(plain);
   if (plain.quote_info) {
     plain.quote_info = formatQuoteEmbedForApi(plain.quote_info);
   }

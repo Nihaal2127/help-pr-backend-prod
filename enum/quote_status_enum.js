@@ -133,6 +133,14 @@ const canTransitionQuoteStatus = (fromStatus, toStatus) => {
   return (allowed[from] || []).includes(to);
 };
 
+const hasQuoteSubcategory = (subcategoryId) => {
+  if (subcategoryId == null || subcategoryId === "") return false;
+  if (typeof subcategoryId === "object") {
+    return subcategoryId._id != null && String(subcategoryId._id).trim() !== "";
+  }
+  return String(subcategoryId).trim() !== "";
+};
+
 const formatQuoteForApi = (quote) => {
   if (!quote || typeof quote !== "object") return quote;
 
@@ -151,6 +159,11 @@ const formatQuoteForApi = (quote) => {
   }
   if (plain.to_date != null && plain.to_date !== "") {
     plain.to_date = formatDateOnly(plain.to_date);
+  }
+
+  // No subcategory → do not expose service (UI cascade: category → subcategory → service).
+  if (!hasQuoteSubcategory(plain.subcategory_id)) {
+    plain.service_id = null;
   }
 
   if (
