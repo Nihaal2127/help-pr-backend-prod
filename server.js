@@ -71,7 +71,7 @@ dotenv.config();
 logPublicImageUrlConfig();
 
 // Connect to the database
-connectDB();
+// connectDB();
 // let isDbConnected = false;
 
 // const connectDBOnce = async () => {
