@@ -55,6 +55,10 @@ const partnerPostSchema = new mongoose.Schema(
       default: POST_MEDIA_TYPE_IMAGE,
     },
     image_urls: { type: [String], default: [] },
+    /** Parallel to image_urls — size in bytes of each image at upload time. */
+    image_byte_sizes: { type: [Number], default: [] },
+    /** Total partner-post media bytes for this post (images + video). Used for plan storage quotas. */
+    media_storage_bytes: { type: Number, default: 0, min: 0 },
     video: {
       type: new mongoose.Schema(
         {
@@ -62,6 +66,7 @@ const partnerPostSchema = new mongoose.Schema(
           hls_url: { type: String, default: '', trim: true },
           thumbnail_url: { type: String, default: '', trim: true },
           duration_seconds: { type: Number, default: null },
+          storage_bytes: { type: Number, default: 0, min: 0 },
           status: {
             type: String,
             enum: VIDEO_STATUSES,

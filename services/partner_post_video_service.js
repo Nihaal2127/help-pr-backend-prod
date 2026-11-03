@@ -27,6 +27,11 @@ const {
   BUNNY_WEBHOOK_STATUS_FAILED,
   BUNNY_WEBHOOK_STATUS_PRESIGNED_UPLOAD_FAILED,
 } = require('./bunny_stream_service');
+const {
+  getBunnyVideoStorageBytes,
+  assertPartnerPostStorageAllows,
+  resolveBunnyVideoStorageBytes,
+} = require('./partner_post_storage_service');
 const { fail, ok, assertPartnerCanPost, validateOrderLink, generateShareToken, mapPostRecords } = require('./partner_post_common_service');
 const { POST_STATUS_PENDING } = require('../enum/post_report_reason_enum');
 const { POST_TYPE_ORDER } = require('../enum/post_type_enum');
@@ -34,44 +39,55 @@ const { safeNotifyBackofficePartnerPostPending } = require('../src/modules/notif
 
 const TOO_LONG_MESSAGE = `Video must be ${MAX_VIDEO_DURATION_SECONDS} seconds or shorter.`;
 
-const buildProcessingVideo = (bunnyVideoId) => ({
+const buildProcessingVideo = (bunnyVideoId, storageBytes = 0) => ({
   bunny_video_id: String(bunnyVideoId),
   hls_url: '',
   thumbnail_url: '',
   duration_seconds: null,
+  storage_bytes: Math.max(0, Math.floor(Number(storageBytes) || 0)),
   status: VIDEO_STATUS_PROCESSING,
   failure_reason: '',
 });
 
-const applyReadyPlayback = (videoId, durationSeconds) => {
+const applyReadyPlayback = (videoId, durationSeconds, storageBytes = 0) => {
   const playback = buildPlaybackUrls(videoId);
   return {
     bunny_video_id: String(videoId),
     hls_url: playback.hls_url,
     thumbnail_url: playback.thumbnail_url,
     duration_seconds: durationSeconds,
+    storage_bytes: Math.max(0, Math.floor(Number(storageBytes) || 0)),
     status: VIDEO_STATUS_READY,
     failure_reason: '',
   };
 };
 
-const applyFailedVideo = (videoId, reason) => ({
+const applyFailedVideo = (videoId, reason, storageBytes = 0) => ({
   bunny_video_id: String(videoId || ''),
   hls_url: '',
   thumbnail_url: '',
   duration_seconds: null,
+  storage_bytes: Math.max(0, Math.floor(Number(storageBytes) || 0)),
   status: VIDEO_STATUS_FAILED,
   failure_reason: reason || 'Video processing failed.',
 });
 
 const pickVideoAfterResolve = (resolved, session, videoId) => {
+  const storageBytes =
+    resolved.storageBytes ?? resolved.video?.storage_bytes ?? 0;
   if (
     resolved.video.status === VIDEO_STATUS_PROCESSING &&
     isPlayableWebhookStatus(session?.last_webhook_status)
   ) {
-    return applyReadyPlayback(videoId, resolved.video.duration_seconds);
+    return applyReadyPlayback(videoId, resolved.video.duration_seconds, storageBytes);
   }
-  return resolved.video;
+  return {
+    ...resolved.video,
+    storage_bytes: Math.max(
+      0,
+      Math.floor(Number(resolved.video?.storage_bytes) || storageBytes || 0)
+    ),
+  };
 };
 
 const refreshSessionTicket = async (session) => {
@@ -168,13 +184,18 @@ const consumeVideoSession = async (partnerId, bunnyVideoId, postId) => {
 const resolveVideoFieldsFromBunny = async (bunnyVideoId) => {
   const videoId = parseBunnyVideoId(bunnyVideoId);
   if (!videoId) {
-    return { video: buildProcessingVideo(''), overDuration: false };
+    return { video: buildProcessingVideo(''), overDuration: false, storageBytes: 0 };
   }
 
   try {
     const bunnyVideo = await getBunnyVideo(videoId);
+    const storageBytes = getBunnyVideoStorageBytes(bunnyVideo);
     if (isBunnyVideoFailed(bunnyVideo)) {
-      return { video: applyFailedVideo(videoId, 'Video processing failed.'), overDuration: false };
+      return {
+        video: applyFailedVideo(videoId, 'Video processing failed.', storageBytes),
+        overDuration: false,
+        storageBytes,
+      };
     }
 
     if (isBunnyVideoFinished(bunnyVideo)) {
@@ -182,17 +203,26 @@ const resolveVideoFieldsFromBunny = async (bunnyVideoId) => {
       if (length > MAX_VIDEO_DURATION_SECONDS) {
         await deleteBunnyVideo(videoId);
         return {
-          video: applyFailedVideo(videoId, TOO_LONG_MESSAGE),
+          video: applyFailedVideo(videoId, TOO_LONG_MESSAGE, storageBytes),
           overDuration: true,
+          storageBytes,
         };
       }
-      return { video: applyReadyPlayback(videoId, length || null), overDuration: false };
+      return {
+        video: applyReadyPlayback(videoId, length || null, storageBytes),
+        overDuration: false,
+        storageBytes,
+      };
     }
 
-    return { video: buildProcessingVideo(videoId), overDuration: false };
+    return {
+      video: buildProcessingVideo(videoId, storageBytes),
+      overDuration: false,
+      storageBytes,
+    };
   } catch (error) {
     console.error('resolveVideoFieldsFromBunny', videoId, error.response?.data || error.message);
-    return { video: buildProcessingVideo(videoId), overDuration: false };
+    return { video: buildProcessingVideo(videoId), overDuration: false, storageBytes: 0 };
   }
 };
 
@@ -216,6 +246,11 @@ const attachVideoToNewPost = async (partnerId, bunnyVideoId, post) => {
   );
   post.media_type = POST_MEDIA_TYPE_VIDEO;
   post.image_urls = [];
+  post.image_byte_sizes = [];
+  post.media_storage_bytes = Math.max(
+    0,
+    Math.floor(Number(post.video?.storage_bytes) || resolved.storageBytes || 0)
+  );
   post.updated_at = new Date();
   await post.save();
   return ok(200, { post });
@@ -235,10 +270,15 @@ const replacePostVideo = async (partnerId, post, bunnyVideoId) => {
 
   post.media_type = POST_MEDIA_TYPE_VIDEO;
   post.image_urls = [];
+  post.image_byte_sizes = [];
   post.video = pickVideoAfterResolve(
     resolved,
     consumed.data.session,
     parseBunnyVideoId(bunnyVideoId)
+  );
+  post.media_storage_bytes = Math.max(
+    0,
+    Math.floor(Number(post.video?.storage_bytes) || resolved.storageBytes || 0)
   );
   post.updated_at = new Date();
   await post.save();
@@ -286,11 +326,22 @@ const syncPostVideoFromBunny = async (post) => {
     return post;
   }
 
+  const mediaStorageBytes = Math.max(
+    0,
+    Math.floor(Number(next.storage_bytes) || resolved.storageBytes || 0)
+  );
   await PartnerPost.updateOne(
     { _id: post._id },
-    { $set: { video: next, updated_at: new Date() } }
+    {
+      $set: {
+        video: next,
+        media_storage_bytes: mediaStorageBytes,
+        updated_at: new Date(),
+      },
+    }
   );
   post.video = next;
+  post.media_storage_bytes = mediaStorageBytes;
   return post;
 };
 
@@ -336,7 +387,11 @@ const applyWebhookStatusToPost = async (payload) => {
   }
 
   if (status === BUNNY_WEBHOOK_STATUS_FAILED || status === BUNNY_WEBHOOK_STATUS_PRESIGNED_UPLOAD_FAILED) {
-    post.video = applyFailedVideo(videoId, 'Video processing failed.');
+    post.video = applyFailedVideo(
+      videoId,
+      'Video processing failed.',
+      post.video?.storage_bytes || 0
+    );
     post.updated_at = new Date();
     await post.save();
     return { ok: true, ignored: false };
@@ -348,7 +403,8 @@ const applyWebhookStatusToPost = async (payload) => {
 
   const resolved = await resolveVideoFieldsFromBunny(videoId);
   if (resolved.overDuration) {
-    post.video = applyFailedVideo(videoId, TOO_LONG_MESSAGE);
+    post.video = applyFailedVideo(videoId, TOO_LONG_MESSAGE, resolved.storageBytes);
+    post.media_storage_bytes = 0;
     post.updated_at = new Date();
     await post.save();
     return { ok: true, ignored: false };
@@ -357,7 +413,11 @@ const applyWebhookStatusToPost = async (payload) => {
   post.video =
     resolved.video.status === VIDEO_STATUS_READY
       ? resolved.video
-      : applyReadyPlayback(videoId, resolved.video.duration_seconds);
+      : applyReadyPlayback(videoId, resolved.video.duration_seconds, resolved.storageBytes);
+  post.media_storage_bytes = Math.max(
+    0,
+    Math.floor(Number(post.video?.storage_bytes) || resolved.storageBytes || 0)
+  );
   post.updated_at = new Date();
   await post.save();
   return { ok: true, ignored: false };
@@ -380,6 +440,15 @@ const createOrderPostFromVideo = async (partnerId, orderId, bunnyVideoId, descri
     return fail(400, 'Description is required.');
   }
 
+  const videoSize = await resolveBunnyVideoStorageBytes(videoId);
+  if (!videoSize.ok) return videoSize;
+
+  const storageCheck = await assertPartnerPostStorageAllows(
+    partnerResult.data.partnerOid,
+    videoSize.data.bytes
+  );
+  if (!storageCheck.ok) return storageCheck;
+
   const now = new Date();
   const post = await PartnerPost.create({
     partner_id: partnerResult.data.partnerOid,
@@ -393,6 +462,8 @@ const createOrderPostFromVideo = async (partnerId, orderId, bunnyVideoId, descri
     description: text,
     media_type: POST_MEDIA_TYPE_VIDEO,
     image_urls: [],
+    image_byte_sizes: [],
+    media_storage_bytes: videoSize.data.bytes,
     status: POST_STATUS_PENDING,
     share_token: generateShareToken(),
     likes_count: 0,

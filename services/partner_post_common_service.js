@@ -21,6 +21,7 @@ const {
 } = require('../enum/post_media_enum');
 const { ORDER_STATUS_COMPLETED } = require('../enum/order_status_enum');
 const { safeNotifyBackofficePartnerPostPending } = require('../src/modules/notifications/services/backofficeHooks');
+const { assertPartnerPostStorageAllows } = require('./partner_post_storage_service');
 
 const fail = (status, message) => ({ ok: false, status, message });
 const ok = (status, data) => ({ ok: true, status, data });
@@ -223,7 +224,13 @@ const parseRejectionReason = (raw) => {
  * Create an order-linked partner post from pre-uploaded image URLs (e.g. order completion flow).
  * Order must already be completed and not linked to another post.
  */
-const createOrderPostFromUrls = async (partnerId, orderId, imageUrls, description) => {
+const createOrderPostFromUrls = async (
+  partnerId,
+  orderId,
+  imageUrls,
+  description,
+  imageByteSizes = []
+) => {
   const partnerResult = await assertPartnerCanPost(partnerId);
   if (!partnerResult.ok) return partnerResult;
 
@@ -238,6 +245,19 @@ const createOrderPostFromUrls = async (partnerId, orderId, imageUrls, descriptio
   const descParsed = parsePostDescription(description);
   if (!descParsed.ok) return fail(400, descParsed.message);
 
+  const rawSizes = Array.isArray(imageByteSizes) ? imageByteSizes : [];
+  const sizes = urls.map((_, index) => {
+    const n = Number(rawSizes[index]);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  });
+  const mediaStorageBytes = sizes.reduce((sum, n) => sum + n, 0);
+
+  const storageCheck = await assertPartnerPostStorageAllows(
+    partnerResult.data.partnerOid,
+    mediaStorageBytes
+  );
+  if (!storageCheck.ok) return storageCheck;
+
   const now = new Date();
   const post = await PartnerPost.create({
     partner_id: partnerResult.data.partnerOid,
@@ -251,6 +271,8 @@ const createOrderPostFromUrls = async (partnerId, orderId, imageUrls, descriptio
     description: descParsed.text,
     media_type: POST_MEDIA_TYPE_IMAGE,
     image_urls: urls,
+    image_byte_sizes: sizes,
+    media_storage_bytes: mediaStorageBytes,
     status: POST_STATUS_PENDING,
     share_token: generateShareToken(),
     likes_count: 0,

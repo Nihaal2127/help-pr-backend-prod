@@ -27,6 +27,7 @@ const {
   createOrderPostFromUrls,
 } = require('../../partner_post_common_service');
 const { createOrderPostFromVideo } = require('../../partner_post_video_service');
+const { collectImageByteSizes } = require('../../partner_post_storage_service');
 const { inspectCompleteOrderMedia } = require('./complete_order_media');
 
 const { fail, ok } = require('../../../utils/mobile_service_result');
@@ -182,6 +183,7 @@ const completePartnerOrderWork = async (partnerId, orderId, body, files) => {
       if (!postPrecheck.ok) return postPrecheck;
     }
 
+    const imageByteSizes = imageFiles.length ? collectImageByteSizes(imageFiles) : [];
     const imageUrls = imageFiles.length ? await uploadWorkProofImages(imageFiles) : [];
     const now = new Date();
 
@@ -215,7 +217,13 @@ const completePartnerOrderWork = async (partnerId, orderId, body, files) => {
     if (publishAsPost) {
       const postResult = bunnyVideoId
         ? await createOrderPostFromVideo(partnerId, order._id, bunnyVideoId, description)
-        : await createOrderPostFromUrls(partnerId, order._id, imageUrls, description);
+        : await createOrderPostFromUrls(
+            partnerId,
+            order._id,
+            imageUrls,
+            description,
+            imageByteSizes
+          );
       if (!postResult.ok) {
         postError = postResult.message;
       } else {

@@ -40,6 +40,13 @@ const {
   POST_TYPE_ORDER,
   POST_TYPE_LEGACY_WORK,
 } = require('../../../services/partner_post_common_service');
+const {
+  assertPartnerPostStorageAllows,
+  collectImageByteSizes,
+  sumUploadFileBytes,
+  sumImageByteSizesForUrls,
+  resolveBunnyVideoStorageBytes,
+} = require('../../../services/partner_post_storage_service');
 const { safeNotifyBackofficePartnerPostPending } = require('../../../src/modules/notifications/services/backofficeHooks');
 
 const uploadPostImages = async (files) => {
@@ -179,7 +186,23 @@ const createPartnerPost = async (partnerId, body, files) => {
   }
 
   let imageUrls = [];
-  if (!isVideoPost) {
+  let imageByteSizes = [];
+  let mediaStorageBytes = 0;
+
+  if (isVideoPost) {
+    const videoSize = await resolveBunnyVideoStorageBytes(bunnyVideoId);
+    if (!videoSize.ok) return videoSize;
+    mediaStorageBytes = videoSize.data.bytes;
+
+    const storageCheck = await assertPartnerPostStorageAllows(partnerOid, mediaStorageBytes);
+    if (!storageCheck.ok) return storageCheck;
+  } else {
+    imageByteSizes = collectImageByteSizes(imageFiles);
+    mediaStorageBytes = sumUploadFileBytes(imageFiles);
+
+    const storageCheck = await assertPartnerPostStorageAllows(partnerOid, mediaStorageBytes);
+    if (!storageCheck.ok) return storageCheck;
+
     imageUrls = await uploadPostImages(imageFiles);
   }
 
@@ -197,6 +220,8 @@ const createPartnerPost = async (partnerId, body, files) => {
     description: descParsed.text,
     media_type: isVideoPost ? POST_MEDIA_TYPE_VIDEO : POST_MEDIA_TYPE_IMAGE,
     image_urls: imageUrls,
+    image_byte_sizes: imageByteSizes,
+    media_storage_bytes: mediaStorageBytes,
     status: POST_STATUS_PENDING,
     share_token: generateShareToken(),
     likes_count: 0,
@@ -403,6 +428,16 @@ const updatePartnerPost = async (partnerId, postId, body, files) => {
   }
 
   if (bunnyVideoId) {
+    const videoSize = await resolveBunnyVideoStorageBytes(bunnyVideoId);
+    if (!videoSize.ok) return videoSize;
+
+    const storageCheck = await assertPartnerPostStorageAllows(
+      partnerResult.data.partnerOid,
+      videoSize.data.bytes,
+      { excludePostId: post._id }
+    );
+    if (!storageCheck.ok) return storageCheck;
+
     Object.assign(post, updates);
     const replaced = await replacePostVideo(partnerResult.data.partnerOid, post, bunnyVideoId);
     if (!replaced.ok) return replaced;
@@ -424,6 +459,24 @@ const updatePartnerPost = async (partnerId, postId, body, files) => {
       keepExisting = [];
     }
 
+    const keptByteSizes = keepExisting.map((url) => {
+      const idx = (post.image_urls || []).findIndex((u) => String(u) === String(url));
+      if (idx < 0) return 0;
+      return Math.max(0, Math.floor(Number(post.image_byte_sizes?.[idx]) || 0));
+    });
+    const newByteSizes = collectImageByteSizes(imageFiles);
+    const finalByteSizes = [...keptByteSizes, ...newByteSizes];
+    const mediaStorageBytes =
+      sumImageByteSizesForUrls(post.image_urls, post.image_byte_sizes, keepExisting) +
+      sumUploadFileBytes(imageFiles);
+
+    const storageCheck = await assertPartnerPostStorageAllows(
+      partnerResult.data.partnerOid,
+      mediaStorageBytes,
+      { excludePostId: post._id }
+    );
+    if (!storageCheck.ok) return storageCheck;
+
     const finalImages = [...keepExisting];
     if (imageFiles.length > 0) {
       const uploaded = await uploadPostImages(imageFiles);
@@ -440,6 +493,8 @@ const updatePartnerPost = async (partnerId, postId, body, files) => {
 
     updates.media_type = POST_MEDIA_TYPE_IMAGE;
     updates.image_urls = finalImages;
+    updates.image_byte_sizes = finalByteSizes;
+    updates.media_storage_bytes = mediaStorageBytes;
     Object.assign(post, updates);
     post.set('video', undefined);
     await post.save();
