@@ -145,8 +145,8 @@ const parseOptionalDate = (raw, fieldName) => {
 
 /**
  * Role scope for audit list:
- * - Super admin (5): logs by staff, franchise admin, franchise employee only (not super admin)
- * - Staff (6): logs by franchise admin, franchise employee, and staff
+ * - Super admin (5): logs by super admin, staff, franchise admin, franchise employee
+ * - Staff (6): logs by super admin, franchise admin, franchise employee, and staff
  * - Franchise admin (1): logs by users of the same franchise (admin + employees)
  * - Franchise employee (3): own logs only
  */
@@ -170,7 +170,14 @@ const resolveAuditListScopeFilter = async (callerUserId) => {
     if (type === USER_TYPE_SUPER_ADMIN || type === USER_TYPE_STAFF) {
         const actors = await User.find({
             deleted_at: null,
-            type: { $in: [USER_TYPE_ADMIN, USER_TYPE_EMPLOYEE, USER_TYPE_STAFF] },
+            type: {
+                $in: [
+                    USER_TYPE_ADMIN,
+                    USER_TYPE_EMPLOYEE,
+                    USER_TYPE_SUPER_ADMIN,
+                    USER_TYPE_STAFF,
+                ],
+            },
         })
             .select('_id')
             .lean();
