@@ -19,6 +19,13 @@ const USER_TYPE_EMPLOYEE = 3;
 const USER_TYPE_SUPER_ADMIN = 5;
 const USER_TYPE_STAFF = 6;
 
+const AUDIT_PERFORMER_ROLE_LABELS = {
+    [USER_TYPE_ADMIN]: 'Franchise Admin',
+    [USER_TYPE_EMPLOYEE]: 'Franchise Employee',
+    [USER_TYPE_SUPER_ADMIN]: 'Super Admin',
+    [USER_TYPE_STAFF]: 'Staff',
+};
+
 const toObjectIdOrNull = (raw) => {
     if (!raw) return null;
     if (raw instanceof mongoose.Types.ObjectId) return raw;
@@ -320,6 +327,22 @@ const listAuditLogs = async (query = {}, callerUserId = null) => {
         ]);
 
         const totalPages = Math.max(1, Math.ceil(totalItems / limit) || 1);
+        const performerIds = [
+            ...new Set(
+                rows
+                    .map((row) => (row.performed_by ? String(row.performed_by) : null))
+                    .filter(Boolean)
+            ),
+        ];
+        const performers = performerIds.length
+            ? await User.find({ _id: { $in: performerIds } }).select('_id type').lean()
+            : [];
+        const roleByUserId = new Map(
+            performers.map((user) => [
+                String(user._id),
+                AUDIT_PERFORMER_ROLE_LABELS[Number(user.type)] || null,
+            ])
+        );
         const records = rows.map((row, index) => ({
             s_no: skip + index + 1,
             _id: row._id,
@@ -332,6 +355,9 @@ const listAuditLogs = async (query = {}, callerUserId = null) => {
             description: row.description,
             performed_by: row.performed_by,
             performed_by_name: row.performed_by_name,
+            performed_by_role: row.performed_by
+                ? roleByUserId.get(String(row.performed_by)) || null
+                : null,
             franchise_id: row.franchise_id,
             franchise_name: row.franchise_name,
             status: row.status,
